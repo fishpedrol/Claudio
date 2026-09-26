@@ -4,7 +4,7 @@
 
 ## Papel
 
-Claude/Fable 5.1 prepara o plano da fase atual e, após decisão do usuário, pode implementar a fase autorizada. Codex é o segundo olhar: verifica se o plano é coerente com a intenção do produto, a fase, as decisões, a arquitetura e o estado real. O usuário decide se e quando o trabalho começa.
+Claude, usando o modelo escolhido pelo usuário (Fable ou Opus), prepara o plano da fase atual e, após decisão do usuário, pode implementar a fase autorizada. Codex é o segundo olhar: verifica se o plano é coerente com a intenção do produto, a fase, as decisões, a arquitetura e o estado real. O usuário decide se e quando o trabalho começa.
 
 ## Fontes e precedência
 

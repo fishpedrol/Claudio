@@ -4,11 +4,11 @@ Use este prompt para conduzir Claude/Fable no Buzzy. As regras abaixo são está
 
 ## Papéis
 
-- **Claude/Fable 5.1:** prepara o plano da fase atual e implementa somente o escopo que o usuário autorizou.
+- **Claude, no modelo escolhido pelo usuário (Fable ou Opus):** prepara o plano da fase atual e implementa somente o escopo que o usuário autorizou.
 - **Codex:** segundo olhar independente. Compara o plano de Claude com a visão do produto, os documentos e o estado real; aponta inconsistências, riscos e lacunas; propõe um plano corrigido e mantém o contexto operativo atualizado.
 - **Usuário:** decide mudanças de produto, recomendações materiais de stack e quando iniciar ou avançar uma fase.
 
-Fable 5.1 como ferramenta de desenvolvimento não significa IA dentro do aplicativo. O MVP continua sem IA integrada.
+Claude, independentemente de o usuário escolher Fable ou Opus, é uma ferramenta de desenvolvimento; isso não significa IA dentro do aplicativo. O MVP continua sem IA integrada.
 
 ## Fontes obrigatórias
 
@@ -39,6 +39,7 @@ Siga integralmente docs/PRODUCT_SPEC.md. Em especial:
 - Movimento e conversa do MVP funcionam localmente, sem IA integrada.
 - Não adicione LLM, RAG, embeddings, APIs de IA, voz, backend, nuvem, telemetria, analytics, auto-updater, comandos arbitrários, shell/PowerShell/CMD arbitrários, keylogging, captura silenciosa de tela ou controle genérico do computador.
 - Segurança e performance entram no desenho desde a Fase 0. Não crie complexidade futura sem necessidade demonstrada pelo MVP.
+- Quando a tarefa envolver desenho, animação ou assets do personagem, abra a referência visual apontada em docs/PRODUCT_SPEC.md e use-a como direção conceitual dentro dos limites descritos ali.
 
 ## Revisão do plano
 
@@ -81,10 +82,10 @@ Registre decisões substituídas sem apagá-las. Não mantenha roadmap ou regras
 - **Fase:** 0 — Descoberta e arquitetura.
 - **Status:** STATUS: PLANNED.
 - **Objetivo:** concluir o plano de arquitetura e execução do MVP Buzzy antes de iniciar código de produto.
-- **Estado observado:** a inspeção encontrou documentação e nenhum código, build, stack ou repositório Git. Confirme novamente antes de depender desse estado.
-- **Plano disponível:** o plano está nos documentos do projeto; não há um arquivo separado identificado como plano de Claude/Fable.
-- **Stack:** STATUS: UNCERTAIN. Ainda não escolhida.
-- **Escopo deste ciclo:** planejar e alinhar a Fase 0. Não implementar funcionalidades do Buzzy.
+- **Estado observado:** há documentação e Git local sem remoto; não há código, build ou stack aprovada. Confirme novamente antes de depender desse estado.
+- **Plano disponível:** proposta parcial distribuída pelos documentos. DEC-006, ARCHITECTURE.md 2.13 e SECURITY.md 4 ainda são espaços reservados.
+- **Stack:** STATUS: UNCERTAIN. A recomendação ainda não foi registrada em DEC-006.
+- **Escopo deste ciclo:** concluir a comparação e alinhar a documentação da Fase 0. Não implementar funcionalidades do Buzzy nem iniciar protótipos sem aprovação do usuário em Q-13.
 
 ### Entregáveis da Fase 0
 
@@ -102,4 +103,4 @@ O plano de Claude/Fable deve cobrir:
 
 A Fase 0 termina quando a recomendação técnica e a arquitetura planejada estiverem registradas com evidências, os critérios e testes forem verificáveis, os documentos concordarem e o usuário aceitar o plano e a stack antes da Fase 1.
 
-**Próxima ação permitida:** Claude/Fable entrega o plano da Fase 0; Codex o revisa contra as fontes; o usuário decide sobre correções e início da implementação.
+**Próxima ação permitida:** Claude/Fable completa DEC-006, ARCHITECTURE.md 2.13 e SECURITY.md 4; corrige os status do TODO.md e registra o estado real no DEVELOPMENT_LOG.md. Depois, Codex revisa a Fase 0 completa e o usuário decide sobre correções, escolhas e início da implementação.

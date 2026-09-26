@@ -29,7 +29,7 @@
 - Atualizados PROJECT_CONTEXT.md, ARCHITECTURE.md, DECISIONS.md, SECURITY.md e TODO.md para refletirem o Buzzy e o próximo passo correto: Fase 0.
 - Criados PRODUCT_SPEC.md e PLAN_REVIEW.md como referências estáveis.
 - Criado docs/PLAN_REVIEW.md e definido context codex/PROMPT_MESTRE_BUZZY.md como instrução variável por fase; context codex/context.md passa a ser um índice e HANDOFF.md uma ponte de compatibilidade.
-- Definido o papel de Claude/Fable 5.1 como agente de planejamento e implementação, com Codex como revisor independente e o usuário como responsável pelas decisões.
+- Definido o papel de Claude no Fable, usando o modelo escolhido pelo usuário, como agente de planejamento e implementação; Codex faz a revisão independente e o usuário decide.
 - Mantida a stack como indefinida até a comparação técnica da Fase 0.
 - Ampliado PROJECT_CONTEXT.md com um inventário resumido por área, preservando a exigência inicial de orientar um agente novo sem conversa prévia.
 - Atualizado prompt_usuario.md para continuar o trabalho documental anterior e recuperar a revisão de fundo mencionada no histórico, se ela ainda estiver disponível.
@@ -43,3 +43,33 @@
 **Problemas corrigidos:** fontes documentais separadas, próximas ações alinhadas ao contexto do Buzzy e inventário de estado resumido no PROJECT_CONTEXT.md. O prompt de continuação orienta a preservar os arquivos e recuperar a revisão anterior antes de repeti-la.
 
 **Pendências:** recuperar ou repetir de forma não concorrente a revisão documental anterior, concluir a comparação de stack, definir a arquitetura de Fase 0, registrar critérios verificáveis para cada fase e, só então, iniciar Fase 1.
+
+## 2026-09-26 — Referência visual do personagem Buzzy
+
+**Objetivo:** incluir a imagem de conceito fornecida pelo usuário no projeto e torná-la utilizável por Claude/Fable como referência de direção visual.
+
+**Alterações realizadas:**
+
+- Copiada a imagem para `assets/references/buzzy-character-concept.png`.
+- Atualizado PRODUCT_SPEC.md com a referência, seus traços visuais gerais e limites de interpretação: não é sprite sheet final, e o cursor ilustrado não faz parte do personagem.
+- Atualizado PROMPT_MESTRE_BUZZY.md para que tarefas futuras de personagem/arte consultem a referência canônica em PRODUCT_SPEC.md.
+
+**Verificações realizadas:** confirmada a existência do arquivo copiado (2.332.894 bytes) e conferido o link relativo da especificação. Nenhum teste de aplicação foi executado; não há código de produto nesta alteração.
+
+**Pendências:** Claude/Fable deve considerar a referência no trabalho em andamento sem substituir o planejamento ou descartar decisões documentadas. Detalhes definitivos de arte e animação dependem da aprovação do usuário.
+
+## 2026-09-26 — Revisão parcial da proposta da Fase 0
+
+**Objetivo:** conferir se os entregáveis registrados no roadmap existem nos documentos antes da revisão final da Fase 0.
+
+**Problemas encontrados:** TODO.md marcava a comparação de stack e as permissões por stack como concluídas, mas DEC-006, ARCHITECTURE.md 2.13 e SECURITY.md 4 ainda eram espaços reservados. TODO.md também dizia que uma revisão adversarial anterior havia sido recuperada, sem resultado correspondente no histórico.
+
+**Alterações realizadas:** corrigidos os estados da Fase 0 e as tarefas pendentes em TODO.md e PROJECT_CONTEXT.md; atualizados README.md e PROMPT_MESTRE_BUZZY.md para refletir a continuação; registrada a resolução operacional de Q-15, pois o usuário confirmou que já enviou o pedido inicial ao Fable e limpou o arquivo; preparado um novo prompt de continuidade em prompt_usuario.md. Os documentos passam a dizer Claude no Fable com o modelo escolhido pelo usuário, incluindo Opus, sem fixar uma versão.
+
+**Verificações realizadas:** inspeção dos documentos canônicos e do diff local. Nenhum teste de aplicação foi executado; não há código de produto.
+
+**Próximos passos:** Claude/Fable deve concluir apenas as seções ausentes da proposta e confirmar se há evidência recuperável da revisão anterior. Depois, Codex fará a revisão integral da Fase 0. Nenhuma escolha de produto ou de stack foi aprovada.
+
+### Atualização — workflow de pesquisa ainda ativo
+
+O usuário mostrou que o workflow `buzzy-stack-research` continua pausado pelo limite de uso; a captura exibe Pesquisa 14/14 e Verificação 68/84. PROJECT_CONTEXT.md, TODO.md e o prompt de continuidade foram atualizados para instruir Claude a retomar ou recuperar esse mesmo workflow e usar os resultados existentes antes de preencher DEC-006. A pesquisa não deve ser duplicada. Esta é uma atualização de estado baseada na captura fornecida pelo usuário, não uma confirmação de que o workflow terminou.

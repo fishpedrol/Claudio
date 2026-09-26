@@ -10,7 +10,7 @@ PRODUCT_SPEC.md define a intenção estável. PROJECT_CONTEXT.md define o estado
 
 ## Papéis e ciclo de trabalho
 
-Claude/Fable 5.1 prepara o plano da fase e implementa apenas o escopo autorizado pelo usuário. Codex revisa o plano de forma independente contra o produto, a fase, as decisões e o estado real; apresenta riscos, lacunas e correções. O usuário decide se a implementação começa e quando uma fase avança.
+Claude prepara o plano da fase e implementa apenas o escopo autorizado pelo usuário. O usuário pode alternar entre Fable e Opus; as instruções do projeto não dependem de um modelo específico. Codex revisa o plano de forma independente contra o produto, a fase, as decisões e o estado real; apresenta riscos, lacunas e correções. O usuário decide se a implementação começa e quando uma fase avança.
 
 Durante revisão de plano, não implemente. Durante implementação autorizada, conclua uma fase por vez e não introduza IA integrada ao MVP.
 

@@ -12,6 +12,12 @@ Buzzy terá identidade e personagem originais. Não copiar nome, personagem, vis
 
 O personagem conceitual é um pequeno primata arbóreo antropomórfico, amigável, curioso, brincalhão, ágil e expressivo: cabeça relativamente grande, olhos expressivos, focinho curto, orelhas arredondadas, braços longos, mãos adequadas à escalada, pernas compactas e cauda longa e expressiva. A arte definitiva será produzida separadamente; o software começa com asset provisório substituível.
 
+### Referência visual fornecida pelo usuário
+
+![Prancha conceitual do personagem Buzzy](../assets/references/buzzy-character-concept.png)
+
+Esta prancha é uma referência de direção visual para o personagem: primata de pelo azul-escuro, áreas do rosto e barriga em tom bege, olhos grandes e expressivos e cauda longa com ponta clara. Ela ajuda Claude/Fable a entender o conceito desejado, mas não é uma folha de sprites pronta nem aprova cada pose, expressão, proporção ou detalhe como requisito final. O cursor de mouse que aparece em um quadro é apenas parte ilustrativa da imagem e não pertence ao personagem nem ao produto. Detalhes finais de arte e animação continuam em aberto até aprovação do usuário.
+
 ## Escopo do MVP
 
 O MVP deve incluir:
@@ -69,7 +75,7 @@ Não assumir que os monitores estão lado a lado. A Fase 0 define a abstração 
 
 A caixa de texto do MVP usa respostas locais para validar a interação. O MVP não integra LLM, RAG, embeddings, vector database, APIs de IA, voz, speech recognition, backend, atualização automática, sincronização em nuvem, telemetria ou analytics.
 
-Fable 5.1/Claude podem ser usados como assistentes de desenvolvimento. Isso não é uma capacidade do produto em execução. Se IA for considerada em uma versão futura, ela será opcional e externa ao núcleo determinístico; o Buzzy continuará funcionando sem ela.
+Claude pode ser usado como assistente de desenvolvimento nos modelos que o usuário escolher, incluindo Fable e Opus. Isso não é uma capacidade do produto em execução. Se IA for considerada em uma versão futura, ela será opcional e externa ao núcleo determinístico; o Buzzy continuará funcionando sem ela.
 
 ## Configurações e dados locais
 
