@@ -1,0 +1,16 @@
+# .gitignore mínimo do Buzzy (Fase 0: ainda não há stack; ampliar quando ela for escolhida)
+
+# Sistema operacional
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Editores e IDEs
+.vscode/
+.idea/
+*.swp
+*~
+
+# Temporários e logs
+*.tmp
+*.log
