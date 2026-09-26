@@ -12,39 +12,40 @@
 
 ## Fase atual
 
-**Fase 0 — Descoberta e arquitetura. STATUS: PLANNED.** A proposta está parcial. DEC-006, ARCHITECTURE.md 2.13 e SECURITY.md 4 ainda são espaços reservados; a comparação de stack não pode ser considerada entregue. A Fase 0 não está pronta para revisão final nem concluída.
+**Fase 0 — Descoberta e arquitetura. STATUS: PLANNED.** A comparação e a proposta estão documentadas. O usuário delegou a escolha da stack ao Codex; WPF/C#/.NET 10 foi selecionada em DEC-006. As escolhas de produto necessárias agora estão respondidas. Faltam os protótipos P1–P3, a revisão independente dos resultados e o fechamento documental da fase. Q-08 será decidida após a medição P2; formato e assinatura de distribuição pública ficam para depois. A Fase 0 **não** está concluída e nenhum protótipo foi executado.
 
-Nenhum código de produto é iniciado nesta fase.
+Ainda não há código do aplicativo. A Etapa 0B permite somente protótipos descartáveis e isolados em `spikes/`.
 
 ### Pendências da Fase 0
 
-- [x] Consolidar a visão do Buzzy e os limites do MVP em uma fonte de produto.
-- [x] Separar a especificação estável do produto do prompt mestre variável por fase.
-- [x] Definir o ciclo Claude/Fable → revisão independente do Codex → decisão do usuário.
-- [x] Criar README com links para as fontes canônicas.
-- [x] Preservar o trabalho documental anterior e indicar como recuperar a revisão de fundo iniciada por Claude/Fable.
-- [x] Manter em PROJECT_CONTEXT.md um inventário resumido de todas as áreas do projeto, marcando o que ainda é planejado ou incerto.
-- [ ] Confirmar a recuperação da revisão documental de fundo. O TODO anterior dizia que ela avaliou a versão de 2026-09-25, mas DEVELOPMENT_LOG.md ainda não contém esse resultado. Só concluir esta tarefa se a evidência estiver disponível e registrada.
-- [x] 2026-09-26 — Inicializar Git local e `.gitignore` mínimo, sem remoto.
-- [ ] Recuperar ou retomar o workflow existente `buzzy-stack-research`, pausado pelo limite de uso; usar seus resultados e evitar iniciar pesquisa duplicada. A captura mais recente mostra a etapa de verificação em 68/84.
-- [ ] Completar a comparação de alternativas de stack com critérios, fontes e trade-offs e recomendar uma. DEC-006 ainda contém apenas um espaço reservado; Q-01 permanece UNCERTAIN até aprovação.
-- [ ] Preencher o encaixe da recomendação na arquitetura (ARCHITECTURE.md 2.13) e as permissões por stack (SECURITY.md 4), mantendo incertezas e protótipos necessários explícitos.
+- [x] 2026-09-26 — Consolidar a visão do Buzzy e os limites do MVP em uma fonte de produto. Evidência: docs/PRODUCT_SPEC.md.
+- [x] 2026-09-26 — Separar a especificação estável do produto do prompt mestre variável por fase. Evidência: docs/PRODUCT_SPEC.md e context codex/PROMPT_MESTRE_BUZZY.md.
+- [x] 2026-09-26 — Definir o ciclo Claude → revisão independente do Codex → decisão do usuário. Evidência: AGENTS.md e docs/PLAN_REVIEW.md.
+- [x] 2026-09-26 — Criar README com links para as fontes canônicas. Evidência: README.md.
+- [x] 2026-09-26 — Preservar o trabalho documental anterior. Evidência: commit 257a05f, que guarda a documentação como estava antes do planejamento técnico. A parte de indicar como recuperar a revisão de fundo não foi cumprida e está na tarefa seguinte.
+- [x] 2026-09-26 — Manter em PROJECT_CONTEXT.md um inventário resumido de todas as áreas do projeto. Evidência: docs/PROJECT_CONTEXT.md, seções 8 e 9.
+- [x] 2026-09-26 — Confirmar que a revisão documental de fundo não pode ser recuperada deste repositório e registrar a limitação. Os números citados no DEVELOPMENT_LOG.md vêm de uma transcrição externa, não versionada, e aquela revisão tratava dos documentos de 2026-09-25, anteriores à reestruturação do Buzzy; portanto, não substitui a revisão atual. A revisão independente válida da Fase 0 foi feita pelo Codex e está registrada em PLAN_REVIEW.md.
+- [x] 2026-09-26 — Inicializar Git e `.gitignore` mínimo. Criado sem remoto. O remoto `origin` passou a existir depois, fora desta rodada.
+- [x] 2026-09-26 — Recuperar o workflow `buzzy-stack-research` em vez de iniciar pesquisa duplicada. Ele foi retomado do mesmo script e concluiu as três etapas. Evidência no repositório: a comparação em DEC-006 e as fontes que ela lista. Os números do processo, como quantidade de pesquisadores e de verificações, estão no DEVELOPMENT_LOG.md e vêm da saída da sessão, fora do repositório; não são reproduzíveis a partir dos arquivos versionados.
+- [x] 2026-09-26 — Completar a comparação de alternativas de stack com critérios, fontes e trade-offs. A pesquisa original avaliou nove stacks; a escolha final WPF/C#/.NET 10 foi feita por delegação do usuário e está em DEC-006.
+- [x] 2026-09-26 — Atualizar o encaixe de WPF na arquitetura (ARCHITECTURE.md 2.13), com janelas, integração Windows, repouso e portões técnicos pendentes.
 - [x] 2026-09-26 — Propor arquitetura mínima, fluxo, máquina de estados, arbitragem de input, clique e arraste, foco da caixa de texto e ciclo de arraste. Proposta em ARCHITECTURE.md, STATUS: PLANNED.
 - [x] 2026-09-26 — Propor modelo do desktop virtual, superfícies, DPI, reconexão e restauração. Proposta em ARCHITECTURE.md e DEC-008.
-- [ ] Completar permissões e riscos específicos da stack em SECURITY.md 4; a seção ainda está vazia.
+- [x] 2026-09-26 — Completar permissões e riscos por stack em SECURITY.md 4, incluindo processos, runtime externo, superfície extra e como cada alternativa obteria o click-through.
 - [x] 2026-09-26 — Propor critérios de aceitação e testes por fase (este arquivo) e plano de medição de desempenho (DEC-011).
-- [ ] Revisão do plano pelo Codex, conforme PLAN_REVIEW.md.
-- [ ] Decisões do usuário Q-01 a Q-14, listadas em DECISIONS.md. Q-15 foi resolvida como questão operacional e não bloqueia a fase.
-- [ ] Etapa 0B, protótipos de viabilidade, se o usuário aprovar Q-13.
-- [ ] Registrar instruções de build e teste em PROJECT_CONTEXT.md quando a stack for aprovada e o projeto criado.
+- [x] 2026-09-26 — Revisar independentemente o plano conforme PLAN_REVIEW.md. A arquitetura está alinhada ao MVP e a ordem continua segura; WPF foi escolhido por delegação, com P1–P3 como gates antes da Fase 1. Atualizadas as referências visuais para deixar claro que são ponto de partida para uma nova proposta original. A revisão não verificou código nem encerrou a Fase 0.
+- [x] 2026-09-26 — Registrar as respostas do usuário para Q-02 a Q-07, Q-09, Q-11, Q-12, Q-14, Q-20 e Q-21 e o ZIP portátil sem assinatura para uso pessoal/testes em Q-10. Evidências: DECISIONS.md e DECISOES_DO_USUARIO.md. Q-08 foi adiada para depois de P2; distribuição pública e assinatura continuam para decisão futura em Q-10. Q-01 e Q-13 foram resolvidas por delegação do usuário; Q-15 foi resolvida como questão operacional; Q-16 a Q-19 foram esclarecidas como referências visuais; Q-22 não se aplica após a escolha de WPF.
+- [ ] Etapa 0B, protótipos descartáveis P1, P2 e P3 com WPF, antes da Fase 1. P9 foi encerrado sem execução porque avaliava interface Win32 manual.
+- [ ] Registrar instruções de build e teste em PROJECT_CONTEXT.md quando o aplicativo WPF da Fase 1 for criado.
 
 ### Critério para concluir a Fase 0
 
-- Comparação técnica e recomendação de stack registradas em DECISIONS.md, com evidências, riscos e alternativas. **Pendente: DEC-006 está vazio.**
-- ARCHITECTURE.md descreve o desenho proposto como PLANNED, sem apresentá-lo como implementado. **Parcial: o desenho geral está registrado, mas o encaixe na stack em 2.13 está vazio.**
-- Máquina de estados, fluxo de arraste, modelo do desktop virtual, segurança, persistência, testes e métricas têm critérios verificáveis. **Feito como proposta; as metas numéricas dependem de Q-08.**
+- Comparação técnica e escolha de stack registradas em DECISIONS.md, com evidências, riscos e alternativas. **Feito; WPF foi escolhido por delegação do usuário.**
+- ARCHITECTURE.md descreve o desenho WPF como PLANNED, sem apresentá-lo como implementado. **Feito; P1–P3 ainda precisam ser verificados.**
+- Permissões e riscos por stack registrados em SECURITY.md. **Feito na seção 4.**
+- Máquina de estados, fluxo de arraste, modelo do desktop virtual, segurança, persistência, testes e métricas têm critérios verificáveis. **Feito como proposta; as metas numéricas dependem de Q-08 e da medição em P2.**
 - O Codex revisou o plano e as correções aceitas foram aplicadas.
-- O usuário aprovou a stack (Q-01) e as decisões que bloqueiam a Fase 1: Q-02, Q-03, Q-10 e Q-13.
+- A escolha da stack, da ordem dos protótipos e das decisões de produto para a Fase 1 está registrada. Q-02 e Q-03 foram respondidas; ZIP portátil sem assinatura para uso pessoal/testes está escolhido em Q-10. A forma de empacotar o runtime ainda será definida no plano do build; distribuição pública pode ser decidida mais tarde.
 - A documentação e a seção Fase atual do prompt mestre descrevem a mesma próxima fase.
 - O usuário decide iniciar a Fase 1.
 
@@ -52,20 +53,28 @@ Antes da revisão final, nenhum espaço reservado pode permanecer como se fosse 
 
 ## Etapa 0B — Protótipos de viabilidade
 
-STATUS: PLANNED. Só acontece se o usuário aprovar Q-13. O código é descartável, fica em uma pasta `spikes/` fora do produto e não segue para a Fase 1. Cada protótipo registra método, hardware e resultado no DEVELOPMENT_LOG.md.
+STATUS: PLANNED. Fazer antes da Fase 1 com a stack escolhida, WPF/C#/.NET 10. O código é descartável, fica em `spikes/` fora do produto e não segue para a Fase 1. Cada protótipo registra método, hardware, métricas e resultado no DEVELOPMENT_LOG.md.
 
 | ID | Pergunta | Teste mínimo | Resultado esperado | Hardware |
 |---|---|---|---|---|
-| P1 | O clique atravessa os pixels transparentes? | Janela do tamanho do sprite na stack recomendada, com sprite sobre o Bloco de Notas. Clicar em pixel com alpha 0, com alpha 1 e no sprite. | Alpha 0 entrega o clique ao Bloco de Notas. Alpha 1 e o sprite entregam ao Buzzy. | 1 monitor |
-| P2 | Quanto custa ficar parado e animar? | Sprite parado por 1 h sem timers. Depois, animação a 10 e a 60 quadros por segundo por 10 min cada. Medir CPU, memória, GPU e acordadas por segundo. | Parado: CPU próxima de zero e nenhuma acordada periódica vinda do app. Os números viram a base de Q-08. | 1 monitor |
-| P3 | O arraste funciona sem roubar foco? | Janela que não ativa, com captura do mouse ao pressionar. Arrastar rápido para fora da janela e para outro monitor, soltar fora, usar Alt+Tab no meio, ligar ClickLock, digitar no Bloco de Notas antes e depois. | O arraste acompanha o cursor e termina ao soltar em qualquer lugar. O Bloco de Notas mantém o foco. Se falhar, testar as alternativas: margem de captura com alpha 1 durante o arraste, ativação só durante o arraste, ou loop modal de mover com animação por timer. | 2 monitores [HW] |
+| P1 | A janela WPF deixa passar o clique nos pixels transparentes? | Janela `AllowsTransparency`, do tamanho do sprite, sobre o Bloco de Notas. Clicar em pixel alfa 0, alfa 1 e pixel visível. | Alfa 0 entrega o clique ao Bloco de Notas; pixels visíveis e alfa 1 atingem a janela do Buzzy. Registrar Windows, DPI, renderização e limites encontrados. | 1 monitor |
+| P2 | Quanto custa ficar parado e animar em WPF? | Sprite parado por 1 h sem timers. Depois, animação a 10 e 60 quadros por segundo por 10 min cada. Medir CPU, memória, GPU e acordadas por segundo com o mesmo protocolo em todos os estados. | Em repouso o app deixa de redesenhar e não gera atividade periódica evitável. Registrar números para Q-08; se falhar, ajustar ciclo visual e repetir. | 1 monitor |
+| P3 | O arraste funciona sem roubar foco em WPF? | Janela que não ativa, com captura ao pressionar. Arrastar rápido para fora da janela, soltar fora, usar Alt+Tab no meio, ligar ClickLock e digitar no Bloco de Notas antes/depois; repetir entre monitores quando houver dois disponíveis. Se a captura básica falhar, pode-se testar uma margem temporária de captura alfa 1 enquanto o gesto ocorre. | O arraste acompanha o cursor e termina ao soltar; o Bloco de Notas mantém o foco. Qualquer alternativa que mude o foco não conta como aprovação do requisito; se não houver solução sem roubo de foco, reabrir DEC-006 antes da Fase 1. | 1 monitor; 2 para repetição [HW] |
 | P4 | A caixa de texto recebe foco e IME? | Abrir a caixa em resposta a clique duplo e, em outro teste, por timer. Digitar com acentos e com um IME. Fechar a caixa e ver para onde vai o foco. | Com clique, o foco chega. Por timer, o Windows nega o foco e a digitação continua no outro app. IME funciona. O destino do foco ao fechar fica registrado. | 1 monitor |
 | P5 | Quais mensagens chegam quando a topologia muda, e a chave do monitor é estável? | Janela que registra mensagens e a leitura da topologia ao conectar, desconectar, rearranjar, girar, trocar o principal e trocar a escala. Reiniciar e trocar portas, comparando as chaves. Repetir com as opções do Windows 11 de lembrar posições e minimizar janelas ao desconectar. | Lista de mensagens por cenário, intervalo de agrupamento calibrado, estabilidade da chave confirmada ou refutada. | 2 monitores [HW] |
 | P6 | Como a janela se comporta ao cruzar monitores de escalas diferentes? | Janela movida por código de um monitor a 100% para um a 200%, parando sobre a borda. | Ponto em que a escala troca, ausência de oscilação com histerese e pés sempre sobre o chão. | 2 monitores com escalas diferentes [HW] |
 | P7 | É possível saber que há um app em tela cheia? | Consulta a cada 2 a 5 s com vídeo em tela cheia no navegador, jogo em janela sem borda e jogo em tela cheia exclusiva. | Estado correto nos três casos, com custo de CPU desprezível. O caso sem borda precisa ser confirmado. | 1 monitor |
-| P8 | Riscos próprios da stack recomendada | Definido em DEC-006, conforme a stack. | Definido em DEC-006. | Conforme o caso |
+| P8 | A janela layered aguenta ser fotografada e continua funcionando? | Outro processo chama a função que tira foto de janela durante a animação. | A atualização da janela continua funcionando, ou falha e é recuperada religando o estilo. | 1 monitor |
+| P9 | Encerrado: comparar o esforço de interface nativa | Não executado. Perdeu a finalidade quando WPF foi escolhido como stack. | Sem resultado; não bloqueia o projeto. | — |
+| P10 | Build, tamanho e portão de segurança | Build de release; medir o executável e o pacote. Rodar como portátil em máquina virtual limpa do Windows, com e sem assinatura, com o controle de aplicativos ligado. Rodar o script que inspeciona as funções importadas pelo binário. | Tamanho registrado, comportamento do aviso do sistema conhecido e portão de APIs proibidas passando. | Máquina virtual |
 
-Q-13 decide se P1 a P3 são pré-requisito para aprovar a stack. P4 a P8 podem acontecer no início das fases que dependem deles.
+**Ordem e papel dos protótipos.** Executar P1 primeiro, depois P3 e por último P2. P1 ou P3 que falhe reabre DEC-006 antes de produto; P2 informa as metas de Q-08 e pode exigir ajuste de repouso:
+
+- **P1** verifica que a janela WPF cumpre o requisito central de clique por pixel entre processos.
+- **P3** verifica input e foco no gesto de maior risco para a experiência.
+- **P2** confirma o repouso real e define a base das metas Q-08.
+
+P4 a P8 e P10 podem acontecer no início das fases que dependem deles.
 
 ## Roadmap do MVP
 
@@ -83,12 +92,12 @@ Cada fase tem STATUS: PLANNED. Nenhuma fase é concluída só porque compila ou 
 - **Objetivo:** janela do personagem transparente, posicionada corretamente no desktop virtual, com ciclo de vida completo.
 - **Inclui:** projeto e build da stack aprovada; manifesto Per-Monitor V2 e `asInvoker`; janela do tamanho do sprite com transparência por pixel; sprite provisório estático e original; janela que não ativa; sempre no topo, bandeja e ausência de botão na barra de tarefas conforme Q-03; instância única, em que abrir o app de novo mostra o Buzzy existente; módulo do mundo do desktop com consultas de monitor e área útil; releitura da topologia e acomodação da posição quando ela muda; saída pelo menu; portão de APIs proibidas no build; script de medição de desempenho; instruções de build e teste em PROJECT_CONTEXT.md.
 - **Exclui:** arraste, movimento, animação, persistência, conversa.
-- **Depende de:** Fase 0 aprovada (Q-01, Q-02, Q-03, Q-10); P1 e P2 se Q-13 exigir.
+- **Depende de:** Fase 0 concluída; P1, P2 e P3 aprovados; e autorização explícita do usuário para iniciar a Fase 1. O alvo Windows 11, os comportamentos Q-03 e o ZIP de teste Q-10 já foram decididos. Q-01 e Q-13 estão resolvidas; P9 foi encerrado.
 - **Critérios de aceitação:**
   1. O app inicia e mostra o sprite sobre a área útil do monitor principal. [MANUAL]
   2. Clicar em pixel transparente dentro do retângulo da janela entrega o clique ao aplicativo de baixo. [MANUAL]
   3. Clicar no sprite não tira o foco do aplicativo ativo. [MANUAL]
-  4. O Buzzy não aparece na barra de tarefas nem no Alt+Tab, se Q-03 confirmar. [MANUAL]
+  4. O Buzzy não aparece na barra de tarefas nem no Alt+Tab, conforme Q-03. [MANUAL]
   5. O sprite fica nítido com o monitor a 100%, 150% e 200%, trocando a escala nas Configurações com o app aberto. [MANUAL]
   6. Trocar resolução, escala ou posição da barra de tarefas com o app aberto mantém o sprite dentro da área útil. [MANUAL]
   7. Sair pelo menu encerra o processo e todos os processos filhos. [MANUAL]
@@ -137,7 +146,7 @@ Cada fase tem STATUS: PLANNED. Nenhuma fase é concluída só porque compila ou 
   2. O personagem nunca fica sem apoio fora dos estados `JUMPING` e `FALLING`. [AUTO]
   3. Pressionar o personagem no meio de um pulo ou queda o segura na hora. [AUTO e MANUAL]
   4. Em `RESTING`, o relógio para e o consumo volta à linha de base. [AUTO e MANUAL, instrumentado]
-  5. O movimento parece contínuo em 60 Hz e em outra taxa de atualização disponível. [MANUAL]
+  5. Gravando a tela a 120 quadros por segundo durante uma caminhada, a posição do personagem avança a cada quadro apresentado, sem quadro repetido nem salto maior que o passo esperado. Repetir em 60 Hz e em outra taxa de atualização disponível. [MANUAL, instrumentado]
 - **Testes automatizados:** trajetórias de referência com passo fixo, colisões contra superfícies de exemplo, testes de propriedade de apoio. [AUTO]
 
 ### Fase 5 — Multi-monitor completo e posição persistida
@@ -176,14 +185,14 @@ Cada fase tem STATUS: PLANNED. Nenhuma fase é concluída só porque compila ou 
 - **Critérios de aceitação:**
   1. A suíte do núcleo passa igual com dois manifestos diferentes. [AUTO]
   2. Manifesto com estado sem clipe ou expressão ausente falha no build. [AUTO]
-  3. O asset não tem halo de alpha baixo acima de um limite definido nesta fase, para a área clicável acompanhar a silhueta. [AUTO]
+  3. Nenhum quadro do asset tem pixel com alfa entre 1 e o limite definido pelo protótipo P1, fora de uma borda de dois pixels ao redor da silhueta. A verificação lê os arquivos de imagem e falha o build. [AUTO]
   4. Trocar expressão não muda estado nem posição. [AUTO]
   5. CPU e GPU com animação ficam dentro das metas de Q-08. [MANUAL, instrumentado]
 
 ### Fase 7 — Interação e caixa de texto
 
 - **Objetivo:** reações a clique e conversa local pela caixa de texto.
-- **Inclui:** reações a clique; janela da conversa, ativável e ancorada ao personagem; abertura por clique duplo ou menu (Q-07); foco, Esc, botão de fechar e fechamento por inatividade; limite de tamanho; motor local de respostas; conteúdo no idioma de Q-12.
+- **Inclui:** reações a clique; janela da conversa, ativável e ancorada ao personagem; abertura por clique duplo ou menu (Q-07); foco, Esc, botão de fechar e fechamento por inatividade; limite de tamanho; motor local de respostas; conteúdo no idioma de Q-12; **arquivo de personalidade**, com os pesos descritos em ARCHITECTURE.md 2.11, já consumido pela agenda autônoma da Fase 4 e pelas frases desta fase.
 - **Exclui:** LLM, API de IA, RAG, rede, voz, memória de conversa.
 - **Depende de:** Fase 6; P4.
 - **Critérios de aceitação:**
@@ -191,15 +200,16 @@ Cada fase tem STATUS: PLANNED. Nenhuma fase é concluída só porque compila ou 
   2. A digitação em outro aplicativo não é afetada enquanto a caixa está fechada ou sem foco. [MANUAL]
   3. Acentos e IME funcionam. [MANUAL]
   4. A mesma entrada com a mesma semente dá a mesma resposta. [AUTO]
-  5. O texto digitado não aparece em nenhum arquivo da pasta de dados nem em log. [AUTO e MANUAL com Process Monitor]
-  6. Arrastar o personagem com a caixa aberta leva a caixa junto. [MANUAL]
-  7. Ao fechar a caixa, o destino do foco segue o comportamento aprovado depois de P4. [MANUAL]
+  5. Trocar o arquivo de personalidade muda a frequência dos comportamentos autônomos e o conjunto de frases, sem alterar nenhuma transição da máquina de estados. A mesma suíte do núcleo passa com duas personalidades diferentes. [AUTO]
+  6. O texto digitado não aparece em nenhum arquivo da pasta de dados nem em log. [AUTO e MANUAL com Process Monitor]
+  7. Arrastar o personagem com a caixa aberta leva a caixa junto. [MANUAL]
+  8. Ao fechar a caixa, o destino do foco segue o comportamento aprovado depois de P4. [MANUAL]
 
 ### Fase 8 — Configurações e persistência local
 
 - **Objetivo:** preferências completas, persistidas de forma previsível e recuperável.
-- **Inclui:** interface de configurações; esquema completo; migração de versão; iniciar com o Windows se Q-04 aprovar; recuperação de arquivo corrompido; cópia `.bak`.
-- **Depende de:** Fase 7; Q-03, Q-04, Q-07, Q-09 e Q-12.
+- **Inclui:** interface de configurações; esquema completo; migração de versão; opção de iniciar com o Windows desligada por padrão e ativada pelo usuário (Q-04); recuperação de arquivo corrompido; cópia `.bak`; comportamento em tela cheia condicionado ao resultado P7 (Q-09).
+- **Depende de:** Fase 7 e do resultado P7 para decidir o custo do comportamento em tela cheia. As decisões Q-03, Q-04, Q-07 e Q-12 já estão registradas.
 - **Critérios de aceitação:**
   1. Gravar e ler devolvem as mesmas configurações. [AUTO]
   2. Arquivo de versão anterior é migrado. [AUTO]
@@ -210,13 +220,13 @@ Cada fase tem STATUS: PLANNED. Nenhuma fase é concluída só porque compila ou 
 ### Fase 9 — Segurança e hardening
 
 - **Objetivo:** confirmar na implementação cada regra de SECURITY.md.
-- **Inclui:** revisão de SECURITY.md contra o código; portão de APIs e auditoria de dependências; sessão de 1 h sem nenhuma conexão de rede; gravações só na pasta do Buzzy; ausência de elevação; teste com entradas aleatórias no leitor de configurações e na caixa de texto; configuração segura do motor web, se houver; revisão de distribuição e assinatura (Q-10).
+- **Inclui:** revisão de SECURITY.md contra o código; portão de APIs e auditoria de dependências; sessão de 1 h sem nenhuma conexão de rede; gravações só na pasta do Buzzy; ausência de elevação; teste com entradas aleatórias no leitor de configurações e na caixa de texto; configuração segura do motor web, se houver; confirmar as condições do ZIP portátil pessoal e, se houver plano de distribuição pública, reabrir formato e assinatura (Q-10).
 - **Critérios de aceitação:** todas as verificações da seção 8 de SECURITY.md passam e não há achado alto ou crítico aberto. [AUTO e MANUAL]
 
 ### Fase 10 — Verificação integrada
 
 - **Objetivo:** confirmar o MVP inteiro em conjunto.
-- **Inclui:** regressão automatizada completa; roteiro manual de aceitação do MVP nas versões do Windows de Q-02; matriz multi-monitor S1 a S12 [HW]; execução longa de 8 h com uso misto; instalação limpa em máquina virtual; correção dos problemas encontrados.
+- **Inclui:** regressão automatizada completa; roteiro manual de aceitação no Windows 11 (alvo inicial Windows 11 24H2 ou posterior, Q-02); matriz multi-monitor S1 a S12 [HW]; execução longa de 8 h com uso misto; extração e execução limpa do ZIP portátil em máquina virtual; correção dos problemas encontrados.
 - **Critérios de aceitação:** todos os critérios das fases anteriores reexecutados e verdes; execução longa sem falha e sem crescimento contínuo de memória, conforme Q-08.
 
 ### Fase 11 — Performance e acabamento
@@ -224,7 +234,7 @@ Cada fase tem STATUS: PLANNED. Nenhuma fase é concluída só porque compila ou 
 - **Objetivo:** atingir as metas de Q-08 e fazer o acabamento visual e de uso.
 - **Inclui:** perfilagem, otimização e acabamento.
 - **Critérios de aceitação:** metas de Q-08 atingidas e medidas; regressão da Fase 10 reexecutada e verde depois do acabamento.
-- **Observação:** a ordem entre as Fases 10 e 11 é a escolha em aberto Q-11.
+- **Observação:** Q-11 foi respondida pelo usuário: a Fase 11 vem depois da verificação da Fase 10 e termina com a regressão reexecutada.
 
 ### Mudanças propostas em relação ao roadmap anterior
 
@@ -233,8 +243,8 @@ Cada fase tem STATUS: PLANNED. Nenhuma fase é concluída só porque compila ou 
 | A persistência mínima da posição entra na Fase 5. | O critério da Fase 5 exige posição persistida correta, mas a persistência só chegava na Fase 8. |
 | A Fase 1 ganha sprite provisório estático, portão de APIs proibidas e medição de desempenho. | Sem sprite não há como verificar transparência e clique. Segurança e desempenho são medidos desde o início, não só nas Fases 9 e 11. |
 | Toda fase tem critérios com marcador [AUTO], [MANUAL] ou [HW]. | Separar evidência automática, inspeção manual e dependência de hardware. |
-| A Fase 11 termina reexecutando a regressão da Fase 10. | Otimização e acabamento podem quebrar o que já foi verificado. A alternativa de inverter as fases está em Q-11. |
-| Etapa 0B de protótipos antes da Fase 1. | Algumas afirmações técnicas só se confirmam em execução. Decisão em Q-13. |
+| A Fase 11 termina reexecutando a regressão da Fase 10. | Otimização e acabamento podem quebrar o que já foi verificado. O usuário aceitou essa ordem em Q-11. |
+| Etapa 0B com protótipos WPF P1, P2 e P3 antes da Fase 1. | A escolha WPF foi aceita, mas transparência por pixel, repouso e arraste ainda precisam de evidência no ambiente real. Q-13 resolvida. |
 
 ## MVP
 
@@ -246,17 +256,17 @@ Nenhum. Não há código.
 
 ### Bloqueios
 
-- A Fase 1 depende da aprovação da stack (Q-01) e das escolhas Q-02, Q-03, Q-10 e Q-13.
-- Verificações [HW] exigem pelo menos dois monitores, sendo um capaz de outra escala ou orientação. Disponibilidade desse hardware: STATUS: UNCERTAIN.
+- A Fase 1 depende de P1–P3 aprovados, Fase 0 concluída e autorização explícita do usuário. As decisões Q-02 e Q-03 e o ZIP pessoal de Q-10 estão registrados; Q-08 será definida depois de P2. Q-01, Q-13 e Q-22 foram resolvidas.
+- Verificações [HW] completas exigem dois monitores, sendo um capaz de outra escala ou orientação. Disponibilidade desse hardware: STATUS: UNCERTAIN; P3 tem uma verificação básica com um monitor e uma repetição pendente [HW].
 
 ## POST-MVP
 
 STATUS: PLANNED apenas como lista; nada aqui tem data.
 
-- Janelas de outros aplicativos como superfícies, se Q-05 as deixar fora do MVP.
-- Toque e caneta, se Q-14 os deixar fora do MVP.
-- Atalhos de teclado, se Q-06 os deixar fora do MVP.
-- Mais idiomas, se Q-12 escolher apenas um.
+- Janelas de outros aplicativos como superfícies, fora do MVP por decisão Q-05.
+- Toque e caneta, fora do MVP por decisão Q-14.
+- Atalhos para controlar o personagem, fora do MVP por decisão Q-06.
+- Mais idiomas, fora do MVP por decisão Q-12.
 - Arte definitiva, animações adicionais e sons.
 - Distribuição pela Microsoft Store.
 

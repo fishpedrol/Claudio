@@ -1,32 +1,41 @@
-# Continuação da Fase 0 — completar a proposta técnica do Buzzy
+# Etapa 0B — validar a stack WPF do Buzzy
 
-Continue o trabalho existente neste repositório. O pedido inicial da Fase 0 já foi enviado a você pelo terminal; o usuário limpou `prompt_usuario.md` depois de copiar aquele texto. Isso não significa que o trabalho foi perdido nem que deva ser refeito do zero. Este arquivo contém agora a mensagem de continuação e pode ser limpo novamente depois de ser copiado.
+Continue o trabalho no repositório existente. Leia primeiro `AGENTS.md`, `CLAUDE.md`, `docs/PROJECT_CONTEXT.md`, `docs/PRODUCT_SPEC.md`, `docs/TODO.md`, `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, `docs/SECURITY.md`, `docs/DEVELOPMENT_LOG.md`, `docs/PLAN_REVIEW.md` e `context codex/PROMPT_MESTRE_BUZZY.md`. Inspecione o estado real do Git e dos arquivos antes de alterar qualquer coisa.
 
-**Workflow em andamento:** existe um workflow dinâmico chamado `buzzy-stack-research`, pausado pelo limite de uso. A captura do terminal indica que a fase de Pesquisa chegou a 14/14 e a de Verificação está em 68/84. Antes de pesquisar ou comparar tecnologias novamente, tente retomar ou recuperar os resultados deste mesmo workflow. Não crie outro workflow concorrente nem descarte o atual. Se não conseguir acessá-lo, diga isso claramente e aguarde orientação em vez de repetir a pesquisa.
+## Decisão vigente
 
-## Primeiro, leia e confirme o estado
+O usuário delegou ao Codex a escolha da stack e dos próximos passos. A escolha registrada é **WPF com C# e .NET 10 LTS** (DEC-006). Não volte a comparar as nove stacks nem trate Win32 como recomendação atual. Win32 nativo é uma alternativa caso os requisitos decisivos falhem nos protótipos.
 
-Leia `AGENTS.md`, `CLAUDE.md`, `docs/PROJECT_CONTEXT.md`, `docs/PRODUCT_SPEC.md`, `docs/TODO.md`, `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, `docs/SECURITY.md`, `docs/DEVELOPMENT_LOG.md`, `docs/PLAN_REVIEW.md` e `context codex/PROMPT_MESTRE_BUZZY.md`. Inspecione também o Git e os arquivos reais. Preserve o trabalho útil já feito e corrija apenas as lacunas comprovadas.
+As duas imagens em `assets/references/` são referências para uma futura proposta visual original melhor. Não são arte final nem especificação literal. Não copie o nome, acessórios, poses ou estilo como requisitos. Este trabalho é apenas técnico; não crie nem altere a arte agora.
 
-O repositório já tem Git local, sem remoto. Não reinicialize o Git. Ainda não há código de produto, build ou testes. A Fase atual continua sendo **Fase 0 — Descoberta e arquitetura** e não está concluída.
+## Escopo autorizado deste ciclo
 
-## O que falta nesta continuação
+Implemente somente protótipos descartáveis de viabilidade WPF para **P1, P3 e P2, nesta ordem**, conforme `docs/TODO.md`. Coloque-os sob `spikes/`, isolados do aplicativo futuro. Ainda não existe autorização para iniciar a Fase 1 ou transformar o protótipo em produto.
 
-1. `docs/DECISIONS.md`, seção DEC-006, ainda contém só um espaço reservado. Complete a comparação de stack e registre critérios ligados ao produto, alternativas consideradas, fontes primárias consultáveis, trade-offs, riscos, recomendação e incertezas. Não marque Q-01 como aprovada: a recomendação continua pendente da decisão do usuário.
-2. `docs/ARCHITECTURE.md`, seção 2.13, ainda é um espaço reservado. Explique como a arquitetura proposta se encaixa na stack recomendada; deixe claros limites da stack e pontos que dependem de protótipos.
-3. `docs/SECURITY.md`, seção 4, ainda é um espaço reservado. Registre processos auxiliares, permissões, superfície de rede, arquivos, distribuição e riscos específicos da stack, sem prometer isolamento que a tecnologia não oferece.
-4. Confira os itens marcados como concluídos em `docs/TODO.md`. A comparação de stack e permissões por stack não estão documentadas, portanto continuam pendentes até que os entregáveis acima existam. O TODO afirma que uma revisão adversarial anterior foi recuperada, mas `docs/DEVELOPMENT_LOG.md` não contém esse resultado: confirme se a evidência existe nos arquivos/histórico disponíveis; se não existir, registre que não foi possível recuperá-la e deixe a tarefa pendente.
-5. Depois de preencher os documentos, sincronize os estados e o resumo do projeto conforme `AGENTS.md`. Atualize `docs/DEVELOPMENT_LOG.md` com o que de fato mudou e com as fontes consultadas. Não marque como `VERIFIED` algo que não foi implementado e testado.
+Antes de criar arquivos, confira se o SDK do .NET 10 está instalado e registre a versão do Windows e o estado do repositório. Não instale ferramentas nem altere configurações do sistema silenciosamente. Se faltar o SDK ou algum recurso indispensável, pare e informe ao usuário o passo necessário.
 
-## Limites deste trabalho
+### P1 — clique através dos pixels transparentes
 
-- Trabalhe apenas na conclusão documental da Fase 0. Não implemente o aplicativo, não inicie a Fase 1 e não crie dependências ou protótipos de viabilidade agora.
-- Q-01 a Q-14 continuam escolhas do usuário. Q-13 trata de fazer P1 a P3 antes ou no começo da Fase 1; não execute P1 a P3 nem escolha essa opção por conta própria.
-- Preserve a visão e os limites de `docs/PRODUCT_SPEC.md`; não aumente o escopo do MVP por inferência.
-- Preserve as partes úteis já escritas em `ARCHITECTURE.md`, `SECURITY.md` e `TODO.md`. Não reescreva esses documentos inteiros para preencher três lacunas.
-- A imagem `assets/references/buzzy-character-concept.png` é referência conceitual do personagem. Ela não é uma folha de sprites pronta; o cursor desenhado nela não pertence ao personagem.
-- Use o modelo Claude escolhido pelo usuário (Fable ou Opus). Não fixe uma versão nem dependa de um modelo específico.
+Crie uma janela WPF `AllowsTransparency` do tamanho de uma figura simples de teste, com pixels alfa 0, alfa 1 e pixels visíveis. Prepare instruções simples para colocar a janela sobre o Bloco de Notas e clicar em cada área. Se não puder fazer essa interação física, pare com P1 como pendente e entregue os passos exatos para o usuário; não declare que passou. Registre versão do Windows, DPI, método de desenho, imagem usada e resultado. Não declare o resultado com base apenas na documentação.
+
+### P3 — arraste sem roubar foco
+
+Teste uma janela que não ativa, com captura do mouse ao pressionar. Arraste rapidamente para fora da janela, solte fora, use Alt+Tab durante o gesto e teste ClickLock. Se a verificação exigir interação física e você não puder realizá-la, pare com P3 pendente e forneça passos claros ao usuário; não declare que passou. Confirme que o Bloco de Notas continua com foco e recebe texto antes e depois. Faça uma repetição entre dois monitores se houver hardware disponível; caso contrário, registre essa parte como pendente de hardware, nunca como aprovada. Se a abordagem falhar, teste somente a margem temporária de captura alfa 1 descrita em TODO.md. Qualquer alternativa que roube foco é reprovada. Não introduza hook global, leitura periódica do cursor ou capacidades proibidas. Se continuar falhando, pare e reporte o bloqueio; não escolha outra stack por conta própria.
+
+### P2 — repouso e animação
+
+Meça o protótipo parado por uma hora sem movimento, animações nem timers periódicos; em seguida, meça uma animação simples a 10 e a 60 quadros por segundo por dez minutos cada. Registre CPU, memória privada, GPU e acordadas por segundo, com ferramenta, máquina, resolução, duração e condições reproduzíveis. Se uma métrica não puder ser obtida, marque-a como não medida; não estime nem invente valores. Os dados informam Q-08. Se houver atividade periódica evitável em repouso, ajuste o protótipo e repita a medição antes de reportar.
+
+## Regras de execução
+
+- Use só dependências necessárias e disponíveis no .NET/WPF; fixe versões se adicionar alguma dependência.
+- Não use hooks globais, polling de cursor, captura de tela, rede, telemetria, execução de comandos ou acesso a dados de outros aplicativos.
+- Mantenha o código descartável separado dos módulos planejados do produto. Não comece a janela, bandeja, configurações ou núcleo da Fase 1.
+- Distingua claramente no relatório: o que foi executado, o que foi apenas escrito, o que passou, falhou ou ficou sem hardware/dados.
+- Atualize `docs/DEVELOPMENT_LOG.md`, `docs/TODO.md` e `docs/PROJECT_CONTEXT.md` conforme `AGENTS.md`, conferindo cada afirmação. Não marque `VERIFIED` sem a execução da verificação correspondente.
+- Se P1 ou P3 falhar, não esconda o resultado nem avance. Registre o problema e pare para revisão do Codex. P2 informa a linha de base; resultado ruim exige corrigir e medir de novo.
+- Não altere PRODUCT_SPEC.md nem as decisões de produto durante estes protótipos, exceto para registrar uma lacuna comprovada e necessária.
 
 ## Ao terminar
 
-Apresente um resumo curto do que completou e do que ainda falta, a recomendação de stack e seus principais motivos e trade-offs, as fontes consultadas, e se conseguiu recuperar a revisão adversarial anterior. Pare depois da entrega documental e aguarde a revisão independente do Codex e as decisões do usuário. Não declare a Fase 0 concluída.
+Entregue um resumo objetivo dos protótipos executados, evidências e medições, resultados de P1/P3/P2, pendências de hardware, dependências adicionadas e arquivos documentais alterados. Indique se WPF segue tecnicamente viável ou se precisa de revisão. Pare ao final da Etapa 0B; não comece a Fase 1.

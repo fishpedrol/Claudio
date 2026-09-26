@@ -8,17 +8,17 @@
 
 - `STATUS: VERIFIED`: implementado e testado.
 - `STATUS: PLANNED`: planejado, ainda não verificado.
-- `STATUS: UNCERTAIN`: escolha ou estado indefinido, inclusive proposta aguardando aprovação.
+- `STATUS: UNCERTAIN`: escolha ou estado indefinido. Uma proposta que aguarda aprovação do usuário está nesse caso.
 
 ## Estado do projeto
 
 Inspeção dos arquivos em 2026-09-26:
 
-- Há documentação e um repositório Git local, sem remoto. O primeiro commit guarda a documentação como estava antes do planejamento técnico da Fase 0.
+- Há documentação, duas pranchas conceituais em `assets/references/` e um repositório Git com dois commits. O remoto `origin` aponta para `https://github.com/fishpedrol/Claudio.git` e o branch `main` o rastreia; se o envio chegou ao servidor não foi verificado. O primeiro commit guarda a documentação como estava antes do planejamento técnico da Fase 0.
 - Não há código de aplicação, dependência, build nem teste.
-- O pedido inicial da Fase 0 já foi copiado para o terminal do Claude e o usuário limpou `prompt_usuario.md` depois do envio. O arquivo é um rascunho operacional do próximo prompt e pode ser limpo após a cópia; isso não significa que o trabalho anterior se perdeu.
+- O pedido inicial da Fase 0 já foi enviado ao Claude pelo terminal; `prompt_usuario.md` é atualizado como instrução operacional para os próximos protótipos. Limpar o arquivo depois de copiar não significa que o trabalho anterior se perdeu.
 
-**Fase atual:** Fase 0 — Descoberta e arquitetura. STATUS: PLANNED. A proposta está parcial: DEC-006 ainda é um espaço reservado, assim como ARCHITECTURE.md 2.13 e SECURITY.md 4. A captura de tela mais recente do usuário mostra o workflow `buzzy-stack-research` pausado pelo limite de uso, com a etapa de verificação em 68/84. Os resultados ainda precisam ser recuperados ou o mesmo workflow retomado antes de completar os documentos; não iniciar uma pesquisa duplicada. A Fase 0 não está pronta para revisão final nem concluída.
+**Fase atual:** Fase 0 — Descoberta e arquitetura, Etapa 0B. STATUS: PLANNED. A escolha WPF/C#/.NET 10 foi aceita por delegação do usuário e está registrada em DEC-006. A revisão do plano pelo Codex foi concluída. As respostas do usuário para Q-02 a Q-07, Q-09, Q-11, Q-12, Q-14, Q-20 e Q-21 foram registradas; Q-10 escolhe um ZIP portátil sem assinatura para uso pessoal e testes. Permanecem os protótipos descartáveis P1, P3 e P2, a revisão do Codex e Q-08 (metas após P2). Distribuição pública, se houver, será decidida depois. Q-01 e Q-13 estão resolvidas; Q-15 foi resolvida como questão operacional; Q-16 a Q-19 foram esclarecidas como referências visuais; Q-22 não se aplica. A Fase 0 **não** está concluída e a stack não foi validada no aplicativo.
 
 ## 1. Objetivo do projeto
 
@@ -34,9 +34,9 @@ LLM e qualquer IA integrada, RAG, embeddings, APIs de IA, voz, backend, nuvem, t
 
 ## 4. Stack atual
 
-Nenhuma stack escolhida. STATUS: UNCERTAIN.
+**WPF com C# e .NET 10 LTS**, escolhida por delegação explícita do usuário. STATUS: PLANNED. P1, P2 e P3 ainda precisam demonstrar transparência por pixel, repouso adequado e arraste sem roubo de foco antes da Fase 1. A pesquisa que colocou Win32 nativo em primeiro continua como comparação histórica; Win32 fica como alternativa de retorno se um requisito central falhar.
 
-A recomendação da Fase 0 ainda não está registrada: DEC-006 é um espaço reservado. Esses frameworks aparecem como alternativas candidatas no histórico, mas a comparação com evidências e trade-offs não está disponível nos documentos atuais. Q-01 permanece UNCERTAIN.
+O comparativo cobriu nove alternativas e registrou três avaliações independentes; a pesquisa técnica original favoreceu Win32 nativo por controle e custo potencial, mas a decisão final considera também a facilidade de evoluir e manter o produto por uma pessoa com apoio de agentes. WPF oferece a janela layered documentada e controles de interface prontos; seus riscos de runtime, DPI e repouso serão verificados por P1–P3. P9 e Q-22 foram encerrados como não aplicáveis.
 
 ## 5. Arquitetura atual
 
@@ -53,25 +53,27 @@ Arquitetura planejada (STATUS: PLANNED, detalhes em [ARCHITECTURE.md](ARCHITECTU
 ## 6. Estrutura de diretórios
 
 ```
-claudio/
-├── .git/                      # repositório local, sem remoto
-├── .gitignore                 # mínimo; ampliar quando a stack for escolhida
+claudio/                       # nome herdado da pasta local; o projeto é o Buzzy
+├── .git/                      # remoto origin: github.com/fishpedrol/Claudio.git; main rastreia origin/main
+├── .gitignore                 # mínimo; revisar com os protótipos WPF e o primeiro build
 ├── assets/
 │   └── references/
-│       └── buzzy-character-concept.png # referência conceitual fornecida pelo usuário
+│       ├── buzzy-character-concept.png  # referência visual para proposta original; incluída em PRODUCT_SPEC.md
+│       └── buzzy-character-concept2.png # segunda referência visual; incluída em PRODUCT_SPEC.md
 ├── AGENTS.md                  # instruções comuns dos agentes: fontes, papéis, sincronização, veracidade
 ├── CLAUDE.md                  # entrada curta para Claude; aponta para AGENTS.md
 ├── README.md                  # visão geral e índice da documentação
-├── prompt_usuario.md          # rascunho temporário do próximo prompt para o terminal do Fable
+├── prompt_usuario.md          # próximo prompt de trabalho para o terminal do Claude
 ├── context codex/
-│   ├── PROMPT_MESTRE_BUZZY.md # prompt operativo; a seção "Fase atual" só muda com aprovação do usuário
+│   ├── PROMPT_MESTRE_BUZZY.md # prompt operativo; atualizar a seção "Fase atual" quando fase ou decisão material mudar
 │   ├── context.md             # índice para as fontes canônicas
 │   └── HANDOFF.md             # ponte de compatibilidade para o prompt mestre
 └── docs/
     ├── PROJECT_CONTEXT.md     # este arquivo
     ├── PRODUCT_SPEC.md        # visão estável, MVP e limites
+    ├── DECISOES_DO_USUARIO.md # resumo simples das decisões respondidas e pendências futuras
     ├── ARCHITECTURE.md        # arquitetura implementada (nenhuma) e planejada
-    ├── DECISIONS.md           # decisões DEC-nnn e escolhas em aberto Q-nn
+    ├── DECISIONS.md           # decisões DEC-nnn e respostas/pendências Q-nn
     ├── SECURITY.md            # segurança, dados e permissões
     ├── TODO.md                # roadmap único de fases, critérios e testes
     ├── DEVELOPMENT_LOG.md     # histórico cronológico
@@ -103,7 +105,7 @@ Nenhuma área tem código. Cada linha resume a proposta e aponta para o detalhe.
 | Clique e caixa de texto | PLANNED | Soltar dentro do limiar é clique. A caixa de texto fica em janela própria e recebe todo o teclado quando focada. Nenhuma tecla move o personagem. | ARCHITECTURE.md 2.7 |
 | Multi-monitor | PLANNED | Topologia arbitrária, coordenadas negativas, escalas e orientações diferentes, conexão e desconexão, restauração em cascata. Fundamentos nas Fases 1 e 3; conclusão na Fase 5. | ARCHITECTURE.md 2.4, 2.5 e 2.8, DEC-008 |
 | Movimento | PLANNED | Passo fixo, física em DIPs, superfícies derivadas das áreas úteis (escolha Q-05). | ARCHITECTURE.md 2.5 e 2.9 |
-| Rendering | PLANNED | Janela do tamanho do sprite com transparência por pixel; redesenho só quando o quadro muda. A técnica exata depende da stack. | ARCHITECTURE.md 2.10 e 2.13 |
+| Rendering | PLANNED | Janela WPF do tamanho do sprite com `AllowsTransparency`; redesenho só quando o quadro muda. P1 verifica clique atravessando alfa 0; P2 mede repouso. | ARCHITECTURE.md 2.10 e 2.13 |
 | Animações | PLANNED | Clipes definidos em manifesto de assets, com taxa de quadros própria; asset provisório original e substituível. | ARCHITECTURE.md 2.10 |
 | Expressões | PLANNED | Dimensão separada do comportamento; trocar expressão não muda estado nem posição. | ARCHITECTURE.md 2.6 e 2.10 |
 | Conversa | PLANNED | Tabela local de intenções, determinística, sem rede e sem gravar o que foi digitado. | ARCHITECTURE.md 2.11 |
@@ -116,10 +118,13 @@ Nenhuma área tem código. Cada linha resume a proposta e aponta para o detalhe.
 ## 10. Limitações conhecidas
 
 - Não há aplicativo, build ou teste; nada pode ser executado.
-- Várias afirmações técnicas só se confirmam com protótipo: clique através de pixels transparentes em cada stack, custo em repouso, arraste sem roubar foco, foco da caixa de texto, mensagens de topologia e estabilidade da chave do monitor (P1 a P8 em TODO.md).
+- Várias afirmações técnicas só se confirmam com protótipo: clique através de pixels transparentes, custo em repouso, arraste sem roubar foco, foco da caixa de texto, mensagens de topologia, estabilidade da chave do monitor e esforço da interface nativa (P1 a P10 em TODO.md).
 - As verificações [HW] exigem dois ou mais monitores com escalas ou orientações diferentes. A disponibilidade desse hardware não foi confirmada.
-- A pesquisa de stack ainda não foi materializada em DEC-006. O workflow de pesquisa existente está pausado pelo limite de uso; seus resultados não devem ser tratados como perdidos nem refeitos antes de tentar retomá-lo. ARCHITECTURE.md 2.13 e SECURITY.md 4 também continuam como espaços reservados.
-- TODO.md afirma que a revisão adversarial de fundo foi recuperada, mas DEVELOPMENT_LOG.md ainda não registra o resultado. Essa afirmação precisa ser confirmada ou corrigida antes de marcar a tarefa como concluída.
+- Só 84 das 300 alegações decisivas da pesquisa de stack passaram por verificação adversarial, e dois terços dessas precisaram de correção. As 216 restantes não foram verificadas.
+- Nenhuma das nove stacks comparadas tem número oficial de consumo de memória, CPU ou GPU no Windows. Todos os números encontrados são de terceiros e vários foram corrigidos na verificação adversarial por exagerar o que a fonte sustenta. A comparação de consumo em DEC-006 é de mecanismo, não de medição.
+- A viabilidade real de janela layered WPF, repouso e arraste precisa dos protótipos P1–P3. O custo comparativo de controles nativos (P9) não é mais relevante para a escolha atual.
+- A pesquisa de stack esgotou o limite de buscas na web da sessão. Parte da verificação adversarial trabalhou abrindo as URLs já citadas, sem novas buscas.
+- A revisão adversarial documental de fundo terminou, mas **não é recuperável a partir deste repositório**: nenhum achado ou relatório dela existe nos arquivos versionados nem no histórico. A tarefa correspondente continua pendente em TODO.md. Além disso, ela avaliou a versão dos documentos de 2026-09-25, anterior à reestruturação do Buzzy, então não valeria como revisão do plano atual.
 
 ## 11. Bugs conhecidos
 
@@ -134,7 +139,7 @@ Nenhum bug de implementação, porque não há código.
 | DEC-003 | MVP local sem IA | ACCEPTED |
 | DEC-004 | Prioridade do usuário | ACCEPTED |
 | DEC-005 | Segurança explícita | ACCEPTED |
-| DEC-006 | Stack recomendada | UNCERTAIN, pendente de aprovação |
+| DEC-006 | Stack escolhida: WPF/C#/.NET 10; pesquisa técnica comparativa preservada | ACCEPTED; P1–P3 ainda pendentes |
 | DEC-007 | Um processo, núcleo puro, adaptador único | UNCERTAIN, proposta |
 | DEC-008 | Coordenadas e monitores | UNCERTAIN, proposta |
 | DEC-009 | Arbitragem de input e foco | UNCERTAIN, proposta |
@@ -142,15 +147,16 @@ Nenhum bug de implementação, porque não há código.
 | DEC-011 | Ociosidade e medição de desempenho | UNCERTAIN, proposta |
 | DEC-012 | Revisão do roadmap | UNCERTAIN, proposta |
 
-As escolhas de produto que aguardam o usuário (Q-01 a Q-14) estão em [DECISIONS.md](DECISIONS.md), seção "Escolhas em aberto". Q-15 foi resolvida como questão operacional e não bloqueia a fase.
+As decisões de produto atualmente respondidas e as pendências estão discriminadas em [DECISIONS.md](DECISIONS.md). Q-08 depende da medição P2; formato e assinatura de uma eventual distribuição pública continuam para decisão futura em Q-10. Q-01 e Q-13 foram resolvidas por delegação do usuário; Q-15 foi resolvida como questão operacional; Q-16 a Q-19 foram esclarecidas como referências visuais, sem decisões implícitas; Q-22 não se aplica.
+
+As referências visuais devem orientar Claude a criar uma proposta original para o Buzzy. Nome, acessórios, poses e estilo vistos nelas não são requisitos aprovados; a nova proposta deve ser apresentada ao usuário para aprovação.
 
 ## 13. Próxima fase
 
-1. Claude/Fable completa a comparação de stack e preenche as seções técnicas que ainda estão vazias, sem iniciar código.
-2. O Codex revisa a proposta completa da Fase 0 conforme PLAN_REVIEW.md.
-3. O usuário decide as escolhas em aberto; as que bloqueiam a Fase 1 são Q-01, Q-02, Q-03, Q-10 e Q-13.
-4. Se Q-13 aprovar, acontece a Etapa 0B: protótipos descartáveis P1 a P3 antes de confirmar a stack.
-5. Com a stack aprovada e a Fase 0 fechada pelo usuário, começa a **Fase 1 — Shell do desktop** (TODO.md).
+1. Claude executa P1, P3 e P2 como protótipos descartáveis WPF conforme `prompt_usuario.md`; não inicia o produto.
+2. Codex revisa o código e os resultados dos protótipos, propõe Q-08 a partir das medidas e reabre DEC-006 se P1 ou P3 falharem.
+3. Sincronizar os documentos e concluir a revisão da Fase 0. As escolhas atuais de plataforma, janela e ZIP de teste já foram respondidas.
+4. Só depois da Fase 0 fechada e da autorização do usuário começa a **Fase 1 — Shell do desktop** (TODO.md).
 
 ## 14. Instruções para executar
 
@@ -176,14 +182,15 @@ A regra de sincronização ao fim de cada fase e a regra de veracidade estão em
 | CLAUDE.md | Entrada curta de Claude, que aponta para AGENTS.md | Raramente |
 | README.md | Visão geral e índice | Um documento for criado ou renomeado |
 | docs/PRODUCT_SPEC.md | Visão do Buzzy, escopo do MVP e restrições | O usuário alterar uma decisão de produto |
+| docs/DECISOES_DO_USUARIO.md | Resumo legível das escolhas respondidas e das pendências futuras; DECISIONS.md continua sendo a fonte oficial | Uma escolha for resolvida ou mudar |
 | docs/PROJECT_CONTEXT.md | Estado atual, fase e próximos passos | Ao fim de toda fase |
 | docs/ARCHITECTURE.md | Arquitetura implementada e desenho planejado, separados por status | O desenho ou a arquitetura real mudar |
-| docs/DECISIONS.md | Decisões, alternativas e escolhas em aberto | Uma decisão for proposta, aceita ou substituída |
+| docs/DECISIONS.md | Decisões, alternativas, respostas do usuário e pendências | Uma decisão for proposta, aceita ou substituída |
 | docs/SECURITY.md | Segurança, dados e permissões | O modelo de segurança mudar |
 | docs/TODO.md | Fases, tarefas, critérios, testes e bloqueios | Ao fim de toda fase |
 | docs/DEVELOPMENT_LOG.md | Histórico cronológico | Ao fim de toda fase |
 | docs/PLAN_REVIEW.md | Critérios do Codex para revisar planos | O processo de revisão mudar |
-| context codex/PROMPT_MESTRE_BUZZY.md | Prompt operativo e seção "Fase atual" | O usuário aprovar uma transição de fase |
+| context codex/PROMPT_MESTRE_BUZZY.md | Prompt operativo e seção "Fase atual" | A fase atual ou uma decisão material mudar |
 | context codex/context.md | Índice para as fontes canônicas | Uma fonte canônica mudar de lugar |
 | context codex/HANDOFF.md | Ponte de compatibilidade | Raramente |
 | prompt_usuario.md | Rascunho temporário do próximo prompt que o usuário copia para o terminal do Fable | Antes do envio; pode ser limpo após copiar |

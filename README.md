@@ -2,7 +2,7 @@
 
 Buzzy é um mascote original e interativo para desktop Windows, inspirado na experiência lúdica dos mascotes clássicos de desktop.
 
-STATUS: PLANNED. O projeto está na Fase 0 — descoberta e arquitetura. A proposta técnica aguarda revisão e aprovação; ainda não há stack aprovada, código nem instruções de build.
+STATUS: PLANNED. O projeto está na Fase 0 — descoberta e arquitetura, Etapa 0B. A stack escolhida por delegação do usuário é WPF com C# e .NET 10; os protótipos P1–P3 ainda precisam validá-la. Ainda não há código de produto nem instruções de build.
 
 ## Documentos
 
@@ -11,7 +11,8 @@ STATUS: PLANNED. O projeto está na Fase 0 — descoberta e arquitetura. A propo
 - [Estado atual do projeto](docs/PROJECT_CONTEXT.md)
 - [Fases e pendências](docs/TODO.md)
 - [Arquitetura](docs/ARCHITECTURE.md)
-- [Decisões e escolhas em aberto](docs/DECISIONS.md)
+- [Decisões registradas e pendências futuras](docs/DECISIONS.md)
+- [Resumo das decisões do usuário](docs/DECISOES_DO_USUARIO.md)
 - [Segurança](docs/SECURITY.md)
 - [Histórico de desenvolvimento](docs/DEVELOPMENT_LOG.md)
 - [Revisão de planos](docs/PLAN_REVIEW.md)

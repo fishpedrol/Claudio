@@ -6,7 +6,7 @@ Use este prompt para conduzir Claude/Fable no Buzzy. As regras abaixo são está
 
 - **Claude, no modelo escolhido pelo usuário (Fable ou Opus):** prepara o plano da fase atual e implementa somente o escopo que o usuário autorizou.
 - **Codex:** segundo olhar independente. Compara o plano de Claude com a visão do produto, os documentos e o estado real; aponta inconsistências, riscos e lacunas; propõe um plano corrigido e mantém o contexto operativo atualizado.
-- **Usuário:** decide mudanças de produto, recomendações materiais de stack e quando iniciar ou avançar uma fase.
+- **Usuário:** decide mudanças de produto e quando iniciar ou avançar fases. Quando delegar explicitamente uma decisão ao Codex, essa decisão será registrada nos documentos com os critérios e limites usados.
 
 Claude, independentemente de o usuário escolher Fable ou Opus, é uma ferramenta de desenvolvimento; isso não significa IA dentro do aplicativo. O MVP continua sem IA integrada.
 
@@ -39,7 +39,7 @@ Siga integralmente docs/PRODUCT_SPEC.md. Em especial:
 - Movimento e conversa do MVP funcionam localmente, sem IA integrada.
 - Não adicione LLM, RAG, embeddings, APIs de IA, voz, backend, nuvem, telemetria, analytics, auto-updater, comandos arbitrários, shell/PowerShell/CMD arbitrários, keylogging, captura silenciosa de tela ou controle genérico do computador.
 - Segurança e performance entram no desenho desde a Fase 0. Não crie complexidade futura sem necessidade demonstrada pelo MVP.
-- Quando a tarefa envolver desenho, animação ou assets do personagem, abra a referência visual apontada em docs/PRODUCT_SPEC.md e use-a como direção conceitual dentro dos limites descritos ali.
+- Quando a tarefa envolver desenho, animação ou assets do personagem, abra as duas referências em docs/PRODUCT_SPEC.md. São pontos de partida para uma proposta original melhor, não especificações literais nem arte aprovada. Preserve os limites de produto e apresente a nova proposta ao usuário antes de tratá-la como final.
 
 ## Revisão do plano
 
@@ -49,7 +49,7 @@ Use docs/PLAN_REVIEW.md. Separe fatos do repositório, requisitos, inferências 
 
 Use a skill code-review somente quando houver um diff útil e uma base de comparação identificável. Uma revisão de plano pode e deve ser feita sem Git; não invente uma base nem trate ausência de diff como falha do plano.
 
-Não escolha tecnologia por preferência ou popularidade. Compare alternativas com evidências técnicas atuais, critérios do produto, riscos, trade-offs e recomendação. Se uma decisão material não puder ser tomada com os documentos, apresente opções concisas e aguarde o usuário.
+Não escolha tecnologia por preferência ou popularidade. Compare alternativas com evidências técnicas atuais, critérios do produto, riscos e trade-offs. Se o usuário delegar a escolha ao Codex, escolha a opção que melhor atende ao projeto completo, explique o motivo e registre os portões de reversão. Sem delegação explícita, apresente opções concisas e aguarde o usuário.
 
 ## Estado do gate
 
@@ -79,28 +79,16 @@ Registre decisões substituídas sem apagá-las. Não mantenha roadmap ou regras
 ## Fase atual — seção variável
 
 - **Data da atualização:** 2026-09-26.
-- **Fase:** 0 — Descoberta e arquitetura.
+- **Fase:** Fase 0 — Descoberta e arquitetura, Etapa 0B — Viabilidade WPF.
 - **Status:** STATUS: PLANNED.
-- **Objetivo:** concluir o plano de arquitetura e execução do MVP Buzzy antes de iniciar código de produto.
-- **Estado observado:** há documentação e Git local sem remoto; não há código, build ou stack aprovada. Confirme novamente antes de depender desse estado.
-- **Plano disponível:** proposta parcial distribuída pelos documentos. DEC-006, ARCHITECTURE.md 2.13 e SECURITY.md 4 ainda são espaços reservados.
-- **Stack:** STATUS: UNCERTAIN. A recomendação ainda não foi registrada em DEC-006.
-- **Escopo deste ciclo:** concluir a comparação e alinhar a documentação da Fase 0. Não implementar funcionalidades do Buzzy nem iniciar protótipos sem aprovação do usuário em Q-13.
+- **Objetivo:** executar protótipos descartáveis na stack escolhida antes de construir o shell do Buzzy.
+- **Estado observado:** existe documentação e Git com remoto `origin`; ainda não há código do aplicativo, build nem teste. Confirme novamente antes de depender desse estado.
+- **Stack:** WPF com C# e .NET 10 LTS, aceita por delegação explícita do usuário e registrada em DEC-006. Não declare a stack validada antes de P1–P3.
+- **Escopo deste ciclo:** concluir apenas P1 (clique por pixel), P3 (arraste sem roubo de foco) e P2 (medição em repouso e animação), nessa ordem, em código descartável sob `spikes/`. Não iniciar a Fase 1 nem criar funcionalidades do produto.
+- **Visual:** as duas imagens em `assets/references/` são referências para Claude elaborar futuramente uma proposta original melhor; não copiar detalhes como requisitos e não gastar este ciclo em arte.
 
-### Entregáveis da Fase 0
+### Critério de conclusão da Etapa 0B
 
-O plano de Claude/Fable deve cobrir:
+Os três protótipos devem ter método, versão do Windows, hardware, evidência observável e resultado registrados. P1 e P3 precisam passar para recomendar a continuação com WPF. P2 informa a linha de base e as metas Q-08; se o resultado for ruim, primeiro corrigir o ciclo de renderização e medir de novo. Falha de P1 ou P3 suspende a Fase 1 e devolve a stack ao Codex para revisão.
 
-1. Comparação de tecnologias para Windows baseada em transparência, janela/tray, input, animações, multi-monitor/DPI, RAM/CPU, estabilidade, distribuição, ecossistema e manutenção; incluir fontes, trade-offs e recomendação.
-2. Arquitetura mínima e fluxo entre desktop shell, coordenadas do desktop virtual, núcleo determinístico, eventos, input/drag, movimento, apresentação e persistência.
-3. Máquina de estados, eventos, transições, distinção entre clique e drag, foco da caixa de texto e ciclo completo de drag com prioridade do usuário.
-4. Cenários multi-monitor para topologia arbitrária, DPI, orientação, conexão/desconexão e mudança de configuração.
-5. Fronteiras de segurança, permissões realmente necessárias e dados persistidos localmente.
-6. Critérios de aceitação e testes por fase, além de metas mensuráveis de performance em idle e uso prolongado.
-7. Roadmap e arquivos documentais a sincronizar, com dependências, riscos e critério de conclusão.
-
-### Critério de conclusão
-
-A Fase 0 termina quando a recomendação técnica e a arquitetura planejada estiverem registradas com evidências, os critérios e testes forem verificáveis, os documentos concordarem e o usuário aceitar o plano e a stack antes da Fase 1.
-
-**Próxima ação permitida:** Claude/Fable completa DEC-006, ARCHITECTURE.md 2.13 e SECURITY.md 4; corrige os status do TODO.md e registra o estado real no DEVELOPMENT_LOG.md. Depois, Codex revisa a Fase 0 completa e o usuário decide sobre correções, escolhas e início da implementação.
+**Próxima ação permitida:** Claude lê as fontes canônicas, executa somente P1, P3 e P2 conforme `prompt_usuario.md`, e atualiza o DEVELOPMENT_LOG.md e TODO.md com evidências reais. Depois para. Codex revisa protótipo, resultados e documentos; em seguida resolve os bloqueios remanescentes de Fase 0. Não avançar à Fase 1 sem autorização do usuário.

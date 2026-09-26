@@ -12,11 +12,17 @@ Buzzy terá identidade e personagem originais. Não copiar nome, personagem, vis
 
 O personagem conceitual é um pequeno primata arbóreo antropomórfico, amigável, curioso, brincalhão, ágil e expressivo: cabeça relativamente grande, olhos expressivos, focinho curto, orelhas arredondadas, braços longos, mãos adequadas à escalada, pernas compactas e cauda longa e expressiva. A arte definitiva será produzida separadamente; o software começa com asset provisório substituível.
 
-### Referência visual fornecida pelo usuário
+### Referências visuais fornecidas pelo usuário
 
-![Prancha conceitual do personagem Buzzy](../assets/references/buzzy-character-concept.png)
+As duas pranchas em `assets/references/buzzy-character-concept.png` e `assets/references/buzzy-character-concept2.png` são referências para Claude desenvolver uma proposta visual original e mais coesa para o Buzzy. Não são arte final, folha de sprites aprovada nem lista de requisitos. Claude pode usar delas a direção geral que ajude a representar o personagem, mas deve propor um resultado próprio para revisão do usuário.
 
-Esta prancha é uma referência de direção visual para o personagem: primata de pelo azul-escuro, áreas do rosto e barriga em tom bege, olhos grandes e expressivos e cauda longa com ponta clara. Ela ajuda Claude/Fable a entender o conceito desejado, mas não é uma folha de sprites pronta nem aprova cada pose, expressão, proporção ou detalhe como requisito final. O cursor de mouse que aparece em um quadro é apenas parte ilustrativa da imagem e não pertence ao personagem nem ao produto. Detalhes finais de arte e animação continuam em aberto até aprovação do usuário.
+![Primeira prancha conceitual de referência](../assets/references/buzzy-character-concept.png)
+
+![Segunda prancha conceitual de referência](../assets/references/buzzy-character-concept2.png)
+
+Elementos que aparecem nas pranchas — incluindo o nome "Pixel", chapéu, poses sobre superfícies, estilo de renderização, cores e acessórios — não ficam aprovados automaticamente. O nome do produto permanece Buzzy conforme esta especificação; qualquer mudança depende de decisão explícita do usuário. As poses não ampliam o escopo atual de superfícies do MVP. A proposta nova deve manter identidade visual distinta de personagens existentes, conforme DEC-002.
+
+O cursor de mouse que aparece em um quadro é apenas parte ilustrativa e não pertence ao personagem nem ao produto. O design final, as poses e as animações continuam pendentes de aprovação do usuário.
 
 ## Escopo do MVP
 
@@ -35,7 +41,16 @@ O MVP deve incluir:
 
 O MVP começa com uma personalidade local. Ela pode influenciar frases, reações, expressões e intensidade do comportamento sem depender de IA.
 
-Always-on-top, tray, minimizar/restaurar, redimensionamento, opacidade e comportamento de inicialização precisam ser avaliados na Fase 0 e registrados como decisões antes de entrarem no escopo confirmado.
+## Decisões de produto confirmadas
+
+As decisões abaixo foram respondidas pelo usuário em 2026-09-26 e detalhadas em [DECISIONS.md](DECISIONS.md). São escopo planejado, ainda não implementado:
+
+- **Plataforma:** Windows 11, com Windows 11 24H2 ou posterior como alvo inicial de teste.
+- **Janela e acesso:** sempre no topo por padrão, opção para desligar, ícone e menu na bandeja, sem botão na barra de tarefas, ocultar/restaurar pela bandeja, escala em passos fixos, sem controle de opacidade no MVP e segunda abertura revelando a instância existente. O botão direito abre o menu.
+- **Controle e movimento:** clique reage, clique duplo abre conversa e botão direito abre menu. No MVP, o personagem usa mouse e touchpad e se apoia apenas nas bordas das áreas úteis dos monitores; atravessar monitores fica ligado por padrão e pode ser desligado. Janelas de outros aplicativos, atalhos de controle, toque e caneta ficam fora do MVP.
+- **Conversa e configurações:** somente português do Brasil. As janelas de conversa e configurações devem permitir navegação por teclado e leitor de tela; a janela do personagem não é alvo de leitor de tela.
+- **Preferências:** iniciar com o Windows será opcional, desligado por padrão. O Buzzy será escondido ou ficará quieto durante outro aplicativo em tela cheia apenas se P7 confirmar custo desprezível. Modo fantasma não entra no MVP.
+- **Build inicial:** ZIP portátil sem assinatura nem instalador para uso pessoal e testes. Distribuição pública e assinatura só serão decididas se o usuário optar por publicar para outras pessoas. O modo de empacotar o runtime .NET será definido no plano de build.
 
 ## Interação e prioridade do usuário
 
@@ -79,7 +94,7 @@ Claude pode ser usado como assistente de desenvolvimento nos modelos que o usuá
 
 ## Configurações e dados locais
 
-Persistência local pode guardar configurações, posição, monitor preferido, tamanho, opacidade e preferências de comportamento quando aprovadas. Não há memória de IA nem sincronização em nuvem no MVP. A lista exata, formato e localização serão decididos na Fase 0 após a escolha da stack.
+Persistência local pode guardar configurações, posição, monitor preferido, tamanho e preferências de comportamento aprovadas. Opacidade não é uma configuração do MVP. Não há memória de IA nem sincronização em nuvem no MVP. O esquema e a localização planejados estão em ARCHITECTURE.md e SECURITY.md.
 
 ## Segurança
 
@@ -93,10 +108,9 @@ O aplicativo pode permanecer aberto por horas. Priorizar baixa atividade em idle
 
 ## Decisões abertas
 
-- Stack, framework e APIs de janela.
-- Comportamento de always-on-top, tray, minimizar/restaurar, redimensionamento, opacidade e inicialização.
-- Modelo detalhado de física, superfícies, animações e assets.
-- Formato de persistência e permissões específicas.
-- Metas de desempenho e critérios de aceitação por funcionalidade.
+- Metas numéricas de desempenho, a definir depois de medir o protótipo P2 (Q-08).
+- Modelo detalhado de física, superfícies, animações e assets, conforme as fases correspondentes.
+- Detalhes finais do formato de persistência e permissões específicas, seguindo ARCHITECTURE.md e SECURITY.md.
+- Formato e assinatura para eventual distribuição pública, a decidir antes de publicar para outras pessoas (Q-10).
 
 Essas decisões não devem ser inventadas pelo plano de implementação. Registrar alternativas, trade-offs e recomendação antes de codificar a parte correspondente.

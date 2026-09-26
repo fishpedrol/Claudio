@@ -6,11 +6,11 @@
 
 ## 1. Arquitetura implementada
 
-Nenhuma. A inspeção dos arquivos em 2026-09-26 encontrou apenas documentação, um `.gitignore` e o repositório Git local. Não há código, dependência, build ou teste.
+Nenhuma. A inspeção dos arquivos em 2026-09-26 encontrou apenas documentação, um `.gitignore`, o repositório Git e duas pranchas conceituais em `assets/references/`. Não há código, dependência, build ou teste.
 
 ## 2. Arquitetura planejada
 
-STATUS: PLANNED. Proposta da Fase 0, pendente de revisão do Codex e de decisão do usuário. A stack recomendada está em DEC-006 ([DECISIONS.md](DECISIONS.md)) e ainda é STATUS: UNCERTAIN. As seções 2.1 a 2.12 valem para qualquer stack; a seção 2.13 mostra como elas se encaixam na stack recomendada.
+STATUS: PLANNED. Proposta da Fase 0 revisada pelo Codex; a viabilidade da stack ainda depende dos protótipos. A escolha por delegação do usuário está em DEC-006 ([DECISIONS.md](DECISIONS.md)): WPF, C# e .NET 10. As seções 2.1 a 2.12 valem para qualquer stack; a seção 2.13 mostra como elas se encaixam na stack escolhida.
 
 ### 2.1 Princípios
 
@@ -30,7 +30,8 @@ STATUS: PLANNED. Proposta da Fase 0, pendente de revisão do Codex e de decisão
 | Arbitragem de input | Converte eventos de ponteiro em gestos (pressionar, clicar, iniciar arraste, arrastar, soltar, cancelar). Decide quem é o dono do input: personagem, caixa de texto ou menu. | Nada | Ler teclado global; interpretar tecla digitada como comando |
 | Movimento | Cinemática com passo fixo: caminhar, escalar, saltar, cair, pousar. Colisão contra as superfícies do mundo do desktop. | Mundo do desktop | Iniciar ação por conta própria; a decisão é do núcleo |
 | Apresentação | Recebe o retrato do estado e escolhe animação, quadro e expressão pelo manifesto de assets. Desenha a janela transparente e gera a máscara de clique. | Manifesto de assets, adaptador (superfície de desenho) | Alterar estado ou posição do personagem |
-| Conversa local | Normaliza o texto digitado e escolhe uma resposta em uma tabela local de intenções, com semente. | Arquivo de conteúdo local, somente leitura | Rede, IA, execução de texto como código, gravação do que foi digitado |
+| Personalidade | Conjunto de pesos lidos de um arquivo de dados: com que frequência cada comportamento autônomo é escolhido, quanto tempo o personagem fica parado, quais expressões predominam e qual conjunto de frases a conversa usa. É consultada, nunca decide sozinha. | Arquivo de conteúdo local, somente leitura | Mudar de estado; aprender; guardar histórico |
+| Conversa local | Normaliza o texto digitado e escolhe uma resposta em uma tabela local de intenções, com semente. | Personalidade, arquivo de conteúdo local, somente leitura | Rede, IA, execução de texto como código, gravação do que foi digitado |
 | Configurações e persistência | Esquema tipado com versão, valores padrão, validação, migração e gravação atômica em arquivo local. | Adaptador (caminho da pasta de dados) | Guardar texto digitado, segredos ou dados de outros aplicativos |
 | Raiz de composição | Liga os módulos, executa os efeitos pedidos pelo núcleo e controla o loop. | Todos | Conter regra de comportamento |
 
@@ -75,7 +76,7 @@ STATUS: PLANNED. Proposta registrada em DEC-008.
 
 ### 2.5 Superfícies
 
-STATUS: PLANNED. O escopo de superfícies do MVP é a escolha em aberto Q-05 em [DECISIONS.md](DECISIONS.md).
+STATUS: PLANNED. O usuário aceitou Q-05 em [DECISIONS.md](DECISIONS.md): no MVP, as superfícies vêm apenas das áreas úteis dos monitores; janelas de outros aplicativos ficam fora.
 
 Proposta para o MVP: as superfícies são derivadas apenas das áreas úteis dos monitores. Janelas de outros aplicativos não são superfícies.
 
@@ -106,9 +107,17 @@ STATUS: PLANNED. Estado de comportamento e expressão são dimensões independen
 | `DRAGGING` | usuário | Personagem preso ao cursor. |
 | `SETTLING` | usuário | Validação logo depois de soltar ou depois de uma mudança de topologia. |
 | `REACTING` | usuário | Reação curta a um clique. |
-| `CONVERSING` | usuário | Caixa de texto aberta; autonomia suspensa. |
-| `HIDDEN` | sistema | Escondido pela bandeja, sessão bloqueada ou suspensão. Sem relógio, sem desenho. |
+| `CONVERSING` | usuário | Parado com a caixa de texto aberta. Autonomia suspensa. |
+| `HIDDEN` | sistema | Escondido. Sem relógio, sem desenho. Guarda **por que** foi escondido: `POR_USUARIO`, `POR_SESSAO` ou `POR_SUSPENSAO`. |
 | `EXITING` | sistema | Grava estado e encerra. |
+
+**Dimensões ortogonais.** Duas informações acompanham o personagem sem fazer parte do estado de comportamento, do mesmo jeito que a expressão:
+
+| Dimensão | Valores | Efeito |
+|---|---|---|
+| Expressão | feliz, curioso, sonolento e demais | Nenhum sobre comportamento ou posição |
+| Caixa de texto | aberta ou fechada | Enquanto aberta, a autonomia fica suspensa em qualquer estado. `CONVERSING` é o estado parado com a caixa aberta; arrastar o personagem com a caixa aberta leva a `DRAGGING` sem fechá-la |
+| Motivo do ocultamento | `POR_USUARIO`, `POR_SESSAO`, `POR_SUSPENSAO` | Decide quais eventos podem tirar o personagem de `HIDDEN` |
 
 **Eventos**
 
@@ -116,7 +125,7 @@ STATUS: PLANNED. Estado de comportamento e expressão são dimensões independen
 |---|---|
 | Ponteiro, somente sobre as janelas do Buzzy ou com captura ativa | `POINTER_DOWN(p, botão)`, `POINTER_MOVE(p)`, `POINTER_UP(p, botão)`, `CAPTURE_LOST` |
 | Gestos derivados pela arbitragem | `PRESS`, `CLICK`, `DOUBLE_CLICK`, `DRAG_START`, `DRAG_MOVE(p)`, `DRAG_END(p)`, `DRAG_CANCEL`, `CONTEXT_MENU` |
-| Caixa de texto | `TEXT_OPEN`, `TEXT_FOCUS_GAINED`, `TEXT_FOCUS_LOST`, `TEXT_SUBMIT(texto)`, `TEXT_CLOSE` |
+| Caixa de texto | `TEXT_OPEN`, `TEXT_SUBMIT(texto)`, `TEXT_CLOSE`, e os avisos de foco `TEXT_FOCUS_GAINED` e `TEXT_FOCUS_LOST`, que não mudam estado: servem só para a apresentação e para contar o tempo de fechamento por inatividade |
 | Sistema | `TOPOLOGY_CHANGED(topologia)`, `SESSION_LOCKED`, `SESSION_UNLOCKED`, `SUSPENDING`, `RESUMED`, `SESSION_ENDING` |
 | Bandeja e menu | `CMD_HIDE`, `CMD_SHOW`, `CMD_PAUSE_AUTONOMY`, `CMD_RESUME_AUTONOMY`, `CMD_OPEN_SETTINGS`, `CMD_RESET_POSITION`, `CMD_EXIT` |
 | Relógio | `TICK(dt)` com passo fixo, `AUTONOMY_TIMER` |
@@ -132,18 +141,31 @@ STATUS: PLANNED. Estado de comportamento e expressão são dimensões independen
 | `PRESSED` | `CLICK` | `REACTING` | Reação curta. Depois, `SETTLING` decide o próximo estado. |
 | `DRAGGING` | `DRAG_MOVE(p)` | `DRAGGING` | Posição = cursor menos o deslocamento da pegada. |
 | `DRAGGING` | `DRAG_END` ou `DRAG_CANCEL` | `SETTLING` | Validação da seção 2.7. |
-| `SETTLING` | com apoio | `IDLE` | Autonomia retomada depois de um intervalo de acomodação. |
-| `SETTLING` | sem apoio | `FALLING` | Cai até o chão do monitor. |
-| `IDLE`, `REACTING` | `DOUBLE_CLICK` ou menu "Conversar" | `CONVERSING` | Abre a caixa de texto e dá foco a ela. |
+| `SETTLING` | com apoio e caixa fechada | `IDLE` | Autonomia retomada depois de um intervalo de acomodação. |
+| `SETTLING` | com apoio e caixa aberta | `CONVERSING` | A caixa continua aberta; a autonomia segue suspensa. |
+| `SETTLING` | sem apoio | `FALLING` | Cai até o chão do monitor, com a caixa aberta ou fechada. |
+| `IDLE`, `REACTING` | `DOUBLE_CLICK` ou menu "Conversar" | `CONVERSING` | Marca a caixa como aberta e dá foco a ela. |
 | `CONVERSING` | `TEXT_SUBMIT` | `CONVERSING` | Mostra a resposta local; a caixa continua aberta. |
-| `CONVERSING` | `TEXT_CLOSE` | `IDLE` | Autonomia retomada. |
-| `CONVERSING` | `PRESS` e depois `DRAG_START` | `DRAGGING` | A caixa acompanha o personagem e continua aberta; ao soltar, volta a `CONVERSING`. |
-| `IDLE` | `AUTONOMY_TIMER` | `WALKING`, `CLIMBING`, `JUMPING` ou `RESTING` | Escolha ponderada pela personalidade, com semente. |
+| `CONVERSING` | `TEXT_CLOSE` | `IDLE` | Marca a caixa como fechada; autonomia retomada. |
+| `CONVERSING` | `PRESS`, depois `DRAG_START` | `DRAGGING` | A caixa continua aberta e acompanha o personagem. Ao soltar, `SETTLING` devolve a `CONVERSING`. |
+| `FALLING`, `LANDING` com caixa aberta | contato com o chão | `CONVERSING` | A caixa aberta impede retomar autonomia. |
+| `IDLE` | `AUTONOMY_TIMER` | `WALKING`, `CLIMBING`, `JUMPING` ou `RESTING` | Escolha ponderada pela personalidade, com semente. Só acontece com a caixa fechada. |
 | `WALKING` | parede, passagem ou fim do chão | `IDLE`, `CLIMBING`, `FALLING` ou `WALKING` | Conforme a superfície (seção 2.5). |
-| `JUMPING`, `FALLING` | contato com o chão | `LANDING`, depois `IDLE` | — |
-| qualquer, exceto `DRAGGING` e `PRESSED` | `TOPOLOGY_CHANGED` | `SETTLING` | Em `DRAGGING` e `PRESSED`, só atualiza a topologia; a validação acontece ao soltar. |
-| qualquer | `CMD_HIDE`, `SESSION_LOCKED`, `SUSPENDING` | `HIDDEN` | Encerra captura e arraste, grava a posição. |
-| `HIDDEN` | `CMD_SHOW`, `SESSION_UNLOCKED`, `RESUMED` | `SETTLING` | Revalida a posição contra a topologia atual. |
+| `CLIMBING` | topo da área útil, fim da parede ou `AUTONOMY_TIMER` | `IDLE`, `WALKING`, `JUMPING` ou `FALLING` | Ao chegar ao topo, para, anda pela borda, salta ou se solta. Soltar-se leva a `FALLING`. |
+| `RESTING` | `AUTONOMY_TIMER` | `IDLE` | Acorda e volta a decidir. O relógio só é religado neste momento. |
+| `RESTING`, `CLIMBING` | `PRESS`, `DOUBLE_CLICK`, `CMD_*` | conforme a linha correspondente | Nenhum estado autônomo bloqueia interação do usuário (DEC-004). |
+| `JUMPING`, `FALLING` | contato com o chão | `LANDING`, depois `IDLE` | Com a caixa fechada. |
+| estados autônomos, físicos e `REACTING` | `TOPOLOGY_CHANGED` | `SETTLING` | Revalida a posição. |
+| `PRESSED`, `DRAGGING` | `TOPOLOGY_CHANGED` | sem troca de estado | Só atualiza a topologia em cache; a validação acontece ao soltar. |
+| `CONVERSING` | `TOPOLOGY_CHANGED` | `SETTLING` | Valida a posição e volta a `CONVERSING`, porque a caixa continua aberta. |
+| `BOOTING`, `HIDDEN`, `EXITING` | `TOPOLOGY_CHANGED` | sem troca de estado | Só atualiza a topologia em cache. `HIDDEN` valida ao reaparecer; `BOOTING` valida ao terminar de carregar. |
+| qualquer, exceto `EXITING` | `CMD_HIDE` | `HIDDEN(POR_USUARIO)` | Encerra captura e arraste, grava a posição. |
+| qualquer, exceto `EXITING` | `SESSION_LOCKED` | `HIDDEN(POR_SESSAO)` | Idem. Se já estava em `HIDDEN(POR_USUARIO)`, o motivo do usuário é preservado. |
+| qualquer, exceto `EXITING` | `SUSPENDING` | `HIDDEN(POR_SUSPENSAO)` | Idem, com a mesma preservação. |
+| `HIDDEN(POR_USUARIO)` | `CMD_SHOW` | `SETTLING` | Só o usuário desfaz o que o usuário pediu. |
+| `HIDDEN(POR_SESSAO)` | `SESSION_UNLOCKED` ou `CMD_SHOW` | `SETTLING` | Revalida a posição contra a topologia atual. |
+| `HIDDEN(POR_SUSPENSAO)` | `RESUMED` ou `CMD_SHOW` | `SETTLING` | Idem. |
+| `HIDDEN(POR_USUARIO)` | `SESSION_UNLOCKED`, `RESUMED` | `HIDDEN(POR_USUARIO)` | O personagem **não** reaparece: um evento do sistema não desfaz uma ação direta do usuário. |
 | qualquer | `CMD_EXIT`, `SESSION_ENDING` | `EXITING` | Grava configurações e encerra. |
 
 **Invariantes, verificáveis por teste automático**
@@ -155,6 +177,10 @@ STATUS: PLANNED. Estado de comportamento e expressão são dimensões independen
 5. Depois de `SETTLING`, a âncora está dentro da área útil de algum monitor presente.
 6. A expressão pode mudar em qualquer estado sem alterar estado de comportamento ou posição.
 7. Com a mesma semente e a mesma sequência de eventos, a sequência de retratos é idêntica.
+8. Abrir ou fechar a caixa de texto nunca muda a posição do personagem.
+9. Se a caixa estava aberta antes de um arraste, continua aberta depois dele.
+10. `SESSION_UNLOCKED` e `RESUMED` nunca fazem o personagem reaparecer quando ele foi escondido pelo usuário.
+11. Todo estado tem pelo menos uma transição de entrada e uma de saída, com duas exceções por construção: `BOOTING`, que só tem saída, e `EXITING`, que só tem entrada.
 
 ### 2.7 Arbitragem de input, clique, arraste e foco
 
@@ -188,7 +214,7 @@ STATUS: PLANNED. Proposta registrada em DEC-009.
 **Foco da caixa de texto**
 
 - Com a caixa de texto focada, todo teclado vai para o campo de texto. O núcleo recebe apenas `TEXT_SUBMIT` e `TEXT_CLOSE`, nunca teclas soltas.
-- O MVP proposto não tem comandos de movimento por teclado (Q-06). Então nenhuma tecla move o personagem, com ou sem foco. Se Q-06 aprovar atalhos, eles valem só com a janela do personagem focada e a caixa de texto fechada.
+- O MVP não tem atalhos de teclado para controlar o personagem (Q-06). Nenhuma tecla move o personagem, com ou sem foco. Isso não impede a navegação por teclado na conversa e nas configurações, prevista em Q-20.
 - A caixa abre por clique duplo ou pelo menu. Ela pede foco no momento da abertura, que é consequência direta de um clique do usuário.
 - A caixa fecha com Esc, pelo botão de fechar ou depois de um tempo sem foco e sem digitação. O tempo é uma configuração a definir na Fase 7.
 - A caixa aceita IME e acentos, porque é um campo de texto padrão da stack.
@@ -226,10 +252,10 @@ STATUS: PLANNED. Proposta registrada em DEC-008.
 
 ### 2.9 Movimento
 
-STATUS: PLANNED. O modelo físico detalhado depende da escolha em aberto Q-05.
+STATUS: PLANNED. O modelo físico detalhado segue as superfícies escolhidas em Q-05; detalhes de colisão e movimento ainda são especificados e validados nas fases correspondentes.
 
 - **Corpo lógico:** retângulo em DIPs com âncora entre os pés. É independente do tamanho da imagem.
-- **Passo fixo:** simulação com passo fixo e integração semi-implícita, sem depender da taxa de quadros. O valor inicial proposto é 1/60 s, a calibrar no protótipo P4.
+- **Passo fixo:** simulação com passo fixo e integração semi-implícita, sem depender da taxa de quadros. O valor inicial proposto é 1/60 s, a confirmar na Fase 4, quando o movimento existir e puder ser medido.
 - **Caminhar:** velocidade constante sobre o chão. Diante de parede, vira ou escala. Diante de passagem, atravessa ou cai.
 - **Escalar:** só em paredes, até o topo da área útil. De lá, desce, pula ou se solta.
 - **Saltar:** trajetória balística calculada para atingir um alvo. O alvo e a velocidade inicial são determinísticos, dada a semente.
@@ -247,9 +273,18 @@ STATUS: PLANNED.
 - A apresentação só redesenha quando o quadro muda ou quando a posição exige. Um clipe de 10 quadros por segundo gera 10 redesenhos por segundo, não 60.
 - A máscara de clique sai do canal alfa do quadro atual.
 
-### 2.11 Conversa local
+### 2.11 Personalidade e conversa local
 
 STATUS: PLANNED.
+
+**Personalidade.** PRODUCT_SPEC.md exige que o MVP comece com uma personalidade local, que influencia frases, reações, expressões e intensidade do comportamento sem depender de IA. Ela é um arquivo de dados com pesos, não código:
+
+- peso de cada comportamento autônomo, usado pela escolha da transição de `IDLE`;
+- faixa de tempo entre decisões autônomas;
+- tendência de expressão em cada estado;
+- identificador do conjunto de frases que a conversa usa.
+
+O núcleo lê esses pesos e continua determinístico: com a mesma personalidade, a mesma semente e a mesma sequência de eventos, o resultado é idêntico. Trocar o arquivo muda o comportamento sem mexer no código, do mesmo jeito que trocar o manifesto de assets muda a aparência. O MVP traz uma personalidade; mais de uma é assunto de depois do MVP.
 
 - A caixa de texto envia o texto para uma tabela local de intenções: palavras-chave e respostas por personalidade, em um arquivo de conteúdo que acompanha o aplicativo e é somente leitura.
 - A escolha da resposta é determinística, dada a semente, com respostas de reserva quando nada combina.
@@ -261,16 +296,82 @@ STATUS: PLANNED.
 STATUS: PLANNED. Propostas registradas em DEC-010 e DEC-011.
 
 - **Arquivo:** um JSON com `schemaVersion` na pasta local do usuário. Sem pacote MSIX, a pasta é `%LOCALAPPDATA%\Buzzy`. Com MSIX, é a pasta local do pacote.
-- **Conteúdo proposto:** posição (seção 2.8), escala do personagem, opacidade, sempre no topo, iniciar com o Windows, nível de autonomia, permitir atravessar monitores e idioma. Os campos que dependem das escolhas Q-03 a Q-07 só entram depois delas.
+- **Conteúdo proposto:** posição (seção 2.8), escala do personagem, sempre no topo, iniciar com o Windows, nível de autonomia, permitir atravessar monitores e idioma. Opacidade fica fora do MVP. As decisões de produto correspondentes foram registradas em Q-03 a Q-07 e Q-12; os campos entram nas fases previstas no TODO.md.
 - **Leitura:** campo desconhecido é ignorado, valor fora da faixa é preso ao limite e arquivo ilegível é trocado pelos valores padrão. Uma cópia do arquivo ilegível é guardada para diagnóstico, no máximo uma.
 - **Gravação:** escreve em um arquivo temporário e substitui o original de forma atômica, mantendo o último arquivo bom como `.bak`. A gravação acontece com atraso depois de soltar o personagem e sempre ao sair.
 - **Tempo:** o relógio lógico só gera `TICK` enquanto há movimento, animação ou arraste. Em `IDLE` sem animação, em `RESTING` e em `HIDDEN`, não há timer periódico. A agenda autônoma usa um único timer até a próxima decisão.
 
 ### 2.13 Encaixe na stack recomendada
 
-STATUS: UNCERTAIN. Depende da aprovação de DEC-006.
+STATUS: PLANNED. WPF com C# e .NET 10 foi escolhida em DEC-006. Antes da Fase 1, P1 verifica clique por alfa, P2 mede repouso e animação, e P3 verifica arraste sem roubo de foco. Duas linhas da tabela da seção 2.13.3 dependem ainda de outros protótipos: a identidade estável do monitor depende de P5, e a consulta de aplicativo em tela cheia depende de P7. Esta seção descreve WPF como janela e interface e limita chamadas Win32 diretas ao adaptador de plataforma.
 
-(Seção preenchida após a comparação de tecnologias.)
+#### 2.13.1 Janelas
+
+| Janela | Tipo | Por quê |
+|---|---|---|
+| Personagem | `Window` WPF sem borda, do tamanho do sprite, com `AllowsTransparency`; a imagem tem alfa real e a janela não ativa | WPF usa o caminho layered para transparência por pixel. P1 confirma o click-through exato no Windows alvo |
+| Caixa de texto | Janela WPF própria, ativável, com controle de texto padrão, ancorada ao lado do personagem | A janela do personagem não ativa; a conversa precisa de foco de teclado e IME |
+| Configurações | Janela WPF comum, aberta pelo menu | Usa controles e navegação de teclado do framework |
+| Menu de contexto e bandeja | Menu WPF; ícone de bandeja pelo adaptador, usando a API da Shell ou componente do .NET | Evita dependência de terceiros; o protótipo define a integração concreta |
+
+A janela do personagem tem o tamanho do sprite, nunca o tamanho da tela. A documentação recomenda que a janela layered seja a menor possível, porque cada atualização copia o bitmap inteiro para a memória do sistema, e há relatos de atraso de mouse no sistema todo com overlay de tela cheia.
+
+#### 2.13.2 Onde cada componente da seção 2.2 mora
+
+| Componente | Realização na stack recomendada |
+|---|---|
+| Núcleo do personagem, mundo do desktop, arbitragem de input, movimento, conversa, esquema de configurações | Biblioteca C# pura sem referência a WPF nem a APIs Windows. Recebe geometria e tempo como entrada e pode ser testada sem abrir janelas |
+| Adaptador de plataforma | Único módulo que traduz eventos WPF e chama APIs Windows quando necessário: captura e foco do mouse, topologia, DPI, bandeja, sessão, energia e caminho dos dados |
+| Apresentação | Janela e composição visual WPF, com imagem transparente dimensionada ao sprite; o desenho não fica ativo quando o estado não muda |
+| Configurações e persistência | Serialização JSON versionada; gravação atômica num adaptador de armazenamento local |
+| Raiz de composição | Inicialização WPF, ligação entre janelas, adaptador e núcleo; agenda trabalho apenas enquanto necessário |
+
+#### 2.13.3 Correspondência com as APIs do Windows
+
+Cada linha liga uma decisão das seções anteriores ao mecanismo que a realiza. WPF cuida das janelas e controles; chamadas diretas ao Windows ficam no adaptador e usam APIs documentadas pela Microsoft. Nenhuma exige elevação.
+
+| Assunto | Seção | API |
+|---|---|---|
+| Transparência por pixel e clique que atravessa | 2.7 | `Window.AllowsTransparency` em janela sem borda WPF; framework cria a janela layered. P1 confirma que os pixels alfa 0 deixam o clique passar a outro processo |
+| Modo fantasma, click-through total | Q-21 | Acrescentar o estilo transparente à janela layered. **Não faz parte do MVP**, conforme decisão do usuário; um personagem que não recebe clique poderia ficar inacessível |
+| Não roubar foco | 2.7 | Responder "não ativar" à mensagem de ativação por mouse, com o estilo que evita ativação |
+| Arraste | 2.7 | `SetCapture` ao pressionar, movimento do mouse, `ReleaseCapture` ao soltar, e a mensagem de mudança de captura como ponto único de término. Nunca o atalho que entrega a janela ao laço de mover do sistema, porque ele congela a física |
+| Clique ou arraste | 2.7 | Retângulo de arraste do sistema, lido para o DPI do monitor, e o tempo de clique duplo do sistema |
+| Coordenadas com sinal | 2.4 | Extrair as coordenadas das mensagens com as macros que preservam o sinal, nunca com as que tratam o valor como sem sinal |
+| DPI por monitor | 2.4 | Declarar Per-Monitor V2 no manifesto, não por chamada de função, e tratar a mensagem de mudança de DPI aplicando o retângulo sugerido |
+| Topologia | 2.4 e 2.8 | Enumerar monitores e ler informação de cada um, incluindo a área útil; mensagens de mudança de vídeo, de DPI e de mudança da área útil, com agrupamento de rajadas |
+| Monitor que contém um ponto | 2.4, 2.7 e 2.8 | Consulta por ponto retornando nulo fora de qualquer monitor, para detectar o vão entre monitores, e a variante que retorna o mais próximo para prender a posição |
+| Identidade estável do monitor | 2.4 | Consulta de configuração de vídeo e leitura do nome do dispositivo de destino, guardando o caminho do dispositivo. Nunca o identificador de execução, o identificador do adaptador nem o nome de vídeo, que não são estáveis |
+| Bandeja | Q-03 | Notificação de ícone na versão 4, identificada por janela e número, com recriação quando a barra de tarefas reinicia |
+| Sem botão na barra de tarefas | Q-03 | Estilo de janela de ferramenta |
+| Fim de sessão | 2.6 | Responder sim de imediato à pergunta de encerramento e gravar na mensagem de encerramento, com gravação incremental antes |
+| Bloqueio e desbloqueio de sessão | 2.6 | Registro de notificação de sessão da estação de trabalho, que entrega o bloqueio e o desbloqueio. Junto com a notificação de energia da linha seguinte, é um dos dois itens desta lista que exigem registro explícito; o resto chega nas mensagens comuns da janela |
+| Suspensão e tela desligada | 2.6 | Notificação de suspensão e retomada, e notificação de estado da tela da sessão para parar de desenhar com o monitor desligado |
+| Repouso | 2.12 | A fila de mensagens bloqueia quando não há nada a fazer. Animação com timer que o sistema pode agrupar, nunca elevando a resolução global do timer |
+| Pasta de dados | 2.12 | Consulta de pasta conhecida, sem montar o caminho com texto |
+| App em tela cheia | Q-09 | Consulta de estado de notificação do usuário, de baixa frequência. Não existe aviso quando um aplicativo entra em tela cheia |
+
+#### 2.13.4 Apresentação e repouso
+
+WPF apresenta o sprite numa janela layered. O projeto não pressupõe que o framework seja barato em repouso: a aplicação deve suspender `CompositionTarget.Rendering`, animações e timers periódicos quando nada muda, e reativá-los apenas durante movimento, animação ou arraste. P2 mede CPU, memória, GPU e acordadas em repouso e em duas taxas de animação. Otimizações de desenho só são escolhidas com dados, na Fase 6.
+
+#### 2.13.5 Limites que os protótipos precisam esclarecer
+
+- P1 confirma o clique por pixel em janela WPF e define regra de alfa para os assets.
+- P2 confirma que o desenho e os timers param de acordar o processo em repouso e fornece a base para metas de desempenho.
+- P3 confirma o arraste quando a janela não ativa. Se a única forma de arrastar alterar o foco, P3 falha; não adotar essa mudança sem decisão explícita do usuário.
+- A conversão entre DIPs de WPF e pixels físicos do desktop fica no adaptador; P6 verifica a transição real entre monitores com escalas diferentes.
+- O menu da bandeja usa a API da Shell ou recurso já incluído no .NET. Não adicionar pacote de terceiros sem justificar, fixar versão e revisar a dependência.
+
+#### 2.13.7 Regras que valem para qualquer stack aprovada
+
+1. Nenhum overlay do tamanho da tela; a janela tem o tamanho do sprite.
+2. Nenhum hook global, nenhuma leitura de input em segundo plano, nenhuma captura de tela.
+3. Topologia em cache, atualizada por evento com agrupamento de rajadas, nunca por consulta periódica.
+4. Física em unidades independentes de dispositivo, convertidas pela escala do monitor da âncora.
+5. Estado de repouso explícito, sem timer de intervalo curto.
+6. Persistência incremental e atômica na pasta local do usuário.
+7. O asset não tem área grande de alfa baixo, porque só alfa exatamente 0 é transparente ao clique. Sombra, se houver, fica em janela separada sem interação.
 
 ### 2.14 Limites de complexidade
 
@@ -282,7 +383,7 @@ STATUS: PLANNED. O MVP funciona sem LLM, RAG, API, memória de IA ou rede. Uma i
 
 ## 3. Decisões ainda pendentes
 
-As escolhas em aberto estão numeradas (Q-01 em diante) na seção "Escolhas em aberto" de [DECISIONS.md](DECISIONS.md).
+As escolhas do usuário e as pendências ainda abertas estão numeradas (Q-01 em diante) em [DECISIONS.md](DECISIONS.md).
 
 ## 4. Histórico de mudanças arquiteturais
 
@@ -291,3 +392,5 @@ As escolhas em aberto estão numeradas (Q-01 em diante) na seção "Escolhas em 
 | 2026-09-25 | Não havia arquitetura de software; foi criada a documentação inicial. | DEC-001 |
 | 2026-09-26 | Registradas fronteiras candidatas e requisitos arquiteturais planejados, sem escolher stack. | DEC-002 a DEC-005 |
 | 2026-09-26 | Proposta de arquitetura da Fase 0: componentes, fluxo, coordenadas, máquina de estados, arbitragem de input, multi-monitor, movimento, apresentação, conversa, persistência e tempo. Tudo STATUS: PLANNED. | DEC-006 a DEC-012 (propostas) |
+| 2026-09-26 | WPF/.NET 10 escolhido; seção 2.13 atualizada para janelas, adaptador de APIs Windows, repouso e protótipos P1–P3. STATUS: PLANNED; ainda não executado. | DEC-006 |
+| 2026-09-26 | Correções na máquina de estados depois de auditoria: caixa de texto virou dimensão ortogonal ao estado; mudança de topologia deixou de tirar o personagem de `HIDDEN`; `HIDDEN` passou a guardar o motivo do ocultamento; `CLIMBING` e `RESTING` ganharam transição de saída. Quatro invariantes novos. | DEC-004 |
