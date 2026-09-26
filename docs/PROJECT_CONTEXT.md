@@ -109,7 +109,7 @@ Nenhuma área tem código. Cada linha resume a proposta e aponta para o detalhe.
 | Animações | PLANNED | Clipes definidos em manifesto de assets, com taxa de quadros própria; asset provisório original e substituível. | ARCHITECTURE.md 2.10 |
 | Expressões | PLANNED | Dimensão separada do comportamento; trocar expressão não muda estado nem posição. | ARCHITECTURE.md 2.6 e 2.10 |
 | Conversa | PLANNED | Tabela local de intenções, determinística, sem rede e sem gravar o que foi digitado. | ARCHITECTURE.md 2.11 |
-| Configurações | PLANNED | Escala, sempre no topo, iniciar com o Windows, autonomia, atravessar monitores, idioma; várias dependem das escolhas Q-03 a Q-12. | ARCHITECTURE.md 2.12, DECISIONS.md |
+| Configurações | PLANNED | Escala em passos fixos, sempre no topo, iniciar com o Windows, autonomia, atravessar monitores e idioma, conforme decisões já registradas; implementar nas fases do TODO.md. | ARCHITECTURE.md 2.12, DECISIONS.md |
 | Persistência | PLANNED | `settings.json` versionado na pasta local do usuário, com gravação atômica; posição a partir da Fase 5. | DEC-010, SECURITY.md 5 |
 | Permissões | PLANNED | Nenhuma elevação, nenhuma rede, nenhuma leitura de outros aplicativos; lista de APIs proibidas verificada no build. | SECURITY.md 2 a 4 |
 | Desempenho | PLANNED | Métricas M1 a M7 e protocolo de medição; metas numéricas dependem de medição no protótipo P2 (escolha Q-08). | DEC-011 |
@@ -154,7 +154,7 @@ As referências visuais devem orientar Claude a criar uma proposta original para
 ## 13. Próxima fase
 
 1. Claude executa P1, P3 e P2 como protótipos descartáveis WPF conforme `prompt_usuario.md`; não inicia o produto.
-2. Codex revisa o código e os resultados dos protótipos, propõe Q-08 a partir das medidas e reabre DEC-006 se P1 ou P3 falharem.
+2. Codex revisa o código e os resultados dos protótipos, apresenta uma recomendação de metas Q-08 ao usuário a partir das medidas e reabre DEC-006 se P1 ou P3 falharem.
 3. Sincronizar os documentos e concluir a revisão da Fase 0. As escolhas atuais de plataforma, janela e ZIP de teste já foram respondidas.
 4. Só depois da Fase 0 fechada e da autorização do usuário começa a **Fase 1 — Shell do desktop** (TODO.md).
 

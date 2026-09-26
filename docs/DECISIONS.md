@@ -2,11 +2,11 @@
 
 > Registro permanente. Decisões substituídas permanecem no histórico e apontam para a decisão nova.
 >
-> **Formato de cada decisão:** título com o ID (`DEC-nnn`, numeração sequencial, nunca reutilizada), seguido de data, estado da decisão, STATUS, problema, decisão, alternativas consideradas, motivo, trade-offs e consequências. Decisões novas entram no fim da lista principal. Escolhas que dependem do usuário ficam em "Escolhas em aberto", com ID `Q-nn`.
+> **Formato de cada decisão:** título com o ID (`DEC-nnn`, numeração sequencial, nunca reutilizada), seguido de data, estado da decisão, STATUS, problema, decisão, alternativas consideradas, motivo, trade-offs e consequências. Decisões novas entram no fim da lista principal. Escolhas do usuário ficam nesta seção com ID `Q-nn`, separadas entre respostas registradas e pendências.
 >
 > **Estado da decisão:** ACCEPTED (aceita pelo usuário), SUPERSEDED por DEC-xxx (substituída), UNCERTAIN (proposta ou escolha ainda em avaliação).
 >
-> **Como uma escolha `Q-nn` é encerrada:** quando o usuário decide, a linha da escolha sai da tabela e vai para a subseção "Escolhas já resolvidas", com a data e a resposta dada. Se a resposta muda o produto ou a arquitetura, ela também vira uma decisão `DEC-nnn` nova, ou muda o estado de uma existente. Uma escolha nunca é apagada.
+> **Como uma escolha `Q-nn` é encerrada:** quando o usuário decide, registre a resposta e a data na tabela de decisões de produto. Se a resposta muda o produto ou a arquitetura, ela também vira uma decisão `DEC-nnn` nova, ou muda o estado de uma existente. Uma escolha nunca é apagada.
 >
 > **STATUS** segue AGENTS.md: VERIFIED significa implementação testada; PLANNED significa que a decisão está aceita, mas sua realização ainda não foi verificada; UNCERTAIN significa que a escolha segue aberta.
 
@@ -425,14 +425,14 @@ Em 2026-09-26 o usuário respondeu às escolhas abaixo em `docs/DECISOES_DO_USUA
 | Q-11 | Manter a ordem: Fase 10 verifica o MVP; Fase 11 otimiza e repete a regressão. | Fases 10 e 11. | PLANNED |
 | Q-12 | Apenas português do Brasil no MVP; manter textos fora do código. | Fase 7; outros idiomas ficam para depois. | PLANNED |
 | Q-14 | Mouse e touchpad no MVP; toque e caneta ficam para depois. | Fases 3 e 4. | PLANNED |
-| Q-20 | Caixa de conversa e configurações navegáveis por teclado e utilizáveis por leitor de tela; janela do personagem não é alvo de leitor de tela. | Fase 7. | PLANNED |
+| Q-20 | Caixa de conversa e configurações navegáveis por teclado e utilizáveis por leitor de tela; janela do personagem não é alvo de leitor de tela. | Fases 7 e 8. | PLANNED |
 | Q-21 | Não incluir modo fantasma (click-through total) no MVP. | Fase 8; evita deixar o personagem inacessível. | PLANNED |
 
 ### Decisões que continuam pendentes
 
 | ID | Pendência | Como resolver | STATUS |
 |---|---|---|---|
-| Q-08 | Metas numéricas de desempenho para M1–M7. | Medir P2; propor metas a partir dos resultados e registrar a decisão antes das fases cujos critérios dependem delas. | UNCERTAIN |
+| Q-08 | Metas numéricas de desempenho para M1–M7. | Medir P2; o Codex apresenta uma recomendação baseada nos resultados para o usuário aceitar ou ajustar antes das fases cujos critérios dependem delas. | UNCERTAIN |
 | Q-10 (distribuição pública) | Se e como publicar uma versão para outras pessoas, possivelmente pelo Git, e se ela deve ser assinada. | Reabrir antes da primeira distribuição pública. O ZIP sem assinatura aceito pelo usuário é para uso pessoal e testes. | UNCERTAIN |
 
 ### Escolhas já resolvidas
@@ -441,13 +441,7 @@ Em 2026-09-26 o usuário respondeu às escolhas abaixo em `docs/DECISOES_DO_USUA
 
 **Q-01 — RESOLVIDA em 2026-09-26:** o usuário delegou ao Codex a escolha da stack e dos próximos passos. DEC-006 escolhe WPF com C# e .NET 10 LTS. P1, P2 e P3 continuam como portões técnicos antes da Fase 1; a aprovação da stack não declara esses testes passados.
 
-**Q-13 — RESOLVIDA em 2026-09-26:** fazer os protótipos descartáveis P1, P2 e P3 antes da Fase 1, usando a stack WPF escolhida. Nenhum protótipo foi executado ainda.
-
-**Q-02, Q-03, Q-04, Q-05, Q-06, Q-07, Q-09, Q-11, Q-12, Q-14, Q-20 e Q-21 — RESOLVIDAS em 2026-09-26:** respostas diretas do usuário registradas na tabela acima. STATUS: PLANNED; nenhuma delas afirma implementação ou verificação concluída.
-
-**Q-10 — RESOLVIDA para o build pessoal e de teste em 2026-09-26; distribuição pública continua UNCERTAIN:** usar ZIP portátil sem assinatura/instalador agora. Reabrir assinatura e formato se houver publicação para outras pessoas. A inclusão ou não do runtime .NET é detalhe do plano do build, não uma escolha já feita pelo usuário.
-
-**Q-08 — DEFERIDA em 2026-09-26:** o usuário decidiu escolher metas depois da medição P2. Até lá, STATUS: UNCERTAIN.
+**Q-13 — RESOLVIDA em 2026-09-26:** fazer os protótipos descartáveis antes da Fase 1, na ordem P1 (clique por pixel), P3 (arraste sem roubo de foco) e P2 (medição de desempenho), usando WPF. Nenhum protótipo foi executado ainda.
 
 **Q-22 — RESOLVIDA em 2026-09-26:** o teto de tempo para P9 não se aplica porque a interface nativa Win32 deixou de ser o caminho escolhido; P9 foi encerrado sem execução.
 

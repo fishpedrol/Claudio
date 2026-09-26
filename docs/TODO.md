@@ -22,7 +22,7 @@ Ainda não há código do aplicativo. A Etapa 0B permite somente protótipos des
 - [x] 2026-09-26 — Separar a especificação estável do produto do prompt mestre variável por fase. Evidência: docs/PRODUCT_SPEC.md e context codex/PROMPT_MESTRE_BUZZY.md.
 - [x] 2026-09-26 — Definir o ciclo Claude → revisão independente do Codex → decisão do usuário. Evidência: AGENTS.md e docs/PLAN_REVIEW.md.
 - [x] 2026-09-26 — Criar README com links para as fontes canônicas. Evidência: README.md.
-- [x] 2026-09-26 — Preservar o trabalho documental anterior. Evidência: commit 257a05f, que guarda a documentação como estava antes do planejamento técnico. A parte de indicar como recuperar a revisão de fundo não foi cumprida e está na tarefa seguinte.
+- [x] 2026-09-26 — Preservar o trabalho documental anterior. Evidência: commit 257a05f, que guarda a documentação como estava antes do planejamento técnico. A revisão de fundo não pôde ser recuperada; essa limitação foi verificada e registrada na tarefa seguinte.
 - [x] 2026-09-26 — Manter em PROJECT_CONTEXT.md um inventário resumido de todas as áreas do projeto. Evidência: docs/PROJECT_CONTEXT.md, seções 8 e 9.
 - [x] 2026-09-26 — Confirmar que a revisão documental de fundo não pode ser recuperada deste repositório e registrar a limitação. Os números citados no DEVELOPMENT_LOG.md vêm de uma transcrição externa, não versionada, e aquela revisão tratava dos documentos de 2026-09-25, anteriores à reestruturação do Buzzy; portanto, não substitui a revisão atual. A revisão independente válida da Fase 0 foi feita pelo Codex e está registrada em PLAN_REVIEW.md.
 - [x] 2026-09-26 — Inicializar Git e `.gitignore` mínimo. Criado sem remoto. O remoto `origin` passou a existir depois, fora desta rodada.
@@ -66,7 +66,7 @@ STATUS: PLANNED. Fazer antes da Fase 1 com a stack escolhida, WPF/C#/.NET 10. O 
 | P7 | É possível saber que há um app em tela cheia? | Consulta a cada 2 a 5 s com vídeo em tela cheia no navegador, jogo em janela sem borda e jogo em tela cheia exclusiva. | Estado correto nos três casos, com custo de CPU desprezível. O caso sem borda precisa ser confirmado. | 1 monitor |
 | P8 | A janela layered aguenta ser fotografada e continua funcionando? | Outro processo chama a função que tira foto de janela durante a animação. | A atualização da janela continua funcionando, ou falha e é recuperada religando o estilo. | 1 monitor |
 | P9 | Encerrado: comparar o esforço de interface nativa | Não executado. Perdeu a finalidade quando WPF foi escolhido como stack. | Sem resultado; não bloqueia o projeto. | — |
-| P10 | Build, tamanho e portão de segurança | Build de release; medir o executável e o pacote. Rodar como portátil em máquina virtual limpa do Windows, com e sem assinatura, com o controle de aplicativos ligado. Rodar o script que inspeciona as funções importadas pelo binário. | Tamanho registrado, comportamento do aviso do sistema conhecido e portão de APIs proibidas passando. | Máquina virtual |
+| P10 | Build, tamanho e portão de segurança | Build de release; medir executável e ZIP. Rodar o ZIP sem assinatura em máquina virtual limpa do Windows, com o controle de aplicativos ligado. Rodar o script que inspeciona as funções importadas pelo binário. | Tamanho registrado, comportamento de aviso/bloqueio sem assinatura conhecido e portão de APIs proibidas passando. Não publicar o build. | Máquina virtual |
 
 **Ordem e papel dos protótipos.** Executar P1 primeiro, depois P3 e por último P2. P1 ou P3 que falhe reabre DEC-006 antes de produto; P2 informa as metas de Q-08 e pode exigir ajuste de repouso:
 
@@ -95,13 +95,16 @@ Cada fase tem STATUS: PLANNED. Nenhuma fase é concluída só porque compila ou 
 - **Depende de:** Fase 0 concluída; P1, P2 e P3 aprovados; e autorização explícita do usuário para iniciar a Fase 1. O alvo Windows 11, os comportamentos Q-03 e o ZIP de teste Q-10 já foram decididos. Q-01 e Q-13 estão resolvidas; P9 foi encerrado.
 - **Critérios de aceitação:**
   1. O app inicia e mostra o sprite sobre a área útil do monitor principal. [MANUAL]
-  2. Clicar em pixel transparente dentro do retângulo da janela entrega o clique ao aplicativo de baixo. [MANUAL]
-  3. Clicar no sprite não tira o foco do aplicativo ativo. [MANUAL]
-  4. O Buzzy não aparece na barra de tarefas nem no Alt+Tab, conforme Q-03. [MANUAL]
-  5. O sprite fica nítido com o monitor a 100%, 150% e 200%, trocando a escala nas Configurações com o app aberto. [MANUAL]
-  6. Trocar resolução, escala ou posição da barra de tarefas com o app aberto mantém o sprite dentro da área útil. [MANUAL]
-  7. Sair pelo menu encerra o processo e todos os processos filhos. [MANUAL]
-  8. Parado por 10 min, o consumo de CPU, memória e acordadas fica registrado como linha de base. [MANUAL, instrumentado]
+  2. O Buzzy fica sempre no topo por padrão e o ícone da bandeja aparece. [MANUAL]
+  3. O menu da bandeja esconde, restaura e encerra o Buzzy; botão direito no personagem abre o mesmo menu. [MANUAL]
+  4. Abrir o app uma segunda vez revela a janela existente sem criar outra instância. [MANUAL]
+  5. Clicar em pixel transparente dentro do retângulo da janela entrega o clique ao aplicativo de baixo. [MANUAL]
+  6. Clicar no sprite não tira o foco do aplicativo ativo. [MANUAL]
+  7. O Buzzy não aparece na barra de tarefas nem no Alt+Tab, conforme Q-03. [MANUAL]
+  8. O sprite fica nítido quando o Windows usa escala de 100%, 150% e 200%; a escala do próprio Buzzy é ajustada em passos fixos na Fase 8. [MANUAL]
+  9. Trocar resolução, escala ou posição da barra de tarefas com o app aberto mantém o sprite dentro da área útil. [MANUAL]
+  10. Sair pelo menu encerra o processo e todos os processos filhos. [MANUAL]
+  11. Parado por 10 min, o consumo de CPU, memória e acordadas fica registrado como linha de base. [MANUAL, instrumentado]
 - **Testes automatizados:** mundo do desktop com topologias de exemplo (lado a lado, empilhado, em L, coordenadas negativas, principal fora da esquerda, retrato, escalas mistas, vão entre monitores); teste de fumaça que inicia o app, encontra a janela, confere os estilos e encerra; portão de APIs proibidas. [AUTO]
 - **Verificação com hardware:** critério 6 com dois monitores. [HW]
 
@@ -133,6 +136,7 @@ Cada fase tem STATUS: PLANNED. Nenhuma fase é concluída só porque compila ou 
   6. Clicar e arrastar não tiram o foco do aplicativo ativo. [MANUAL]
   7. Com ClickLock ligado, o arraste funciona sem tempo limite. [MANUAL]
   8. O consumo de CPU durante o arraste fica medido e registrado. [MANUAL, instrumentado]
+  9. Clique duplo é reconhecido dentro do intervalo do Windows e botão direito solicita o menu de contexto. [AUTO e MANUAL]
 - **Testes automatizados:** reconhecedor de gestos (limiar por DPI, clique duplo, perda de captura, botão direito); invariantes 1 e 2 sob sequências aleatórias; validação ao soltar sobre as topologias de exemplo. [AUTO]
 
 ### Fase 4 — Movimento e superfícies
@@ -204,6 +208,7 @@ Cada fase tem STATUS: PLANNED. Nenhuma fase é concluída só porque compila ou 
   6. O texto digitado não aparece em nenhum arquivo da pasta de dados nem em log. [AUTO e MANUAL com Process Monitor]
   7. Arrastar o personagem com a caixa aberta leva a caixa junto. [MANUAL]
   8. Ao fechar a caixa, o destino do foco segue o comportamento aprovado depois de P4. [MANUAL]
+  9. A conversa pode ser percorrida por teclado e seus controles são identificados por um leitor de tela. [MANUAL]
 
 ### Fase 8 — Configurações e persistência local
 
@@ -216,6 +221,10 @@ Cada fase tem STATUS: PLANNED. Nenhuma fase é concluída só porque compila ou 
   3. Arquivo corrompido gera valores padrão, guarda uma cópia e o app continua. [AUTO]
   4. Matar o processo durante a gravação nunca deixa o arquivo ilegível. [AUTO]
   5. Iniciar com o Windows liga, desliga e respeita a desativação feita pelo usuário nas Configurações do Windows. [MANUAL]
+  6. O início automático vem desligado e só é ativado após uma ação explícita do usuário. [MANUAL]
+  7. As configurações podem ser percorridas por teclado e seus controles são identificados por um leitor de tela. [MANUAL]
+  8. Sempre no topo pode ser ligado e desligado; a opacidade não aparece como opção do MVP. [MANUAL]
+  9. A escala do Buzzy pode ser escolhida somente entre os passos fixos oferecidos. [MANUAL]
 
 ### Fase 9 — Segurança e hardening
 

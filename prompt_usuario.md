@@ -1,12 +1,14 @@
 # Etapa 0B — validar a stack WPF do Buzzy
 
-Continue o trabalho no repositório existente. Leia primeiro `AGENTS.md`, `CLAUDE.md`, `docs/PROJECT_CONTEXT.md`, `docs/PRODUCT_SPEC.md`, `docs/TODO.md`, `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, `docs/SECURITY.md`, `docs/DEVELOPMENT_LOG.md`, `docs/PLAN_REVIEW.md` e `context codex/PROMPT_MESTRE_BUZZY.md`. Inspecione o estado real do Git e dos arquivos antes de alterar qualquer coisa.
+Estou retomando o trabalho porque o terminal/conversa anterior foi encerrado. Use este prompt e os arquivos do repositório como contexto canônico; não dependa de lembrar a conversa anterior. Leia primeiro `AGENTS.md`, `CLAUDE.md`, `docs/PROJECT_CONTEXT.md`, `docs/PRODUCT_SPEC.md`, `docs/TODO.md`, `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, `docs/SECURITY.md`, `docs/DEVELOPMENT_LOG.md`, `docs/PLAN_REVIEW.md` e `context codex/PROMPT_MESTRE_BUZZY.md`. Inspecione o estado real do Git e dos arquivos antes de alterar qualquer coisa. Se houver protótipos, resultados ou documentação parcialmente atualizada, preserve-os e continue do ponto real; não sobrescreva nem refaça trabalho sem necessidade.
 
 ## Decisão vigente
 
 O usuário delegou ao Codex a escolha da stack e dos próximos passos. A escolha registrada é **WPF com C# e .NET 10 LTS** (DEC-006). Não volte a comparar as nove stacks nem trate Win32 como recomendação atual. Win32 nativo é uma alternativa caso os requisitos decisivos falhem nos protótipos.
 
-As duas imagens em `assets/references/` são referências para uma futura proposta visual original melhor. Não são arte final nem especificação literal. Não copie o nome, acessórios, poses ou estilo como requisitos. Este trabalho é apenas técnico; não crie nem altere a arte agora.
+As duas imagens em `assets/references/` são referências para uma futura proposta visual original melhor. Não são arte final nem especificação literal. Não copie o nome, acessórios, poses ou estilo como requisitos. O escopo de implementação deste ciclo é técnico; a proposta visual ao final será apenas conceitual, sem criar ou alterar arte/assets.
+
+As respostas do usuário já estão registradas em `docs/DECISOES_DO_USUARIO.md` e na tabela canônica de `docs/DECISIONS.md`. Não pergunte de novo sobre Windows 11, comportamento da janela, superfícies, atalhos, gestos, início com o Windows, tela cheia, ZIP pessoal, ordem das fases, idioma, toque/caneta, acessibilidade ou modo fantasma. Q-08 será decidida depois da medição P2. Formato e assinatura de uma eventual publicação pública ficam para depois; o primeiro ZIP sem assinatura é somente para uso pessoal e testes.
 
 ## Escopo autorizado deste ciclo
 
@@ -38,4 +40,6 @@ Meça o protótipo parado por uma hora sem movimento, animações nem timers per
 
 ## Ao terminar
 
-Entregue um resumo objetivo dos protótipos executados, evidências e medições, resultados de P1/P3/P2, pendências de hardware, dependências adicionadas e arquivos documentais alterados. Indique se WPF segue tecnicamente viável ou se precisa de revisão. Pare ao final da Etapa 0B; não comece a Fase 1.
+Depois de concluir e registrar os protótipos técnicos, inclua no relatório uma **proposta conceitual preliminar para o personagem** baseada nas referências, separada dos resultados técnicos. Sugira uma direção original (silhueta, paleta, expressão e como funcionaria como mascote de desktop), explique brevemente como ela evita copiar as referências ou personagens existentes e indique o que o usuário precisaria aprovar. Não crie nem altere imagens, sprites ou outros assets; não mude o nome nem as escolhas registradas; não deixe esta proposta atrasar os testes. Ela não aprova arte final nem autoriza a Fase 1.
+
+Entregue um resumo objetivo dos protótipos executados, evidências e medições, resultados de P1/P3/P2, pendências de hardware, dependências adicionadas e arquivos documentais alterados. Indique se WPF segue tecnicamente viável ou se precisa de revisão. Separe com clareza a proposta visual das evidências técnicas. Pare ao final da Etapa 0B; não comece a Fase 1.

@@ -17,6 +17,6 @@ STATUS: PLANNED. O projeto está na Fase 0 — descoberta e arquitetura, Etapa 0
 - [Histórico de desenvolvimento](docs/DEVELOPMENT_LOG.md)
 - [Revisão de planos](docs/PLAN_REVIEW.md)
 - [Prompt mestre variável para a fase atual](context%20codex/PROMPT_MESTRE_BUZZY.md)
-- [Prompt de continuidade para enviar ao Fable](prompt_usuario.md) (rascunho operacional; pode ser limpo depois de copiar para o terminal)
+- [Prompt de continuidade para enviar ao Claude no terminal](prompt_usuario.md) (rascunho operacional; pode ser limpo depois de copiar)
 
 O nome Buzzy e a inspiração em mascotes antigos não autorizam copiar personagem, visual, voz, marca ou conteúdo existente. IA é ferramenta de desenvolvimento; o MVP do aplicativo permanece local e sem IA integrada.
