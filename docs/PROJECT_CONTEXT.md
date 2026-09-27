@@ -15,10 +15,13 @@
 Inspeção dos arquivos em 2026-09-26:
 
 - Há documentação, duas pranchas conceituais em `assets/references/` e um repositório Git com dois commits. O remoto `origin` aponta para `https://github.com/fishpedrol/Claudio.git` e o branch `main` o rastreia; se o envio chegou ao servidor não foi verificado. O primeiro commit guarda a documentação como estava antes do planejamento técnico da Fase 0.
-- Não há código de aplicação, dependência, build nem teste.
+- Não há código de **aplicação**. Desde 2026-09-26 existe código **descartável** de protótipo em `spikes/`, isolado do produto: um projeto WPF sem nenhuma dependência NuGet, que compila em Release sem avisos. Ele não é módulo do Buzzy, não segue para a Fase 1 e pode ser apagado inteiro sem perda. Não há teste automatizado.
+- O SDK do .NET 10.0.401 foi instalado na máquina do usuário em 2026-09-26, com autorização explícita dele, porque não havia SDK nenhum e nada podia ser compilado.
 - O pedido inicial da Fase 0 já foi enviado ao Claude pelo terminal; `prompt_usuario.md` é atualizado como instrução operacional para os próximos protótipos. Limpar o arquivo depois de copiar não significa que o trabalho anterior se perdeu.
 
-**Fase atual:** Fase 0 — Descoberta e arquitetura, Etapa 0B. STATUS: PLANNED. A escolha WPF/C#/.NET 10 foi aceita por delegação do usuário e está registrada em DEC-006. A revisão do plano pelo Codex foi concluída. As respostas do usuário para Q-02 a Q-07, Q-09, Q-11, Q-12, Q-14, Q-20 e Q-21 foram registradas; Q-10 escolhe um ZIP portátil sem assinatura para uso pessoal e testes. Permanecem os protótipos descartáveis P1, P3 e P2, a revisão do Codex e Q-08 (metas após P2). Distribuição pública, se houver, será decidida depois. Q-01 e Q-13 estão resolvidas; Q-15 foi resolvida como questão operacional; Q-16 a Q-19 foram esclarecidas como referências visuais; Q-22 não se aplica. A Fase 0 **não** está concluída e a stack não foi validada no aplicativo.
+**Fase atual:** Fase 0 — Descoberta e arquitetura, Etapa 0B. STATUS: PLANNED. A escolha WPF/C#/.NET 10 foi aceita por delegação do usuário e está registrada em DEC-006. A revisão do plano pelo Codex foi concluída. As respostas do usuário para Q-02 a Q-07, Q-09, Q-11, Q-12, Q-14, Q-20 e Q-21 foram registradas; Q-10 escolhe um ZIP portátil sem assinatura para uso pessoal e testes. Distribuição pública, se houver, será decidida depois. Q-01 e Q-13 estão resolvidas; Q-15 foi resolvida como questão operacional; Q-16 a Q-19 foram esclarecidas como referências visuais; Q-22 não se aplica. A Fase 0 **não** está concluída e a stack não foi validada no aplicativo.
+
+Os protótipos P1, P3 e P2 **começaram** em 2026-09-26 e **nenhum está aprovado**. O que já existe: P1 com sonda automatizada de teste de acerto passando nas quatro faixas de alfa e um clique físico registrado; P3 com a parte automatizada aprovada e, além dela, **10 gestos de arraste reais feitos pelo usuário sem nenhum roubo de foco**, incluindo duas travessias terminando no monitor secundário em coordenadas negativas; P2 **interrompido** antes de concluir e a refazer com a máquina parada. Faltam três cliques físicos de P1, alguns cenários de P3 (clique curto, Alt+Tab no gesto, ClickLock, e a confirmação de que o texto entra no Bloco de Notas) e a medição inteira de P2. Depois deles vêm a revisão do Codex e a recomendação de metas para Q-08. Situação por protótipo em TODO.md, Etapa 0B; evidências em DEVELOPMENT_LOG.md.
 
 ## 1. Objetivo do projeto
 
@@ -34,7 +37,9 @@ LLM e qualquer IA integrada, RAG, embeddings, APIs de IA, voz, backend, nuvem, t
 
 ## 4. Stack atual
 
-**WPF com C# e .NET 10 LTS**, escolhida por delegação explícita do usuário. STATUS: PLANNED. P1, P2 e P3 ainda precisam demonstrar transparência por pixel, repouso adequado e arraste sem roubo de foco antes da Fase 1. A pesquisa que colocou Win32 nativo em primeiro continua como comparação histórica; Win32 fica como alternativa de retorno se um requisito central falhar.
+**WPF com C# e .NET 10 LTS**, escolhida por delegação explícita do usuário. STATUS: PLANNED. P1, P2 e P3 ainda precisam demonstrar transparência por pixel, repouso adequado e arraste sem roubo de foco antes da Fase 1.
+
+Medições de 2026-09-26, no protótipo `spikes/BuzzySpike` sobre .NET 10.0.12: `AllowsTransparency` do WPF **produz mesmo** uma janela com `WS_EX_LAYERED`, e o teste de acerto do Windows entrega o clique ao aplicativo de baixo nos pixels de alfa 0 e retém o clique em alfa 1, 128 e 255. A janela com `WS_EX_NOACTIVATE` não tomou o foco ao aparecer nem ao ser movida entre os dois monitores. São indícios fortes a favor da stack, mas **não** são a aprovação de P1 e P3, que exige gesto humano. A pesquisa que colocou Win32 nativo em primeiro continua como comparação histórica; Win32 fica como alternativa de retorno se um requisito central falhar.
 
 O comparativo cobriu nove alternativas e registrou três avaliações independentes; a pesquisa técnica original favoreceu Win32 nativo por controle e custo potencial, mas a decisão final considera também a facilidade de evoluir e manter o produto por uma pessoa com apoio de agentes. WPF oferece a janela layered documentada e controles de interface prontos; seus riscos de runtime, DPI e repouso serão verificados por P1–P3. P9 e Q-22 foram encerrados como não aplicáveis.
 
@@ -64,6 +69,12 @@ claudio/                       # nome herdado da pasta local; o projeto é o Buz
 ├── CLAUDE.md                  # entrada curta para Claude; aponta para AGENTS.md
 ├── README.md                  # visão geral e índice da documentação
 ├── prompt_usuario.md          # próximo prompt de trabalho para o terminal do Claude
+├── spikes/                    # Etapa 0B: protótipos DESCARTÁVEIS, fora do produto
+│   ├── README.md              # o que é cada protótipo e como rodar
+│   ├── global.json            # fixa o SDK do .NET em 10.0.401
+│   ├── BuzzySpike/            # projeto WPF único, com modos p1, p3 e p2; zero dependências
+│   ├── ferramentas/           # scripts PowerShell de execução e leitura (UTF-8 com BOM)
+│   └── resultados/            # logs e relatórios por rodada; fora do Git
 ├── context codex/
 │   ├── PROMPT_MESTRE_BUZZY.md # prompt operativo; atualizar a seção "Fase atual" quando fase ou decisão material mudar
 │   ├── context.md             # índice para as fontes canônicas
@@ -119,7 +130,7 @@ Nenhuma área tem código. Cada linha resume a proposta e aponta para o detalhe.
 
 - Não há aplicativo, build ou teste; nada pode ser executado.
 - Várias afirmações técnicas só se confirmam com protótipo: clique através de pixels transparentes, custo em repouso, arraste sem roubar foco, foco da caixa de texto, mensagens de topologia, estabilidade da chave do monitor e esforço da interface nativa (P1 a P10 em TODO.md).
-- As verificações [HW] exigem dois ou mais monitores com escalas ou orientações diferentes. A disponibilidade desse hardware não foi confirmada.
+- As verificações [HW] exigem dois ou mais monitores com escalas ou orientações diferentes. Em 2026-09-26 confirmou-se que a máquina do usuário tem **dois monitores**, ambos 1920x1080, com o secundário à esquerda do primário em **coordenadas negativas** (-1920,0)-(0,1080). Isso cobre a parte de topologia e de coordenadas com sinal. O que continua **sem hardware** é a escala mista: os dois estão em 100% (96 DPI), então P6, o critério 8 da Fase 1 e qualquer verificação de DPI diferente permanecem impossíveis nesta máquina sem mudar a configuração do Windows.
 - Só 84 das 300 alegações decisivas da pesquisa de stack passaram por verificação adversarial, e dois terços dessas precisaram de correção. As 216 restantes não foram verificadas.
 - Nenhuma das nove stacks comparadas tem número oficial de consumo de memória, CPU ou GPU no Windows. Todos os números encontrados são de terceiros e vários foram corrigidos na verificação adversarial por exagerar o que a fonte sustenta. A comparação de consumo em DEC-006 é de mecanismo, não de medição.
 - A viabilidade real de janela layered WPF, repouso e arraste precisa dos protótipos P1–P3. O custo comparativo de controles nativos (P9) não é mais relevante para a escolha atual.
@@ -153,14 +164,23 @@ As referências visuais devem orientar Claude a criar uma proposta original para
 
 ## 13. Próxima fase
 
-1. Claude executa P1, P3 e P2 como protótipos descartáveis WPF conforme `prompt_usuario.md`; não inicia o produto.
+1. Concluir a Etapa 0B. Os protótipos já existem e rodaram na parte automatizável; o que falta exige o usuário: clicar nas faixas alfa 0, 128 e 255 de P1, executar os gestos B1 a B7 de P3 e deixar a medição de P2 terminar. Instruções em `spikes/README.md`. Nenhum código de produto começa aqui.
 2. Codex revisa o código e os resultados dos protótipos, apresenta uma recomendação de metas Q-08 ao usuário a partir das medidas e reabre DEC-006 se P1 ou P3 falharem.
 3. Sincronizar os documentos e concluir a revisão da Fase 0. As escolhas atuais de plataforma, janela e ZIP de teste já foram respondidas.
 4. Só depois da Fase 0 fechada e da autorização do usuário começa a **Fase 1 — Shell do desktop** (TODO.md).
 
 ## 14. Instruções para executar
 
-Não aplicável: não há aplicativo. As instruções entram aqui na Fase 1, depois da escolha da stack.
+Não há aplicativo. As instruções do produto entram aqui na Fase 1.
+
+Para os protótipos descartáveis da Etapa 0B, é preciso o SDK do .NET 10 (`dotnet --list-sdks` deve mostrar 10.x):
+
+```powershell
+cd spikes\BuzzySpike
+dotnet build -c Release
+```
+
+Como rodar cada protótipo e como ler os resultados: [spikes/README.md](../spikes/README.md). Esse código é descartável e não é o Buzzy.
 
 ## 15. Instruções para testar
 

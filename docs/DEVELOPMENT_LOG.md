@@ -213,3 +213,120 @@ A verificação da entrega deixou um achado de pé depois da refutação adversa
 A seção "Fontes primárias" de DEC-006 ganhou duas subseções novas. "Leituras de código-fonte" lista os quinze arquivos abertos, por stack, com o ramo ou versão lidos. "Números de tamanho e de manutenção" lista os quatro endereços de onde vieram os valores da tabela. A seção registra que endereços de ramo podem mudar, então uma releitura futura pode não achar o mesmo trecho. As duas afirmações de SECURITY.md que dependiam dessas fontes passaram a remeter a DEC-006.
 
 Com isso, o item 1 do pedido, que exigia fontes primárias consultáveis, fica atendido também para as afirmações que não vinham de documentação oficial.
+
+## 2026-09-26 — Etapa 0B: protótipos WPF P1, P3 e P2
+
+**Objetivo:** executar os protótipos descartáveis de viabilidade da stack WPF/C#/.NET 10, na ordem P1, P3 e P2, conforme TODO.md, Etapa 0B. Nenhum código de produto; nenhuma autorização para a Fase 1.
+
+### Levantamento do ambiente, antes de criar qualquer arquivo
+
+| Item | Valor medido |
+|---|---|
+| Sistema | Windows 11 Pro 25H2, build 26200.9457, x64 |
+| Processador | AMD Ryzen 7 7800X3D, 8 núcleos, 16 processadores lógicos |
+| Memória | 15,7 GB |
+| Vídeo | NVIDIA GeForce RTX 5060, driver 32.0.16.1714, 1920x1080 a 180 Hz |
+| Monitores | **dois**, ambos 1920x1080 a 96 DPI (escala 100%) |
+| Monitor primário | `\\.\DISPLAY1`, tela (0,0)-(1920,1080), área útil (0,0)-(1920,1032) |
+| Monitor secundário | `\\.\DISPLAY2`, tela **(-1920,0)-(0,1080)**, área útil (-1920,0)-(0,1032) |
+| Desktop virtual | origem (-1920,0), 3840x1080 |
+| Limiar de arraste do sistema | 4 x 4 px (`SM_CXDRAG`, `SM_CYDRAG`) |
+| Tempo de clique duplo | 500 ms |
+| ClickLock | desligado; tempo configurado 1200 ms |
+| Conta | membro de Administradores, token não elevado |
+
+O alvo de teste exigido por Q-02 é Windows 11 24H2 ou posterior: 25H2 atende.
+
+**O monitor secundário fica à esquerda do primário, em coordenadas negativas.** Isso torna verificável nesta máquina a exigência de ARCHITECTURE.md 2.4 de extrair coordenadas preservando o sinal, e permite a repetição [HW] de dois monitores prevista em P3. O que esta máquina **não** permite é escala mista: os dois monitores estão em 100%, então P6 e o critério 8 da Fase 1 continuam sem hardware.
+
+**Bloqueio encontrado e resolvido com autorização.** Não havia **nenhum** SDK do .NET instalado; existiam só os runtimes .NET 8 (`Microsoft.NETCore.App 8.0.19` e `8.0.21`, `Microsoft.WindowsDesktop.App 8.0.19`), e `dotnet --version` respondia "No .NET SDKs were found". Nada de WPF podia ser compilado. Conforme a instrução da etapa, o trabalho parou antes de criar arquivos e o usuário foi consultado. Ele escolheu instalar pelo winget, e o SDK **10.0.401** foi instalado, trazendo junto `Microsoft.NETCore.App 10.0.12` e `Microsoft.WindowsDesktop.App 10.0.12`. Nenhuma outra ferramenta ou configuração do sistema foi alterada.
+
+### O que foi construído
+
+`spikes/`, isolado do produto e descartável, descrito em [spikes/README.md](../spikes/README.md):
+
+- Um único projeto WPF `BuzzySpike` (`net10.0-windows`, x64, Release) com modos `p1`, `p3`, `p3-margem`, `p2-repouso`, `p2-anim10`, `p2-anim60` e `p2-anim60comp`. Um projeto só, e não três, para que a medição de P2 valha para exatamente a mesma janela que P1 e P3 exercitam.
+- **Zero dependências**: `dotnet list package` não retorna pacote nenhum. A saída de build tem 228 KB e uma única DLL própria. O SDK está fixado em `spikes/global.json` (10.0.401).
+- Manifesto com Per-Monitor V2 e `asInvoker`, conforme ARCHITECTURE.md 2.13.3 e SECURITY.md 2.
+- Figura de teste **gerada em código**, não carregada de arquivo: garante alfa exato, sem compressão nem perfil de cor no caminho, e não cria nenhum asset de arte. Quatro faixas de alfa 0, 1, 128 e 255, com molduras opacas que as tornam localizáveis na tela.
+- Ferramentas em `spikes/ferramentas/`: `sonda-p1.ps1`, `sonda-p3.ps1`, `medir-p2.ps1`, `medir-p2-tudo.ps1`, `ler-p1.ps1`, `ler-p3.ps1`.
+- `.gitignore` ampliado com `bin/`, `obj/` e `spikes/resultados/`, que era a revisão prevista para o primeiro build.
+
+**Limites respeitados de propósito.** O protótipo e as ferramentas não usam hook global, injeção de input, captura de tela, leitura periódica do cursor, rede, telemetria nem leitura de título ou conteúdo de janela de outro processo. A verificação de foco compara apenas identificadores de janela. A consequência é assumida: **o veredito final de P1 e de P3 depende de gestos feitos por uma pessoa**, e onde o gesto falta o resultado fica pendente, nunca aprovado.
+
+### P1 — clique através dos pixels transparentes. STATUS: PARCIAL.
+
+Evidência automatizada, obtida com `WindowFromPoint`, que é o mesmo teste de acerto que o Windows faz quando alguém clica, e que para janelas layered leva o alfa de cada pixel em conta. Sem injetar input e sem fotografar a tela. Janela do protótipo sobre a janela do Bloco de Notas, em (-1274,302), no monitor secundário:
+
+| Faixa | Alfa | Ponto de tela | Janela atingida | Atravessou | Resultado |
+|---|---|---|---|---|---|
+| alfa0 | 0 | (-1154,327) | Bloco de Notas (pid 24920) | **sim** | como previsto |
+| alfa1 | 1 | (-1154,377) | BuzzySpike | não | como previsto |
+| alfa255 | 255 | (-1154,427) | BuzzySpike | não | como previsto |
+| alfa128 | 128 | (-1154,477) | BuzzySpike | não | como previsto |
+
+Registros da janela: `WS_EX_LAYERED` **presente** (estilo estendido `0x08080088`), o que confirma na prática que `AllowsTransparency` do WPF em .NET 10 usa o caminho de janela layered afirmado em ARCHITECTURE.md 2.13.1. DPI da janela 96 (100%); figura 200x200 px em Pbgra32; runtime .NET 10.0.12.
+
+**Um clique físico foi registrado**, na faixa alfa 1, em coordenada de cliente (87,52), e ele **não** tirou o foco do aplicativo ativo. Os outros três cliques físicos ainda não foram feitos.
+
+**Achado que vale para os assets.** Alfa 1 captura o clique, exatamente como alfa 128 e alfa 255. Isso confirma por medição a regra do item 7 de ARCHITECTURE.md 2.13.7, que até aqui era afirmação de documentação: só alfa **exatamente** 0 é transparente ao clique. A faixa alfa 128 não estava no pedido original de P1 e foi acrescentada para testar essa regra.
+
+**Por que P1 não está aprovado:** a instrução da etapa exige o clique físico e proíbe declarar aprovação sem ele. Falta clicar nas faixas alfa 0, 128 e 255. Além disso, só o DPI de 96 foi exercitado, porque os dois monitores estão em 100%.
+
+### P3 — arraste sem roubar foco. STATUS: PARCIAL.
+
+A Parte A, que não exige gesto humano, foi executada e passou inteira:
+
+- **A1, foco ao aparecer:** com o Bloco de Notas em primeiro plano, abrir a janela do protótipo não mudou o foco. A janela em primeiro plano era a mesma antes e depois.
+- **A3, estilos:** estilo estendido `0x08080088`, com `WS_EX_NOACTIVATE` e `WS_EX_LAYERED` presentes. A janela também responde `MA_NOACTIVATE` à mensagem de ativação por mouse.
+- **A2, travessia entre monitores:** a janela foi movida por `SetWindowPos` com `SWP_NOACTIVATE` em nove passos, de x=1200 até x=-1800, atravessando do monitor primário para o secundário e entrando em coordenadas negativas. **Nenhum dos nove passos trocou o foco para o protótipo.**
+
+A2 é movimento programático e **não** é o arraste; ela isola o mecanismo de movimento e foco do mecanismo de captura do mouse. Só a Parte B, física, aprova P3.
+
+**Por que P3 não está aprovado:** faltam os gestos B1 a B7 descritos por `sonda-p3.ps1`: arraste devagar, arraste rápido soltando fora da janela, Alt+Tab no meio do gesto, travessia entre monitores arrastando, ClickLock ligado, e clique curto que deve ser classificado como clique e não como arraste. O recuo previsto em TODO.md, a margem temporária de captura alfa 1, está implementado no modo `p3-margem` mas **não foi usado**, porque a captura simples não falhou em nada que já tenha sido testado.
+
+### P2 — repouso e animação. STATUS: EM EXECUÇÃO.
+
+A sequência completa está rodando: repouso por 60 min com intervalo de amostragem de 5 s, depois animação a 10, a 60 e a 60 pelo compositor, 10 min cada com intervalo de 1 s. As métricas seguem M1 a M4 de DEC-011, medidas **por PID** e não por nome de processo, porque há mais de uma instância do protótipo aberta. Os resultados entram numa subseção própria quando a sequência terminar.
+
+**Achado já obtido numa medição curta de validação do instrumento**, que precisa ser confirmado na medição longa: um `DispatcherTimer` pedindo 60 quadros por segundo entregou **39,09 quadros por segundo** em 71,7 s. Por isso foi acrescentado o modo `p2-anim60comp`, que usa `CompositionTarget.Rendering` em vez do timer do Windows, para separar "60 pedidos" de "60 entregues". Esse caminho tem custo próprio, porque o evento do compositor chega na taxa de atualização do monitor, 180 Hz nesta máquina, e não na taxa da animação; o protótipo conta os dois números.
+
+**Nota de método sobre a resolução do timer.** Nesta máquina a resolução do timer global já está em 1,000 ms **antes** de o Buzzy abrir, elevada por outro processo. O critério oficial de DEC-011 é sobre *qual processo muda* a resolução, então cada relatório mede antes de abrir, durante e depois de fechar, para permitir atribuição. Nas medições curtas o valor não mudou em nenhum dos três momentos.
+
+### Defeitos encontrados e corrigidos durante o trabalho
+
+- **Marshalling de `MONITORINFOEX`.** A primeira versão do levantamento usou `StructLayout` sem `CharSet`, que marshala o campo de nome como ANSI e produz `cbSize` de 72 em vez de 104. `GetMonitorInfoW` rejeitava a chamada e devolvia retângulos zerados **sem erro visível**. Corrigido com `CharSet.Unicode`. Pelo mesmo motivo, `Interop.cs` usa `DllImport` e não `LibraryImport`: o marshalling gerado em tempo de compilação não lida com esse campo. Há um comentário no arquivo avisando para não trocar em bloco.
+- **Codificação dos scripts.** Os `.ps1` gravados em UTF-8 sem BOM eram lidos como ANSI pelo Windows PowerShell 5.1; o travessão virava um caractere que o interpretador trata como aspas de fechamento e encerrava a string no meio, quebrando o script. Todos os scripts passaram a ser gravados em UTF-8 **com BOM**, e a sintaxe de cada um é conferida com o parser antes de rodar.
+- **Fechamento da janela do protótipo.** `Process.CloseMainWindow()` não alcança a janela, que é tool window; o processo acabava terminado à força e o resumo interno não era gravado. A medição passou a enviar `WM_CLOSE` ao HWND que o próprio protótipo registra no log, e o relatório declara se o fechamento foi limpo.
+- **Ordem de execução.** A sequência de P2 chegou a ser iniciada antes de P3 para aproveitar o tempo de parede. Como TODO.md fixa a ordem P1, P3, P2 e a varredura de P3 passaria por cima da janela medida, a sequência foi interrompida, os resultados parciais apagados, a Parte A de P3 executada, e só então P2 recomeçou do zero.
+
+### Testes executados
+
+Build em Release: **sucesso, 0 avisos e 0 erros**. Não há testes automatizados: protótipo descartável não recebe suíte de teste, e a Fase 1 é que introduz o portão de build.
+
+### Pendências desta etapa
+
+1. Cliques físicos de P1 nas faixas alfa 0, 128 e 255.
+2. Gestos físicos B1 a B7 de P3.
+3. Fim da sequência de medição de P2 e registro dos números.
+4. Recomendação de metas para Q-08 a partir dos números de P2, que é tarefa do Codex.
+5. Escala mista de DPI continua sem hardware: os dois monitores estão em 100%.
+
+Enquanto 1 e 2 não forem feitos, **P1 e P3 não estão aprovados** e a Fase 0 não fecha.
+
+### Atualização — sessão física de P3 e interrupção de P2 (2026-09-26)
+
+O usuário exercitou o protótipo de P3 com o mouse. O log `spikes/resultados/p3.log` registra **10 gestos de arraste reais**, e o resultado central é forte:
+
+- **Foco nunca roubado.** Nos 10 gestos, todo bloco de fim traz "Foco é nosso agora?: não (correto)" e "Foco mudou no gesto?: não". Zero marcas de PROBLEMA. A janela em primeiro plano permaneceu no aplicativo do usuário (VS Code, depois outra) o tempo todo.
+- **Arraste rápido e pesado:** um único gesto aplicou **4433 movimentos**; a captura foi sempre obtida (`captura = 329908 (nossa: True)`) e sempre encerrada pelo caminho único `WM_CAPTURECHANGED`.
+- **Travessia entre monitores arrastando:** 2 gestos terminaram no monitor secundário `\.\DISPLAY2` em coordenadas negativas (ex.: posição final (-524,123)), sem trocar o foco. Cobre a parte [HW] de dois monitores de P3.
+- **Latência M5:** típica ~0,2 ms de média por gesto; pior movimento isolado de toda a sessão 3,895 ms, ainda abaixo de um quadro.
+
+O que **não** ficou coberto e mantém P3 como PARCIAL: nenhum dos 10 gestos foi um **clique curto** (todos passaram do limiar de 4 px), então a classificação clique-vs-arraste só foi exercitada no lado "arraste"; **Alt+Tab no meio do gesto** e **ClickLock** não aparecem no log; e o log não enxerga o Bloco de Notas, então a confirmação de que o texto digitado entra nele depois do arraste (B1/B2) depende do usuário.
+
+**P2 foi interrompido e precisa ser refeito.** A sequência `medir-p2-tudo.ps1` não terminou: só a etapa de repouso rodou e a janela dela (PID 23348) foi encerrada antes da hora — provavelmente quando o usuário mexeu nas janelas para fechar a do P3 —, e o processo orquestrador saiu sem registrar "FIM". A janela de repouso acumulou apenas 4 passagens de desenho, o que é um sinal preliminar bom de ociosidade, mas **sem duração válida** não é um número reportável. Alerta de método para a refação: o cronômetro do protótipo de P3 pulou de tempo decorrido ~00:25 para ~05:05 entre lotes de gestos, o que sugere suspensão da máquina ou salto do timer de alta resolução no Ryzen 7800X3D; a medição de repouso precisa rodar com a máquina parada e ser conferida contra esse salto.
+
+**Operação:** a janela travada de P3 (PID 8888), que tinha sido arrastada até (785,1030), atrás da barra de tarefas, foi fechada a pedido do usuário por `WM_CLOSE` no HWND que ela mesma registrou; o bloco de encerramento foi gravado. Nenhum processo do protótipo continua rodando.
+
+**Documentos sincronizados:** TODO.md (tabela de situação dos protótipos), PROJECT_CONTEXT.md (estado dos protótipos) e este log. Nada aprovado; a Fase 0 continua aberta.

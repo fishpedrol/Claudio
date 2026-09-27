@@ -12,9 +12,11 @@
 
 ## Fase atual
 
-**Fase 0 — Descoberta e arquitetura. STATUS: PLANNED.** A comparação e a proposta estão documentadas. O usuário delegou a escolha da stack ao Codex; WPF/C#/.NET 10 foi selecionada em DEC-006. As escolhas de produto necessárias agora estão respondidas. Faltam os protótipos P1–P3, a revisão independente dos resultados e o fechamento documental da fase. Q-08 será decidida após a medição P2; formato e assinatura de distribuição pública ficam para depois. A Fase 0 **não** está concluída e nenhum protótipo foi executado.
+**Fase 0 — Descoberta e arquitetura. STATUS: PLANNED.** A comparação e a proposta estão documentadas. O usuário delegou a escolha da stack ao Codex; WPF/C#/.NET 10 foi selecionada em DEC-006. As escolhas de produto necessárias agora estão respondidas. Faltam os protótipos P1–P3, a revisão independente dos resultados e o fechamento documental da fase. Q-08 será decidida após a medição P2; formato e assinatura de distribuição pública ficam para depois. A Fase 0 **não** está concluída.
 
-Ainda não há código do aplicativo. A Etapa 0B permite somente protótipos descartáveis e isolados em `spikes/`.
+A Etapa 0B começou em 2026-09-26: os protótipos existem, compilam e rodaram na parte que não exige gesto humano. **Nenhum dos três está aprovado.** P1 e P3 dependem de cliques e arrastes feitos por uma pessoa; P2 depende do fim da sequência de medição. Detalhes e evidências em DEVELOPMENT_LOG.md, entrada "Etapa 0B: protótipos WPF P1, P3 e P2".
+
+Ainda não há código do aplicativo. A Etapa 0B permite somente protótipos descartáveis e isolados em `spikes/`, e o que existe lá é descartável por construção.
 
 ### Pendências da Fase 0
 
@@ -35,7 +37,7 @@ Ainda não há código do aplicativo. A Etapa 0B permite somente protótipos des
 - [x] 2026-09-26 — Propor critérios de aceitação e testes por fase (este arquivo) e plano de medição de desempenho (DEC-011).
 - [x] 2026-09-26 — Revisar independentemente o plano conforme PLAN_REVIEW.md. A arquitetura está alinhada ao MVP e a ordem continua segura; WPF foi escolhido por delegação, com P1–P3 como gates antes da Fase 1. Atualizadas as referências visuais para deixar claro que são ponto de partida para uma nova proposta original. A revisão não verificou código nem encerrou a Fase 0.
 - [x] 2026-09-26 — Registrar as respostas do usuário para Q-02 a Q-07, Q-09, Q-11, Q-12, Q-14, Q-20 e Q-21 e o ZIP portátil sem assinatura para uso pessoal/testes em Q-10. Evidências: DECISIONS.md e DECISOES_DO_USUARIO.md. Q-08 foi adiada para depois de P2; distribuição pública e assinatura continuam para decisão futura em Q-10. Q-01 e Q-13 foram resolvidas por delegação do usuário; Q-15 foi resolvida como questão operacional; Q-16 a Q-19 foram esclarecidas como referências visuais; Q-22 não se aplica após a escolha de WPF.
-- [ ] Etapa 0B, protótipos descartáveis P1, P2 e P3 com WPF, antes da Fase 1. P9 foi encerrado sem execução porque avaliava interface Win32 manual.
+- [ ] Etapa 0B, protótipos descartáveis P1, P2 e P3 com WPF, antes da Fase 1. P9 foi encerrado sem execução porque avaliava interface Win32 manual. **Parcial em 2026-09-26:** SDK do .NET 10.0.401 instalado com autorização do usuário; projeto `spikes/BuzzySpike` criado, sem dependências, compilando em Release sem avisos. P1 tem sonda automatizada com as quatro faixas como previsto e um clique físico registrado; faltam três. P3 teve a Parte A automatizada aprovada por inteiro; faltam os gestos B1 a B7. P2 estava em execução ao fim da rodada. Evidências em DEVELOPMENT_LOG.md.
 - [ ] Registrar instruções de build e teste em PROJECT_CONTEXT.md quando o aplicativo WPF da Fase 1 for criado.
 
 ### Critério para concluir a Fase 0
@@ -53,7 +55,17 @@ Antes da revisão final, nenhum espaço reservado pode permanecer como se fosse 
 
 ## Etapa 0B — Protótipos de viabilidade
 
-STATUS: PLANNED. Fazer antes da Fase 1 com a stack escolhida, WPF/C#/.NET 10. O código é descartável, fica em `spikes/` fora do produto e não segue para a Fase 1. Cada protótipo registra método, hardware, métricas e resultado no DEVELOPMENT_LOG.md.
+STATUS: EM ANDAMENTO desde 2026-09-26. Fazer antes da Fase 1 com a stack escolhida, WPF/C#/.NET 10. O código é descartável, fica em `spikes/` fora do produto e não segue para a Fase 1. Cada protótipo registra método, hardware, métricas e resultado no DEVELOPMENT_LOG.md.
+
+**Como rodar o que já existe:** `spikes/README.md`. Os scripts ficam em `spikes/ferramentas/`.
+
+**Regra de veredito desta etapa.** As ferramentas não injetam input e não fotografam a tela, por decisão de SECURITY.md 3.2. Elas produzem toda a evidência obtenível sem gesto humano e param aí. Onde falta o clique ou o arraste de uma pessoa, o protótipo fica **pendente**, nunca aprovado.
+
+| ID | Situação em 2026-09-26 | O que falta para aprovar |
+|---|---|---|
+| P1 | PARCIAL. Sonda de teste de acerto do Windows: alfa 0 atravessou para o Bloco de Notas; alfa 1, 128 e 255 ficaram na janela do Buzzy. `WS_EX_LAYERED` confirmado. Um clique físico registrado, na faixa alfa 1, sem roubo de foco. | Cliques físicos nas faixas alfa 0, 128 e 255. DPI diferente de 96 continua sem hardware. |
+| P3 | PARCIAL, forte no ponto central. Parte A automatizada aprovada. Parte B: o usuário fez **10 gestos de arraste reais**, incluindo arraste rápido (até 4433 movimentos num só gesto) e **2 travessias terminando no monitor secundário em coordenadas negativas**. Em **nenhum** dos 10 gestos o foco foi para a janela do Buzzy (0 marcas de PROBLEMA); a captura foi sempre obtida e sempre encerrada pelo caminho único `WM_CAPTURECHANGED`. Latência M5 típica ~0,2 ms, pior movimento isolado 3,9 ms. | **B7** (clique curto que vira clique, não arraste): 0 exemplos — todos os 10 gestos passaram do limiar. **B4** (Alt+Tab no meio do gesto) e **B6** (ClickLock): não capturados no log. **B1/B2** (o texto digitado entra no Bloco de Notas depois do arraste): o log não enxerga o Bloco de Notas; só o usuário confirma. |
+| P2 | **INTERROMPIDO, precisa refazer.** A sequência foi cortada: só a etapa de repouso rodou e foi encerrada cedo (janela fechada antes da hora, provavelmente ao mexer nas janelas), e o orquestrador saiu sem registrar FIM. Sinal preliminar bom, mas sem duração válida: a janela de repouso acumulou só 4 passagens de desenho. Há ainda um alerta de método: o cronômetro do protótipo pulou de ~00:25 para ~05:05 de tempo decorrido, o que sugere suspensão da máquina ou salto do timer de alta resolução no Ryzen. | Rodar `medir-p2-tudo.ps1` de novo, com a **máquina parada** (o usuário longe do teclado), e conferir que o cronômetro não salta. Registrar M1 a M4 no DEVELOPMENT_LOG.md. |
 
 | ID | Pergunta | Teste mínimo | Resultado esperado | Hardware |
 |---|---|---|---|---|

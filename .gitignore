@@ -14,3 +14,14 @@ desktop.ini
 # Temporários e logs
 *.tmp
 *.log
+
+# Build do .NET / WPF (introduzido na Etapa 0B, com os protótipos em spikes/)
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+# Resultados de execução dos protótipos: gerados por rodada, não versionados.
+# A evidência que precisa sobreviver é resumida em docs/DEVELOPMENT_LOG.md.
+spikes/resultados/
