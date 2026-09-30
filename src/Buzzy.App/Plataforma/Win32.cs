@@ -27,15 +27,21 @@ internal static class Win32
     // ---- Mensagens -----------------------------------------------------------------
     internal const int WM_NULL = 0x0000;
     internal const int WM_SETTINGCHANGE = 0x001A;
+    internal const int WM_CANCELMODE = 0x001F;
     internal const int WM_MOUSEACTIVATE = 0x0021;
     internal const int WM_DISPLAYCHANGE = 0x007E;
     internal const int WM_CONTEXTMENU = 0x007B;
+    internal const int WM_MOUSEMOVE = 0x0200;
     internal const int WM_LBUTTONDOWN = 0x0201;
     internal const int WM_LBUTTONUP = 0x0202;
+    internal const int WM_LBUTTONDBLCLK = 0x0203;
+    internal const int WM_RBUTTONDOWN = 0x0204;
     internal const int WM_RBUTTONUP = 0x0205;
+    internal const int WM_CAPTURECHANGED = 0x0215;
     internal const int WM_GETDPISCALEDSIZE = 0x02E4;
     internal const int WM_APP = 0x8000;
     internal const int MA_NOACTIVATE = 3;
+    internal const int MK_LBUTTON = 0x0001;
     internal const int SPI_SETWORKAREA = 0x002F;
 
     // ---- SetWindowPos --------------------------------------------------------------
@@ -74,7 +80,11 @@ internal static class Win32
     internal const int NIN_KEYSELECT = 0x0401;
 
     // ---- Métricas ------------------------------------------------------------------
+    internal const int SM_CXDOUBLECLK = 36;
+    internal const int SM_CYDOUBLECLK = 37;
     internal const int SM_CXSMICON = 49;
+    internal const int SM_CXDRAG = 68;
+    internal const int SM_CYDRAG = 69;
 
     [StructLayout(LayoutKind.Sequential)]
     internal struct POINT
@@ -153,6 +163,11 @@ internal static class Win32
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool ClientToScreen(nint hWnd, ref POINT lpPoint);
 
+    /// <summary>Retângulo de uma janela do próprio Buzzy, em pixels físicos.</summary>
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool GetWindowRect(nint hWnd, out RECT lpRect);
+
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool SetForegroundWindow(nint hWnd);
@@ -163,6 +178,24 @@ internal static class Win32
 
     [DllImport("user32.dll", EntryPoint = "RegisterWindowMessageW", CharSet = CharSet.Unicode, SetLastError = true)]
     internal static extern int RegisterWindowMessage(string lpString);
+
+    // ---- user32: captura do mouse no gesto começado no personagem (ARCHITECTURE.md 2.7) ----
+
+    /// <summary>
+    /// Captura o mouse para a janela do personagem durante um gesto que começou nela. Como a janela
+    /// não é a de primeiro plano, o Windows só entrega o mouse a ela enquanto um botão estiver
+    /// pressionado; ela nunca lê input fora desse gesto (SECURITY.md 3.1).
+    /// </summary>
+    [DllImport("user32.dll")]
+    internal static extern nint SetCapture(nint hWnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool ReleaseCapture();
+
+    /// <summary>Tempo de clique duplo do sistema, em milissegundos (ARCHITECTURE.md 2.7, regra 4).</summary>
+    [DllImport("user32.dll")]
+    internal static extern uint GetDoubleClickTime();
 
     // ---- user32: menu nativo ---------------------------------------------------------
 

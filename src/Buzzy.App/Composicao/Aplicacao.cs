@@ -1,23 +1,43 @@
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Interop;
-using System.Windows.Media.Imaging;
+using System.Windows.Media;
 using System.Windows.Threading;
 using Buzzy.App.Apresentacao;
 using Buzzy.App.Plataforma;
 using Buzzy.Core;
+using Buzzy.Core.Entrada;
 using Buzzy.Core.Personagem;
 
 namespace Buzzy.App.Composicao;
 
+/// <summary>Opções da linha de comando que a raiz de composição usa.</summary>
+/// <param name="MovimentoPausado">
+/// <c>--pausado</c>: começa com o movimento autônomo pausado, como o item "Pausar movimento" do
+/// menu. Usado pelas verificações de tela, que precisam do personagem parado no lugar inicial.
+/// </param>
+/// <param name="Semente">
+/// <c>--semente N</c>: semente fixa da agenda autônoma, para reproduzir uma sequência de
+/// comportamento (diagnóstico e testes). Sem ela, a semente vem do relógio do sistema.
+/// </param>
+internal sealed record OpcoesDaAplicacao(bool MovimentoPausado, ulong? Semente)
+{
+    internal static readonly OpcoesDaAplicacao Padrao = new(false, null);
+}
+
 /// <summary>
-/// Raiz de composição das Fases 1 e 2 (DEC-007): liga o núcleo puro do personagem e do
-/// posicionamento ao adaptador de plataforma (janelas, bandeja, menu e mensagens do Windows).
+/// Raiz de composição das Fases 1 a 4 (DEC-007): liga o núcleo puro do personagem, do
+/// posicionamento e da arbitragem de input ao adaptador de plataforma (janelas, captura do
+/// mouse, bandeja, menu e mensagens do Windows) e escolhe o quadro do sprite pelo retrato.
 ///
-/// Ocioso por eventos (DEC-011): nada roda em timer periódico. Os únicos timers são de uma
-/// vez só: o agrupamento das mensagens de topologia (300 ms depois de uma mensagem, com até
-/// três novas tentativas se a leitura vier incoerente) e novas tentativas de pôr o ícone na
-/// bandeja quando a Shell recusa.
+/// Ocioso por eventos (DEC-011): em repouso, nada roda em timer periódico. Os timers são de uma
+/// vez só — o agrupamento das mensagens de topologia (300 ms depois de uma mensagem, com até
+/// três novas tentativas se a leitura vier incoerente), novas tentativas de pôr o ícone na
+/// bandeja e a próxima decisão da agenda autônoma. O relógio de passo fixo só corre enquanto o
+/// núcleo pede (reação, pouso, gesto curto e movimento) e anda junto com os quadros do
+/// compositor do WPF (<see cref="CompositionTarget.Rendering"/>): a janela se move no máximo uma
+/// vez por quadro, com a posição mais recente. O arraste não usa relógio: cada movimento do
+/// mouse vira posição da janela no mesmo tratamento da mensagem.
 /// </summary>
 internal sealed class Aplicacao
 {
@@ -32,13 +52,20 @@ internal sealed class Aplicacao
 
     private const int TentativasDaBandeja = 3;
 
+    /// <summary>Maior atraso que o relógio de passo fixo recupera de uma vez (15 passos a 60 Hz).</summary>
+    private static readonly TimeSpan AtrasoMaximoDoRelogio = TimeSpan.FromMilliseconds(250);
+
     private readonly Application _app;
     private readonly InstanciaUnica _instancia;
+    private readonly OpcoesDaAplicacao _opcoes;
     private readonly DispatcherTimer _agrupador;
     private readonly DispatcherTimer _repetirBandeja;
-    private readonly DispatcherTimer _relogio;
     private readonly List<string> _motivosPendentes = [];
     private readonly Dictionary<Evento, string> _motivosDoNucleo = new(ReferenceEqualityComparer.Instance);
+    private readonly ArbitroDeGestos _arbitro = new();
+
+    /// <summary>M5 do arraste em curso (DEC-011), só com <c>--diagnostico</c>: ms de cada movimento até a janela no lugar.</summary>
+    private readonly List<double> _latenciasDoArraste = [];
 
     private JanelaDeServico? _servico;
     private JanelaPersonagem? _personagem;
@@ -60,10 +87,22 @@ internal sealed class Aplicacao
     private bool _encerrando;
     private bool _processandoNucleo;
 
-    internal Aplicacao(Application app, InstanciaUnica instancia)
+    /// <summary>A janela foi movida durante o arraste sem registrar a posição (diagnóstico).</summary>
+    private bool _posicaoSemRegistro;
+
+    /// <summary>Se o relógio de passo fixo está ligado (inscrito nos quadros do compositor).</summary>
+    private bool _relogioLigado;
+
+    /// <summary>Quadro do sprite na janela e o estado em que ele começou a ser contado.</summary>
+    private QuadroDoSprite? _quadroAtual;
+    private Estado _estadoDoQuadro = Estado.Booting;
+    private long _passoDeEntradaNoEstado;
+
+    internal Aplicacao(Application app, InstanciaUnica instancia, OpcoesDaAplicacao? opcoes = null)
     {
         _app = app;
         _instancia = instancia;
+        _opcoes = opcoes ?? OpcoesDaAplicacao.Padrao;
         _agrupador = new DispatcherTimer(DispatcherPriority.Normal) { Interval = Agrupamento };
         _agrupador.Tick += AoAgrupar;
         _repetirBandeja = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromSeconds(2) };
@@ -72,11 +111,6 @@ internal sealed class Aplicacao
             _repetirBandeja.Stop();
             AdicionarIconeNaBandeja();
         };
-        _relogio = new DispatcherTimer(DispatcherPriority.Render)
-        {
-            Interval = TimeSpan.FromSeconds(1d / 60),
-        };
-        _relogio.Tick += AoTiqueDoRelogio;
     }
 
     internal void Iniciar()
@@ -107,7 +141,7 @@ internal sealed class Aplicacao
         Diagnostico.Evento("SERVICO", ("hwnd", _servico.Hwnd));
 
         _personagem = new JanelaPersonagem();
-        _personagem.MenuSolicitado += p => Adiar(() => Enviar(new ContextMenu(p), "personagem"));
+        _personagem.Ponteiro += AoPonteiro;
         _personagem.DpiMudou += dpi => AoPossivelMudancaDeTopologia($"WM_DPICHANGED {dpi}");
         _personagem.Minimizada += () => Adiar(() => Enviar(new CmdHide(), "minimizado pelo Windows"));
         _personagem.Closing += (_, e) =>
@@ -123,14 +157,15 @@ internal sealed class Aplicacao
         new WindowInteropHelper(_personagem).EnsureHandle();
         Diagnostico.Evento("JANELA", ("hwnd", _personagem.Hwnd));
 
-        ulong semente = unchecked((ulong)Environment.TickCount64);
+        ulong semente = _opcoes.Semente ?? unchecked((ulong)Environment.TickCount64);
         _nucleo = new Nucleo(new ConfiguracaoDoNucleo
         {
             Tamanho = SpriteProvisorio.TamanhoLogico,
             Acoes = AcoesAutonomas.Descansar | AcoesAutonomas.TrocarExpressao,
         }, semente);
-        Diagnostico.Evento("NUCLEO", ("semente", semente));
+        Diagnostico.Evento("NUCLEO", ("semente", semente), ("pausado", _opcoes.MovimentoPausado ? "sim" : "nao"));
         Enviar(new Loaded(topologia, PosicaoSalva: null, Preferencias.Padrao), "início");
+        if (_opcoes.MovimentoPausado) Enviar(new CmdPauseAutonomy(), "linha de comando --pausado");
 
         _dpiDoIcone = topologia.Principal.Dpi;
         _bandeja = new Bandeja(_servico.Hwnd, CriarIcone(_dpiDoIcone));
@@ -144,6 +179,57 @@ internal sealed class Aplicacao
     }
 
     // ------------------------------------------------------------------ eventos
+
+    /// <summary>
+    /// Ponteiro sobre o personagem ou capturado num gesto começado nele (ARCHITECTURE.md 2.7): a
+    /// arbitragem decide o gesto e a captura, e o núcleo aplica cada gesto no mesmo tratamento da
+    /// mensagem — um movimento de arraste vira posição da janela antes de a mensagem acabar.
+    /// </summary>
+    private void AoPonteiro(EventoDePonteiro evento)
+    {
+        if (_encerrando || _nucleo is null || _personagem is null) return;
+        long recebido = Stopwatch.GetTimestamp();
+        Arbitragem arbitragem = _arbitro.Receber(evento);
+
+        // A captura acompanha o gesto: pega no botão esquerdo pressionado e solta no fim dele.
+        if (arbitragem.Capturar) _personagem.Capturar();
+        else _personagem.SoltarCaptura();
+
+        bool moveu = false;
+        foreach (Evento gesto in arbitragem.Gestos)
+        {
+            if (gesto is DragStart) _latenciasDoArraste.Clear();
+            Enviar(gesto, "ponteiro");
+            moveu |= gesto is DragMove;
+            if (gesto is DragEnd or DragCancel) RegistrarFimDoArraste(gesto);
+        }
+
+        if (moveu && Diagnostico.Ligado)
+            _latenciasDoArraste.Add(Stopwatch.GetElapsedTime(recebido).TotalMilliseconds);
+    }
+
+    /// <summary>
+    /// Só com <c>--diagnostico</c>: resumo do arraste e M5 (DEC-011), sem registrar cada movimento.
+    /// A posição validada ao soltar já foi registrada no fim do processamento do gesto.
+    /// </summary>
+    private void RegistrarFimDoArraste(Evento fim)
+    {
+        if (!Diagnostico.Ligado) return;
+        double[] ms = [.. _latenciasDoArraste.Order()];
+        _latenciasDoArraste.Clear();
+        if (ms.Length == 0)
+        {
+            Diagnostico.Evento("ARRASTE", ("fim", fim.GetType().Name), ("movimentos", 0));
+            return;
+        }
+        double p95 = ms[Math.Min(ms.Length - 1, (int)Math.Ceiling(ms.Length * 0.95) - 1)];
+        Diagnostico.Evento("ARRASTE",
+            ("fim", fim.GetType().Name),
+            ("movimentos", ms.Length),
+            ("m5MediaMs", Math.Round(ms.Average(), 3)),
+            ("m5P95Ms", Math.Round(p95, 3)),
+            ("m5MaxMs", Math.Round(ms[^1], 3)));
+    }
 
     private void AoPrimeiroQuadro(object? remetente, EventArgs e)
     {
@@ -218,6 +304,7 @@ internal sealed class Aplicacao
         bool mudou = !nova.MesmaConfiguracao(_topologia);
         _topologia = nova;
         Enviar(new TopologyChanged(nova), motivos);
+        ReafirmarLugarDaJanela(motivos);
 
         if (nova.Principal.Dpi != _dpiDoIcone && _bandeja is not null)
         {
@@ -229,6 +316,24 @@ internal sealed class Aplicacao
     }
 
     // ------------------------------------------------------------------ ações
+
+    /// <summary>
+    /// Depois de reler a topologia: se a janela não está onde o núcleo a pôs (o Windows a
+    /// reposicionou ao trocar monitor ou DPI, ou outro agente a moveu) ou o sprite ficou em outro
+    /// DPI, reaplica o lugar do núcleo, que é quem decide a posição. Nunca no meio de um gesto do
+    /// usuário (ARCHITECTURE.md 2.8: com o botão pressionado, a validação é ao soltar).
+    /// </summary>
+    private void ReafirmarLugarDaJanela(string motivo)
+    {
+        if (_personagem is null || _nucleo is null || !_visivel || _encerrando) return;
+        if (_nucleo.Estado.Estado is Estado.Pressed or Estado.Dragging) return;
+        if (_nucleo.Estado.Lugar is not { } lugar) return;
+        RetanguloPx? real = _personagem.RetanguloReal();
+        if (real == lugar.Retangulo && lugar.Monitor.Dpi == _dpiDoSprite) return;
+        Diagnostico.Evento("POSICAO", ("reaplicada", "sim"), ("motivo", motivo), ("real", real), ("nucleo", lugar.Retangulo));
+        _posicionamento = lugar;
+        AplicarNaJanela(lugar);
+    }
 
     private static Topologia? LerTopologiaNaPartida()
     {
@@ -248,24 +353,34 @@ internal sealed class Aplicacao
         if (_personagem is null) return;
         if (p.Monitor.Dpi != _dpiDoSprite || _personagem.Sprite is null)
         {
-            _personagem.DefinirSprite(SpriteProvisorio.Renderizar(p.Monitor.Dpi));
+            QuadroDoSprite quadro = _quadroAtual ?? new QuadroDoSprite("parado", false, null);
+            _personagem.DefinirSprite(SpriteProvisorio.Renderizar(quadro, p.Monitor.Dpi));
+            _quadroAtual = quadro;
             _dpiDoSprite = p.Monitor.Dpi;
         }
         _personagem.AplicarRetangulo(p.Retangulo);
-        RegistrarPosicao(p);
+        // Durante o arraste e o movimento, registrar cada passo pesaria no próprio movimento: a
+        // posição é registrada quando o personagem para (fim de ProcessarFilaDoNucleo).
+        if (EmMovimentoOuArraste()) _posicaoSemRegistro = true;
+        else RegistrarPosicao(p);
     }
 
+    private bool EmMovimentoOuArraste()
+        => _nucleo?.Estado.Estado is { } e && (e == Estado.Dragging || e.EmMovimento());
+
     /// <summary>
-    /// Só com <c>--diagnostico</c>: registra a posição e dois pontos de teste do sprite
-    /// (um opaco e um transparente, em coordenadas de tela), usados pela verificação da Fase 1.
+    /// Só com <c>--diagnostico</c>: registra a posição e dois pontos de teste do sprite em pé (um
+    /// opaco e um transparente, em coordenadas de tela), usados pelas verificações de tela para
+    /// clicar no personagem parado. Os pontos são sempre os do quadro "parado" no DPI do monitor.
     /// </summary>
     private void RegistrarPosicao(Posicionamento p)
     {
-        if (!Diagnostico.Ligado || _personagem?.Sprite is not BitmapSource sprite) return;
+        _posicaoSemRegistro = false;
+        if (!Diagnostico.Ligado || _personagem is null) return;
         string opaco = "indisponível", transparente = "indisponível";
         try
         {
-            (PontoPx o, PontoPx t) = SpriteProvisorio.PontosDeTeste(sprite);
+            (PontoPx o, PontoPx t) = SpriteProvisorio.PontosDeTeste(SpriteProvisorio.Renderizar(p.Monitor.Dpi));
             opaco = $"{p.Retangulo.Esquerda + o.X},{p.Retangulo.Topo + o.Y}";
             transparente = $"{p.Retangulo.Esquerda + t.X},{p.Retangulo.Topo + t.Y}";
         }
@@ -310,8 +425,9 @@ internal sealed class Aplicacao
         // A decisão usa o estado do momento em que o menu abriu, que é o texto que o
         // usuário leu no item. O laço modal do menu continua despachando operações.
         bool visivelAoAbrir = _visivel;
+        bool pausadoAoAbrir = _nucleo?.Estado.AutonomiaPausada ?? false;
         Diagnostico.Evento("MENU", ("aberto", origem), ("ponto", ponto), ("peloTeclado", peloTeclado ? "sim" : "nao"));
-        ComandoDoMenu comando = MenuNativo.Mostrar(ponto, visivelAoAbrir, abrirParaCima: origem == "bandeja");
+        ComandoDoMenu comando = MenuNativo.Mostrar(ponto, visivelAoAbrir, pausadoAoAbrir, abrirParaCima: origem == "bandeja");
         if (_encerrando) return;
 
         switch (comando)
@@ -321,6 +437,12 @@ internal sealed class Aplicacao
                 break;
             case ComandoDoMenu.AlternarVisibilidade:
                 MostrarPorComando("menu");
+                break;
+            case ComandoDoMenu.AlternarMovimento when pausadoAoAbrir:
+                Enviar(new CmdResumeAutonomy(), "menu");
+                break;
+            case ComandoDoMenu.AlternarMovimento:
+                Enviar(new CmdPauseAutonomy(), "menu");
                 break;
             case ComandoDoMenu.Sair:
                 Enviar(new CmdExit(), "menu");
@@ -336,17 +458,24 @@ internal sealed class Aplicacao
 
     private void Enviar(Evento evento, string motivo)
     {
-        if (_encerrando) return;
+        if (!Enfileirar(evento, motivo)) return;
+        ProcessarFilaDoNucleo();
+    }
+
+    /// <summary>Põe o evento na fila do núcleo sem processar (lote de passos do relógio).</summary>
+    private bool Enfileirar(Evento evento, string motivo)
+    {
+        if (_encerrando) return false;
         if (_nucleo is null) throw new InvalidOperationException("O núcleo ainda não foi criado.");
 
         if (!_nucleo.Enfileirar(evento))
         {
             Diagnostico.Evento("NUCLEO", ("evento", evento.GetType().Name), ("descartado", "autônomo sob controle do usuário"));
-            return;
+            return false;
         }
 
         _motivosDoNucleo[evento] = motivo;
-        ProcessarFilaDoNucleo();
+        return true;
     }
 
     private void ProcessarFilaDoNucleo()
@@ -388,9 +517,13 @@ internal sealed class Aplicacao
                 if (descartados > 0)
                     Diagnostico.Evento("NUCLEO", ("autonomosDescartados", descartados));
 
-                foreach ((Evento evento, Efeito efeito, string motivoEvento) in efeitos)
+                for (int i = 0; i < efeitos.Count; i++)
                 {
                     if (_encerrando) break;
+                    (Evento evento, Efeito efeito, string motivoEvento) = efeitos[i];
+                    // Num lote (vários passos do relógio no mesmo quadro), só a última posição
+                    // antes do próximo mostrar/esconder vai para a janela: uma movimentação por quadro.
+                    if (efeito is MoverJanela && MovimentacaoPosterior(efeitos, i)) continue;
                     ExecutarEfeito(evento, efeito, motivoEvento);
                 }
             }
@@ -399,6 +532,46 @@ internal sealed class Aplicacao
         {
             _processandoNucleo = false;
         }
+        AtualizarSprite();
+        if (_posicaoSemRegistro && _visivel && !_encerrando && !EmMovimentoOuArraste()) RegistrarPosicao(_posicionamento);
+    }
+
+    /// <summary>Se há outra <see cref="MoverJanela"/> depois de <paramref name="i"/>, sem mostrar/esconder no meio.</summary>
+    private static bool MovimentacaoPosterior(List<(Evento Evento, Efeito Efeito, string Motivo)> efeitos, int i)
+    {
+        for (int j = i + 1; j < efeitos.Count; j++)
+        {
+            switch (efeitos[j].Efeito)
+            {
+                case MoverJanela:
+                    return true;
+                case MostrarJanela or EsconderJanela:
+                    return false;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Poses provisórias da Fase 4: escolhe o quadro pelo retrato do núcleo e só troca o sprite
+    /// quando o quadro ou o DPI mudam (ARCHITECTURE.md 2.10: redesenho só quando o quadro muda).
+    /// </summary>
+    private void AtualizarSprite()
+    {
+        if (_personagem is null || _nucleo is null || _encerrando || _posicionamento is null) return;
+        Retrato retrato = _nucleo.Retrato;
+        if (!retrato.Estado.Visivel()) return;
+        if (retrato.Estado != _estadoDoQuadro)
+        {
+            _estadoDoQuadro = retrato.Estado;
+            _passoDeEntradaNoEstado = _nucleo.Estado.Passos;
+        }
+        QuadroDoSprite quadro = PoseDoPersonagem.Escolher(retrato, _nucleo.Estado.Passos - _passoDeEntradaNoEstado);
+        int dpi = _posicionamento.Monitor.Dpi;
+        if (quadro == _quadroAtual && dpi == _dpiDoSprite && _personagem.Sprite is not null) return;
+        _personagem.DefinirSprite(SpriteProvisorio.Renderizar(quadro, dpi));
+        _quadroAtual = quadro;
+        _dpiDoSprite = dpi;
     }
 
     private void ExecutarEfeito(Evento evento, Efeito efeito, string motivo)
@@ -428,28 +601,37 @@ internal sealed class Aplicacao
                 break;
 
             case LigarRelogio:
+                if (!_relogioLigado) Diagnostico.Evento("RELOGIO", ("ligado", "sim"), ("evento", evento.GetType().Name));
                 IniciarRelogio();
                 break;
 
             case DesligarRelogio:
-                _relogio.Stop();
-                _tempoAcumulado = TimeSpan.Zero;
+                if (_relogioLigado) Diagnostico.Evento("RELOGIO", ("ligado", "nao"), ("evento", evento.GetType().Name));
+                PararRelogio();
                 break;
 
             case AgendarDecisao agendar:
+                Diagnostico.Evento("AGENDA", ("atrasoMs", (long)agendar.Atraso.TotalMilliseconds), ("geracao", agendar.Geracao));
                 AgendarTemporizadorDeDecisao(agendar);
                 break;
 
             case CancelarDecisao:
+                Diagnostico.Evento("AGENDA", ("cancelada", "sim"));
                 CancelarDecisaoAutonoma();
                 break;
 
             case LiberarCaptura:
-                // A captura e os gestos reais de mouse entram na Fase 3; a Fase 2 não mantém captura.
+                // O núcleo encerrou o gesto por conta própria (esconder ou sair no meio dele): a
+                // arbitragem esquece o gesto e a janela solta o mouse, sem gerar DRAG_CANCEL.
+                _arbitro.Reiniciar();
+                _latenciasDoArraste.Clear();
+                _personagem?.SoltarCaptura();
                 break;
 
             case AbrirMenu pedidoMenu:
-                ExibirMenuDoDesktop(pedidoMenu.Ponto, "personagem", peloTeclado: false);
+                // O laço modal do menu roda depois do processamento, não dentro dele: eventos que
+                // chegam com o menu aberto (relógio, agenda, bandeja) são aplicados na hora.
+                Adiar(() => ExibirMenuDoDesktop(pedidoMenu.Ponto, "personagem", peloTeclado: false));
                 break;
 
             case Encerrar:
@@ -473,27 +655,55 @@ internal sealed class Aplicacao
     private void RegistrarVisibilidade(bool visivel, string motivo)
         => Diagnostico.Evento("VISIVEL", ("visivel", visivel ? "sim" : "nao"), ("motivo", motivo));
 
+    /// <summary>
+    /// Liga o relógio de passo fixo: inscreve-se nos quadros do compositor do WPF, que só existem
+    /// enquanto alguém está inscrito. Sem nada se mexendo, não há inscrição nem quadros (DEC-011).
+    /// </summary>
     private void IniciarRelogio()
     {
-        if (_relogio.IsEnabled) return;
+        if (_relogioLigado) return;
+        _relogioLigado = true;
         _tempoAcumulado = TimeSpan.Zero;
         _ultimaMarcacaoRelogio = Stopwatch.GetTimestamp();
-        _relogio.Start();
+        CompositionTarget.Rendering += AoQuadroDoCompositor;
     }
 
-    private void AoTiqueDoRelogio(object? remetente, EventArgs e)
+    private void PararRelogio()
     {
-        if (_nucleo is null || !_relogio.IsEnabled) return;
+        if (!_relogioLigado) return;
+        _relogioLigado = false;
+        CompositionTarget.Rendering -= AoQuadroDoCompositor;
+        _tempoAcumulado = TimeSpan.Zero;
+    }
+
+    /// <summary>
+    /// Um quadro do compositor: aplica os passos fixos acumulados desde o anterior num lote só, e a
+    /// janela vai para a posição do último passo.
+    /// </summary>
+    private void AoQuadroDoCompositor(object? remetente, EventArgs e)
+    {
+        if (_nucleo is null || !_relogioLigado || _encerrando) return;
         long agora = Stopwatch.GetTimestamp();
         _tempoAcumulado += Stopwatch.GetElapsedTime(_ultimaMarcacaoRelogio, agora);
         _ultimaMarcacaoRelogio = agora;
 
         TimeSpan passo = TimeSpan.FromSeconds(1d / _nucleo.Configuracao.PassosPorSegundo);
-        while (_tempoAcumulado >= passo && _relogio.IsEnabled)
+        // Depois de uma parada da thread da interface (chamada lenta ao Windows, depurador), os
+        // passos atrasados não saem todos de uma vez: o relógio lógico perde o excesso, em vez de
+        // aplicar uma rajada de movimentos. O passo continua fixo (ARCHITECTURE.md 2.9).
+        if (_tempoAcumulado > AtrasoMaximoDoRelogio)
+        {
+            long descartados = (long)((_tempoAcumulado - AtrasoMaximoDoRelogio) / passo);
+            _tempoAcumulado = AtrasoMaximoDoRelogio;
+            Diagnostico.Evento("RELOGIO", ("atraso", "limitado"), ("passosDescartados", descartados));
+        }
+        bool algum = false;
+        while (_tempoAcumulado >= passo)
         {
             _tempoAcumulado -= passo;
-            Enviar(new Tick(), $"relógio passo {++_passosDoRelogio}");
+            algum |= Enfileirar(new Tick(), $"relógio passo {++_passosDoRelogio}");
         }
+        if (algum) ProcessarFilaDoNucleo();
     }
 
     private void AgendarTemporizadorDeDecisao(AgendarDecisao agendamento)
@@ -513,6 +723,7 @@ internal sealed class Aplicacao
                 _decisaoAutonoma = null;
                 _aoDispararDecisao = null;
             }
+            Diagnostico.Evento("AGENDA", ("disparo", agendamento.Geracao));
             Enviar(new AutonomyTimer(agendamento.Geracao), $"agenda autônoma geração {agendamento.Geracao}");
         };
         _decisaoAutonoma = temporizador;
@@ -541,9 +752,10 @@ internal sealed class Aplicacao
         // Um menu aberto nesta thread (por exemplo, fim de sessão com o menu na tela) é
         // fechado antes de destruir as janelas.
         Win32.EndMenu();
+        _personagem?.SoltarCaptura();
         _agrupador.Stop();
         _repetirBandeja.Stop();
-        _relogio.Stop();
+        PararRelogio();
         CancelarDecisaoAutonoma();
         _bandeja?.Dispose();
         _servico?.Dispose();

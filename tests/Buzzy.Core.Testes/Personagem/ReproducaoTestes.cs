@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
 using Buzzy.Core.Personagem;
@@ -12,46 +13,97 @@ namespace Buzzy.Core.Testes.Personagem;
 /// (<c># semente: 42</c>, <c># queda-fisica: sim</c>, <c># painel: sim</c>,
 /// <c># acoes: Andar,Descansar</c>), depois as linhas de evento (<c>&gt;</c>) e a saída esperada.
 ///
-/// Para regravar as referências depois de uma mudança intencional, rode com a variável de
-/// ambiente <c>BUZZY_ATUALIZAR_REFERENCIAS=1</c> e revise a diferença no Git antes de aceitar.
+/// As referências são lidas da pasta-fonte (não da cópia do build, que pode estar velha), a lista
+/// é fixa (<see cref="Referencias"/>) e o conteúdo inteiro do arquivo precisa ser igual ao que a
+/// regravação escreveria, normalizando só o fim de linha (o Git pode trocar LF por CRLF).
+///
+/// Para regravar as referências depois de uma mudança intencional, rode só este teste, fora de
+/// integração contínua, com a variável de ambiente <c>BUZZY_ATUALIZAR_REFERENCIAS=1</c> (por
+/// exemplo, <c>Buzzy.Core.Testes.exe --filtro ReproducaoTestes</c>) e revise a diferença no Git
+/// antes de aceitar. Com a variável ligada em qualquer outra execução, o teste falha em vez de
+/// regravar e passar em silêncio.
 /// </summary>
 internal static class ReproducaoTestes
 {
+    /// <summary>As reproduções exigidas, nem mais nem menos: um arquivo apagado ou acrescentado sem entrar aqui falha.</summary>
+    private static readonly string[] Referencias =
+    [
+        "01-clique-e-arraste.txt",
+        "02-ocultacao-e-sessao.txt",
+        "03-tela-cheia.txt",
+        "04-agenda-e-energia.txt",
+        "05-movimento-e-fisica.txt",
+    ];
+
+    private const string VariavelDeAtualizacao = "BUZZY_ATUALIZAR_REFERENCIAS";
+
+    /// <summary>Variáveis que os serviços de integração contínua comuns definem.</summary>
+    private static readonly string[] VariaveisDeIntegracaoContinua = ["CI", "TF_BUILD", "GITHUB_ACTIONS"];
+
+    // Item S da revisão do gate da Fase 2.
     [Teste]
     public static void ReproducoesGravadasBatemComAReferencia()
     {
-        string pasta = Path.Combine(AppContext.BaseDirectory, "Referencias");
-        string[] arquivos = [.. Directory.GetFiles(pasta, "*.txt").Where(f => !f.EndsWith(".obtido.txt", StringComparison.Ordinal))];
-        Afirmar.Verdadeiro(arquivos.Length >= 4, $"referências encontradas em {pasta}: {arquivos.Length}");
-        bool atualizar = Environment.GetEnvironmentVariable("BUZZY_ATUALIZAR_REFERENCIAS") == "1";
+        string fontes = Path.Combine(PastaDasFontes(), "Referencias");
+        Afirmar.Verdadeiro(Directory.Exists(fontes), $"pasta-fonte das referências não encontrada: {fontes}");
+        Afirmar.Sequencia(Referencias, ListarReferencias(fontes), $"referências em {fontes}");
+
+        bool atualizar = Environment.GetEnvironmentVariable(VariavelDeAtualizacao) == "1";
+        if (atualizar && RecusaDeAtualizacao(Environment.GetEnvironmentVariable, Environment.GetCommandLineArgs(), NomesDosTestes()) is { } recusa)
+        {
+            Afirmar.Falhar($"{VariavelDeAtualizacao}=1 fora de uso local explícito ({recusa}): nada foi regravado. "
+                + $"Para regravar, rode só as reproduções (--filtro {nameof(ReproducaoTestes)}) fora de integração contínua e revise a diferença no Git; senão, desligue a variável.");
+        }
 
         var falhas = new List<string>();
-        foreach (string arquivo in arquivos.Order(StringComparer.Ordinal))
+        foreach (string nome in Referencias)
         {
-            string[] linhas = File.ReadAllLines(arquivo, Encoding.UTF8);
+            string arquivo = Path.Combine(fontes, nome);
+            string conteudo = NormalizarFimDeLinha(File.ReadAllText(arquivo, Encoding.UTF8));
+            string[] linhas = conteudo.Split('\n');
             string[] cabecalho = [.. linhas.TakeWhile(l => l.StartsWith('#') || l.Length == 0)];
             (ConfiguracaoDoNucleo cfg, ulong semente) = LerCabecalho(cabecalho, arquivo);
 
             IReadOnlyList<string> obtido = Gravacao.Reproduzir(cfg, semente, linhas, PorNome);
-            string[] esperado = [.. linhas.Skip(cabecalho.Length).Where(l => l.Length > 0 && !l.StartsWith('#'))];
+            string esperado = Gravacao.Juntar(cabecalho.Concat(obtido));
 
             if (atualizar)
             {
-                string fonte = Path.Combine(PastaDasFontes(), "Referencias", Path.GetFileName(arquivo));
-                File.WriteAllText(fonte, Gravacao.Juntar(cabecalho.Concat(obtido)), new UTF8Encoding(false));
-                Console.WriteLine($"         referência regravada: {fonte}");
+                File.WriteAllText(arquivo, esperado, new UTF8Encoding(false));
+                Console.WriteLine($"         referência regravada ({VariavelDeAtualizacao}=1): {arquivo}");
                 continue;
             }
 
-            int diferente = PrimeiraDiferenca(esperado, obtido);
-            if (diferente >= 0)
+            if (!string.Equals(conteudo, esperado, StringComparison.Ordinal))
             {
-                string obtidoEm = Path.ChangeExtension(arquivo, ".obtido.txt");
-                File.WriteAllText(obtidoEm, Gravacao.Juntar(cabecalho.Concat(obtido)), new UTF8Encoding(false));
-                falhas.Add($"{Path.GetFileName(arquivo)}, linha {diferente + 1} da saída: esperado <{Linha(esperado, diferente)}>, obtido <{Linha(obtido, diferente)}> (saída completa em {obtidoEm})");
+                string obtidoEm = Path.Combine(AppContext.BaseDirectory, "Referencias", Path.ChangeExtension(nome, ".obtido.txt"));
+                Directory.CreateDirectory(Path.GetDirectoryName(obtidoEm)!);
+                File.WriteAllText(obtidoEm, esperado, new UTF8Encoding(false));
+                string[] noArquivo = conteudo.Split('\n'), reproduzido = esperado.Split('\n');
+                int diferente = PrimeiraDiferenca(noArquivo, reproduzido);
+                falhas.Add($"{nome}, linha {diferente + 1}: no arquivo <{Linha(noArquivo, diferente)}>, reproduzido <{Linha(reproduzido, diferente)}> (saída completa em {obtidoEm})");
             }
         }
         if (falhas.Count > 0) Afirmar.Falhar(string.Join(Environment.NewLine + "         ", falhas));
+    }
+
+    // Item S: a regravação só vale como uso local explícito.
+    [Teste]
+    public static void RegravarReferencias_SoEmUsoLocalExplicito()
+    {
+        string[] testes = [.. NomesDosTestes()];
+        Afirmar.Verdadeiro(testes.Contains($"{nameof(ReproducaoTestes)}.{nameof(ReproducoesGravadasBatemComAReferencia)}"), "os nomes seguem os do executor");
+        string? SemVariaveis(string _) => null;
+        string? EmIntegracao(string nome) => nome == "GITHUB_ACTIONS" ? "true" : null;
+        string[] exe = ["Buzzy.Core.Testes.exe"];
+
+        Afirmar.NaoNulo(RecusaDeAtualizacao(SemVariaveis, exe, testes), "suíte completa, sem --filtro: recusa");
+        Afirmar.NaoNulo(RecusaDeAtualizacao(SemVariaveis, [.. exe, "--filtro", "Testes"], testes), "filtro que também escolhe outros testes: recusa");
+        Afirmar.NaoNulo(RecusaDeAtualizacao(SemVariaveis, [.. exe, "--filtro", "EscreverELer"], testes), "filtro que não escolhe as reproduções gravadas: recusa");
+        Afirmar.NaoNulo(RecusaDeAtualizacao(SemVariaveis, [.. exe, "--filtro"], testes), "--filtro sem texto: recusa");
+        Afirmar.NaoNulo(RecusaDeAtualizacao(EmIntegracao, [.. exe, "--filtro", nameof(ReproducaoTestes)], testes), "integração contínua: recusa");
+        Afirmar.Nulo(RecusaDeAtualizacao(SemVariaveis, [.. exe, "--filtro", nameof(ReproducaoTestes)], testes), "só as reproduções, localmente: aceita");
+        Afirmar.Nulo(RecusaDeAtualizacao(SemVariaveis, [.. exe, "--filtro", "reproducoesgravadas"], testes), "o filtro ignora maiúsculas, como o executor: aceita");
     }
 
     [Teste]
@@ -84,6 +136,52 @@ internal static class ReproducaoTestes
         Afirmar.Igual(36, Gravacao.Ler("Tick vezes=36", _ => umMonitor, estado).Count, "Tick vezes=N");
         Afirmar.Lanca<FormatException>(() => Gravacao.Ler("Voar alto=sim", _ => umMonitor, estado));
     }
+
+    /// <summary>
+    /// Por que recusar a regravação, ou nulo se ela é uso local explícito: fora de integração
+    /// contínua e com o executor restrito, pelo <c>--filtro</c>, a testes das reproduções que
+    /// incluem o de comparação. Uma variável esquecida no ambiente, numa execução completa ou em
+    /// CI, aceitaria em silêncio qualquer mudança de comportamento.
+    /// </summary>
+    private static string? RecusaDeAtualizacao(Func<string, string?> ambiente, IReadOnlyList<string> argumentos, IEnumerable<string> testes)
+    {
+        foreach (string variavel in VariaveisDeIntegracaoContinua)
+        {
+            if (!string.IsNullOrEmpty(ambiente(variavel))) return $"a variável {variavel} indica integração contínua";
+        }
+
+        int indice = -1;
+        for (int i = 0; i < argumentos.Count; i++)
+        {
+            if (argumentos[i] == "--filtro") indice = i;
+        }
+        if (indice < 0 || indice + 1 >= argumentos.Count) return "a execução não restringiu os testes com --filtro";
+
+        string filtro = argumentos[indice + 1];
+        string prefixo = nameof(ReproducaoTestes) + ".";
+        string[] escolhidos = [.. testes.Where(t => t.Contains(filtro, StringComparison.OrdinalIgnoreCase))];
+        if (!escolhidos.Contains(prefixo + nameof(ReproducoesGravadasBatemComAReferencia), StringComparer.Ordinal))
+            return $"o filtro \"{filtro}\" não escolhe {nameof(ReproducoesGravadasBatemComAReferencia)}";
+        int outros = escolhidos.Count(t => !t.StartsWith(prefixo, StringComparison.Ordinal));
+        return outros > 0 ? $"o filtro \"{filtro}\" também escolhe {outros} teste(s) fora das reproduções" : null;
+    }
+
+    /// <summary>Nomes dos testes deste assembly, no formato do executor (<c>Classe.Metodo</c>).</summary>
+    private static IEnumerable<string> NomesDosTestes()
+        => typeof(ReproducaoTestes).Assembly.GetTypes()
+            .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
+                .Where(m => m.GetCustomAttribute<TesteAttribute>() is not null)
+                .Select(m => $"{t.Name}.{m.Name}"));
+
+    /// <summary>Arquivos de referência da pasta, em ordem, sem as saídas obtidas de execuções que falharam.</summary>
+    private static string[] ListarReferencias(string pasta)
+        => [.. Directory.GetFiles(pasta, "*.txt")
+            .Select(Path.GetFileName)
+            .OfType<string>()
+            .Where(n => !n.EndsWith(".obtido.txt", StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal)];
+
+    private static string NormalizarFimDeLinha(string texto) => texto.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
 
     private static Topologia PorNome(string nome)
         => TopologiasDeExemplo.Todas.FirstOrDefault(t => t.Nome == nome).Topologia

@@ -11,6 +11,12 @@ public sealed record EstadoDoNucleo
 {
     public Estado Estado { get; init; } = Estado.Booting;
 
+    /// <summary>
+    /// Se a carga (<see cref="Loaded"/>) já aconteceu. Só a primeira carga vale; pedidos anteriores
+    /// a ela (mostrar, esconder, sessão, topologia) ficam guardados até ela chegar.
+    /// </summary>
+    public bool Carregado { get; init; }
+
     /// <summary>Por que está escondido; <see cref="MotivoDoOcultamento.Nenhum"/> fora de <see cref="Estado.Hidden"/>.</summary>
     public MotivoDoOcultamento Motivo { get; init; }
 
@@ -58,11 +64,18 @@ public sealed record EstadoDoNucleo
     /// <summary>Monitores cobertos por tela cheia, em cache (DEC-013).</summary>
     public MonitoresOcupados Ocupados { get; init; } = MonitoresOcupados.Nenhum;
 
-    /// <summary>Posição anterior à mudança automática por tela cheia, só em memória.</summary>
+    /// <summary>
+    /// Posição anterior à mudança automática por tela cheia, só em memória. "O modo não age de
+    /// novo até a próxima mudança" sai da própria regra "uma vez por mudança" de
+    /// <see cref="FullscreenTargetsChanged"/>, sem campo à parte.
+    /// </summary>
     public PosicaoDoPersonagem? RetornoDaTelaCheia { get; init; }
 
-    /// <summary>Depois de <c>CMD_SHOW</c> em <c>HIDDEN(POR_TELA_CHEIA)</c>: o modo não age até a próxima mudança.</summary>
-    public bool TelaCheiaAdiada { get; init; }
+    /// <summary>
+    /// Se os monitores ocupados pela tela cheia mudaram durante o gesto em curso (PRESSED ou
+    /// DRAGGING): ao soltar, o ponto do usuário vale e o retorno temporário é descartado.
+    /// </summary>
+    public bool TelaCheiaMudouNoGesto { get; init; }
 
     /// <summary>Relógio lógico: passos fixos já aplicados.</summary>
     public long Passos { get; init; }

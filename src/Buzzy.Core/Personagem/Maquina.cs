@@ -104,7 +104,9 @@ public static class Maquina
 
         private void Carregar(Loaded e)
         {
-            if (_s.Estado is not (Estado.Booting or Estado.Hidden)) return;
+            // Só a primeira carga vale. Antes dela o estado só pode ser BOOTING, HIDDEN (pedido de
+            // esconder, bloqueio ou suspensão anteriores à carga) ou EXITING.
+            if (_s.Carregado || _s.Estado is not (Estado.Booting or Estado.Hidden)) return;
 
             Posicionamento lugar;
             PosicaoDoPersonagem posicao;
@@ -117,12 +119,17 @@ public static class Maquina
                 lugar = Posicionador.Inicial(e.Topologia, _cfg.Tamanho);
                 posicao = Posicionador.Descrever(lugar);
             }
-            _s = _s with { Topologia = e.Topologia, Preferencias = e.Preferencias, Lugar = lugar, Posicao = posicao };
+            _s = _s with { Carregado = true, Topologia = e.Topologia, Preferencias = Sanear(e.Preferencias), Lugar = lugar, Posicao = posicao };
 
             if (_s.Estado == Estado.Booting)
                 Acomodar(lugar.Ancora, "BOOTING: configurações e topologia carregadas", posicao);
             else if (_s.Motivo == MotivoDoOcultamento.Nenhum)
                 Acomodar(lugar.Ancora, "HIDDEN: pedido de mostrar anterior à carga", posicao);
+
+            // O modo de tela cheia vale desde a partida: monitores ocupados avisados antes da carga
+            // estão em cache.
+            if (_s.Estado.Visivel() && _s.Preferencias.ModoTelaCheia && _s.Lugar is { } l && _s.Ocupados.Contem(l.Monitor.Chave))
+                SairDoMonitorOcupado("BOOTING: carga sobre um monitor ocupado pela tela cheia");
         }
 
         private void MudarTopologia(Topologia nova)
@@ -147,13 +154,33 @@ public static class Maquina
         {
             if (!_s.Estado.AceitaPressionar() || _s.Lugar is null) return;
             PontoPx ancora = _s.Lugar.Ancora;
-            _s = _s with { Pegada = new PontoPx(cursor.X - ancora.X, cursor.Y - ancora.Y), PassosRestantes = 0 };
+            _s = _s with { Pegada = new PontoPx(cursor.X - ancora.X, cursor.Y - ancora.Y), PassosRestantes = 0, TelaCheiaMudouNoGesto = false };
             IrPara(Estado.Pressed, "PRESS sobre pixel opaco");
+        }
+
+        /// <summary>
+        /// Fim de um gesto do usuário (linha PRESSED, DRAGGING | FULLSCREEN_TARGETS_CHANGED): um
+        /// arraste é sempre escolha de posição; um clique ou um cancelamento só descartam o retorno
+        /// temporário se a tela cheia mudou durante o gesto (o ponto do usuário vale).
+        /// </summary>
+        private void FimDoGestoDoUsuario(bool escolheuPosicao)
+        {
+            if (escolheuPosicao || _s.TelaCheiaMudouNoGesto) _s = _s with { RetornoDaTelaCheia = null };
+            _s = _s with { TelaCheiaMudouNoGesto = false };
         }
 
         private void Clicar()
         {
             if (_s.Estado != Estado.Pressed) return;
+            // Com o botão pressionado, TOPOLOGY_CHANGED só atualiza o cache; "a validação acontece
+            // ao soltar". Se o monitor do personagem mudou ou sumiu, valida já no CLICK, sem sair
+            // da reação; senão, a reação começa no mesmo lugar.
+            if (_s.Lugar is { } lugar && _s.Topologia is { } topologia && !Equals(topologia.PorChave(lugar.Monitor.Chave), lugar.Monitor))
+            {
+                (Posicionamento validado, PosicaoDoPersonagem posicao, _) = Validar(lugar.Ancora, _s.Posicao);
+                _s = _s with { Lugar = validado, Posicao = posicao };
+            }
+            FimDoGestoDoUsuario(escolheuPosicao: false);
             _s = _s with { PassosRestantes = _cfg.PassosDaReacao, Expressao = Expressao.Feliz, Sinal = Sinal.FoiClicado };
             IrPara(Estado.Reacting, "CLICK");
         }
@@ -169,7 +196,10 @@ public static class Maquina
                 _s = _s with { Sinal = Sinal.FoiClicadoDuasVezes, Expressao = Expressao.Rindo };
 
             if (de == Estado.Pressed && _s.Lugar is not null)
+            {
+                FimDoGestoDoUsuario(escolheuPosicao: false);
                 Acomodar(_s.Lugar.Ancora, "DOUBLE_CLICK a partir de PRESSED");
+            }
         }
 
         private void IniciarArraste()
@@ -193,7 +223,7 @@ public static class Maquina
             if (_s.Estado != Estado.Dragging) return;
             var ancora = new PontoPx(cursor.X - _s.Pegada.X, cursor.Y - _s.Pegada.Y);
             // Soltar é escolha manual: descarta o retorno temporário da tela cheia (DEC-013).
-            _s = _s with { RetornoDaTelaCheia = null };
+            FimDoGestoDoUsuario(escolheuPosicao: true);
             Acomodar(ancora, "DRAG_END");
             if (_s.Posicao is not null) _depois.Add(new GravarPosicao(_s.Posicao));
         }
@@ -204,12 +234,13 @@ public static class Maquina
             if (_s.Estado == Estado.Dragging)
             {
                 // O personagem fica onde estava; não volta ao ponto de origem (ARCHITECTURE.md 2.7).
-                _s = _s with { RetornoDaTelaCheia = null };
+                FimDoGestoDoUsuario(escolheuPosicao: true);
                 Acomodar(_s.Lugar.Ancora, "DRAG_CANCEL");
                 if (_s.Posicao is not null) _depois.Add(new GravarPosicao(_s.Posicao));
             }
             else if (_s.Estado == Estado.Pressed)
             {
+                FimDoGestoDoUsuario(escolheuPosicao: false);
                 Acomodar(_s.Lugar.Ancora, "DRAG_CANCEL em PRESSED (captura perdida antes do limiar)");
             }
         }
@@ -237,7 +268,8 @@ public static class Maquina
 
         private void EscolherEnergia(NivelDeEnergia nivel)
         {
-            if (!_s.PainelAberto) return;
+            // SECURITY.md 7: só os três níveis permitidos; um valor fora deles é ignorado.
+            if (!_s.PainelAberto || !Enum.IsDefined(nivel)) return;
             if (_s.Preferencias.Energia == nivel) return;
             _s = _s with { Preferencias = _s.Preferencias with { Energia = nivel } };
             _depois.Add(new GravarPreferencias(_s.Preferencias));
@@ -264,10 +296,15 @@ public static class Maquina
             if (_s.Estado == Estado.Hidden)
             {
                 // Um evento do sistema não troca uma ocultação do usuário; entre os motivos do
-                // sistema, a sessão bloqueada prevalece sobre a suspensão e a tela cheia.
+                // sistema, a sessão bloqueada prevalece sobre a suspensão e a tela cheia
+                // (precedência em ARCHITECTURE.md 2.6).
                 if (Precedencia(motivo) > Precedencia(_s.Motivo))
                 {
                     _transicoes.Add(new Transicao(Estado.Hidden, Estado.Hidden, $"{regra}: motivo {_s.Motivo} -> {motivo}"));
+                    // A ocultação deixa de ser da tela cheia: o retorno temporário volta a ser a
+                    // posição do personagem, sem reaparecer, e não sobra para o próximo episódio.
+                    if (_s.Motivo == MotivoDoOcultamento.PorTelaCheia)
+                        _s = _s with { Posicao = _s.RetornoDaTelaCheia ?? _s.Posicao, RetornoDaTelaCheia = null };
                     _s = _s with { Motivo = motivo };
                 }
                 return;
@@ -278,7 +315,16 @@ public static class Maquina
             FecharPainelSeAberto();
             _s = _s with { Motivo = motivo, PassosRestantes = 0 };
             IrPara(Estado.Hidden, regra);
-            if (_s.Posicao is not null) _depois.Add(new GravarPosicao(_s.Posicao));
+            GravarPosicaoDoUsuario();
+        }
+
+        /// <summary>
+        /// Grava a posição escolhida pelo usuário: durante a tela cheia, a de antes da transferência
+        /// automática, nunca a temporária (SECURITY.md 5: a posição temporária fica só em memória).
+        /// </summary>
+        private void GravarPosicaoDoUsuario()
+        {
+            if ((_s.RetornoDaTelaCheia ?? _s.Posicao) is { } posicao) _depois.Add(new GravarPosicao(posicao));
         }
 
         private static int Precedencia(MotivoDoOcultamento motivo) => motivo switch
@@ -295,6 +341,10 @@ public static class Maquina
             // Invariante 10: SESSION_UNLOCKED e RESUMED nunca mostram o que o usuário escondeu.
             if (_s.Estado != Estado.Hidden || _s.Motivo != motivoQueSeDesfaz) return;
             Mostrar(regra);
+            // Um evento do sistema também não desfaz o modo de tela cheia: se o personagem
+            // reapareceu num monitor ainda ocupado (monitores em cache), o modo age de novo.
+            if (_s.Preferencias.ModoTelaCheia && _s.Lugar is { } lugar && _s.Ocupados.Contem(lugar.Monitor.Chave))
+                SairDoMonitorOcupado($"{regra}: reapareceu num monitor ocupado pela tela cheia");
         }
 
         private void MostrarPorComando()
@@ -306,6 +356,13 @@ public static class Maquina
                     // O usuário pediu: aparece na posição anterior e descarta o retorno temporário.
                     _s = _s with { Posicao = _s.RetornoDaTelaCheia ?? _s.Posicao, RetornoDaTelaCheia = null };
                 }
+                else
+                {
+                    // Escondido por outro motivo no meio de um episódio de tela cheia: mostrar é
+                    // escolha manual, então reaparece onde estava e o fim da tela cheia não o move
+                    // mais (invariante 14).
+                    _s = _s with { RetornoDaTelaCheia = null };
+                }
                 Mostrar("CMD_SHOW");
                 return;
             }
@@ -316,7 +373,7 @@ public static class Maquina
 
         private void Mostrar(string regra)
         {
-            if (_s.Topologia is null)
+            if (!_s.Carregado || _s.Topologia is null)
             {
                 // Ainda não carregou: aparece quando a carga chegar.
                 _s = _s with { Motivo = MotivoDoOcultamento.Nenhum };
@@ -346,7 +403,7 @@ public static class Maquina
 
         private void RedefinirPosicao()
         {
-            if (_s.Topologia is null || _s.Estado is Estado.Booting or Estado.Pressed or Estado.Dragging) return;
+            if (!_s.Carregado || _s.Topologia is null || _s.Estado is Estado.Booting or Estado.Pressed or Estado.Dragging) return;
             Posicionamento inicial = Posicionador.Inicial(_s.Topologia, _cfg.Tamanho);
             _s = _s with { RetornoDaTelaCheia = null };
             if (_s.Estado == Estado.Hidden)
@@ -362,7 +419,7 @@ public static class Maquina
             FixarArrasteInterrompido();
             FecharPainelSeAberto();
             IrPara(Estado.Exiting, regra);
-            if (_s.Posicao is not null) _depois.Add(new GravarPosicao(_s.Posicao));
+            GravarPosicaoDoUsuario();
             _depois.Add(new Encerrar());
         }
 
@@ -380,12 +437,26 @@ public static class Maquina
             // Uma vez por mudança; com o modo desligado, só o cache.
             if (!mudou || !_s.Preferencias.ModoTelaCheia || _s.Topologia is null) return;
 
-            // Invariante 14: PRESSED e DRAGGING nunca são interrompidos pelo modo.
-            if (_s.Estado is Estado.Booting or Estado.Exiting or Estado.Pressed or Estado.Dragging) return;
+            // Invariante 14: PRESSED e DRAGGING nunca são interrompidos pelo modo; ao soltar, o ponto
+            // do usuário vale e o retorno temporário é descartado (FimDoGestoDoUsuario).
+            if (_s.Estado is Estado.Pressed or Estado.Dragging)
+            {
+                _s = _s with { TelaCheiaMudouNoGesto = true };
+                return;
+            }
+            if (_s.Estado is Estado.Booting or Estado.Exiting) return;
 
             if (_s.Estado == Estado.Hidden)
             {
-                if (_s.Motivo != MotivoDoOcultamento.PorTelaCheia) return;
+                if (_s.Motivo != MotivoDoOcultamento.PorTelaCheia)
+                {
+                    // O episódio terminou com o personagem escondido por outro motivo (usuário,
+                    // sessão, suspensão): ele não reaparece, mas a posição de antes da tela cheia
+                    // volta a valer para quando reaparecer, e o retorno não sobra.
+                    if (ocupados.Vazio && _s.RetornoDaTelaCheia is { } retorno)
+                        _s = _s with { Posicao = retorno, RetornoDaTelaCheia = null };
+                    return;
+                }
                 if (ocupados.Vazio)
                 {
                     RestaurarRetorno("FULLSCREEN_TARGETS_CHANGED(vazio): restaura a posição anterior");
@@ -410,19 +481,29 @@ public static class Maquina
             }
 
             if (_s.Lugar is null || _s.Posicao is null || !ocupados.Contem(_s.Lugar.Monitor.Chave)) return;
+            SairDoMonitorOcupado("FULLSCREEN_TARGETS_CHANGED");
+        }
 
+        /// <summary>
+        /// Personagem visível num monitor ocupado pela tela cheia (monitores em cache): guarda a
+        /// posição anterior só em memória, se ainda não houver uma, e transfere para o monitor livre
+        /// mais próximo, sem ativar; se nenhum estiver livre, fecha o painel e esconde.
+        /// </summary>
+        private void SairDoMonitorOcupado(string regra)
+        {
+            if (_s.Topologia is null || _s.Lugar is null || _s.Posicao is null) return;
             PosicaoDoPersonagem anterior = _s.RetornoDaTelaCheia ?? _s.Posicao;
-            MonitorDoDesktop? monitorLivre = MonitorLivreMaisProximo(_s.Topologia, ocupados, _s.Lugar.Ancora);
+            MonitorDoDesktop? monitorLivre = MonitorLivreMaisProximo(_s.Topologia, _s.Ocupados, _s.Lugar.Ancora);
             _s = _s with { RetornoDaTelaCheia = anterior };
             if (monitorLivre is null)
             {
                 FecharPainelSeAberto();
                 _s = _s with { Motivo = MotivoDoOcultamento.PorTelaCheia, PassosRestantes = 0 };
-                IrPara(Estado.Hidden, "FULLSCREEN_TARGETS_CHANGED: nenhum monitor livre");
+                IrPara(Estado.Hidden, $"{regra}: nenhum monitor livre");
                 return;
             }
             Posicionamento noLivre = Posicionador.NoMonitor(monitorLivre, _s.Posicao.FracaoX, _s.Posicao.FracaoY, _cfg.Tamanho);
-            Acomodar(noLivre.Ancora, "FULLSCREEN_TARGETS_CHANGED: transfere para o monitor livre");
+            Acomodar(noLivre.Ancora, $"{regra}: transfere para o monitor livre");
         }
 
         private void RestaurarRetorno(string regra)
@@ -450,9 +531,14 @@ public static class Maquina
             return melhor;
         }
 
+        /// <summary>SECURITY.md 7: nível de energia fora de BAIXA/MEDIA/ALTA vira o padrão seguro, Média.</summary>
+        private static Preferencias Sanear(Preferencias preferencias)
+            => Enum.IsDefined(preferencias.Energia) ? preferencias : preferencias with { Energia = Preferencias.Padrao.Energia };
+
         private void MudarPreferencias(Preferencias novas)
         {
             Preferencias antes = _s.Preferencias;
+            novas = Sanear(novas);
             _s = _s with { Preferencias = novas };
             if (!antes.ModoTelaCheia || novas.ModoTelaCheia) return;
 
@@ -775,8 +861,10 @@ public static class Maquina
                 ? _s.Aleatorio.Duracao(perfil.DescansoMinimo, perfil.DescansoMaximo)
                 : _s.Aleatorio.Duracao(perfil.DecisaoMinima, perfil.DecisaoMaxima);
             _s = _s with { Aleatorio = a };
-            // Depois de uma interação, a autonomia só volta após o intervalo de acomodação.
-            return _s.Estado == Estado.Idle && atraso < _cfg.IntervaloDeAcomodacao ? _cfg.IntervaloDeAcomodacao : atraso;
+            // Depois de uma interação (soltar, fechar o painel, retomar a autonomia, em qualquer
+            // estado que decide), a autonomia só volta após o intervalo de acomodação; é também o
+            // menor intervalo entre duas decisões autônomas.
+            return atraso < _cfg.IntervaloDeAcomodacao ? _cfg.IntervaloDeAcomodacao : atraso;
         }
     }
 }

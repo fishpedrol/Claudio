@@ -320,6 +320,151 @@ O usuário aceitou estas metas em 2026-09-27. A Fase 1 deve apenas estabelecer a
 - **Trade-offs:** *One Piece* é obra e marca de terceiros; para uso pessoal (Q-10) não há impedimento prático, mas qualquer distribuição pública exige rever o chapéu e a semelhança antes.
 - **Consequências:** PRODUCT_SPEC.md (Visão) reescrito; DEC-002, DEC-014, DEC-018, Q-17 e Q-23 atualizados; IDENTIDADE_VISUAL.md e o prompt mestre do Codex alinhados; a pixel art ganhou o chapéu, que reage às emoções.
 
+## DEC-020 — Esclarecimentos da máquina de estados depois da auditoria da Fase 2
+
+- **Data:** 2026-09-30
+- **Estado da decisão:** ACCEPTED por Claude sob a autorização de DEC-015 (decisão técnica dentro de PRODUCT_SPEC.md e DEC-013; Codex revisa quando o usuário pedir).
+- **STATUS:** PLANNED até o gate da Fase 2 ser registrado em TODO.md; as regras estão implementadas em `src/Buzzy.Core/Personagem/Maquina.cs` e cobertas por testes. As que dependem do modo de tela cheia só serão exercitadas pelo app na Fase 8.
+- **Problema:** uma auditoria independente do gate da Fase 2, com quatro auditores e verificação cética, achou lacunas na tabela de ARCHITECTURE.md 2.6. Algumas só apareciam em sequências raras, mas violavam a especificação:
+  - a posição temporária da tela cheia seria gravada como a escolhida pelo usuário;
+  - o retorno temporário sobrava de um episódio de tela cheia para o seguinte;
+  - desbloquear a sessão fazia o personagem reaparecer sobre um jogo ainda em tela cheia;
+  - um "mostrar" anterior à carga fazia a carga ser ignorada;
+  - um nível de energia inválido derrubava o núcleo;
+  - a precedência entre motivos de ocultamento não estava escrita.
+- **Decisão:**
+  1. **Precedência dos motivos de ocultamento:** `POR_USUARIO` > `POR_SESSAO` > `POR_SUSPENSAO` > `POR_TELA_CHEIA`. Em `HIDDEN`, um motivo só substitui outro de precedência menor. Com a sessão bloqueada, suspender e retomar não mostram o personagem.
+  2. **Retorno temporário da tela cheia:**
+     - fica só em memória;
+     - `GravarPosicao` grava sempre o retorno, se houver, e nunca a posição temporária;
+     - quando outro motivo substitui `POR_TELA_CHEIA`, o retorno vira a posição, sem reaparecer;
+     - se a tela cheia termina com o personagem escondido por outro motivo, a posição de antes volta a valer;
+     - um `CMD_SHOW` manual durante o episódio descarta o retorno;
+     - um arraste sempre descarta o retorno; clique, clique duplo ou cancelamento em `PRESSED` só o descartam se a tela cheia mudou durante o gesto;
+     - desligar o modo (`SETTINGS_CHANGED`) desfaz o efeito temporário. Escondido por outro motivo, a posição de antes volta a valer sem reaparecer. Em `PRESSED`/`DRAGGING`, o fim do gesto decide: um arraste escolhe a posição; um clique ou cancelamento leva de volta à posição de antes. Com o modo desligado, o retorno não sobra fora de um gesto. Esta regra foi achada pelos testes de cobertura do gate, depois da auditoria.
+  3. **Reaparecer por evento do sistema** (`SESSION_UNLOCKED`, `RESUMED`) e a carga reaplicam o modo de tela cheia contra os monitores ocupados em cache. `CMD_SHOW` é escolha do usuário e não o reaplica.
+  4. **Carga:** só o primeiro `Loaded` vale. Pedidos anteriores a ele ficam guardados, e o personagem só aparece com a carga.
+  5. **`CLICK` depois de mudança de topologia:** se o monitor do personagem mudou ou sumiu com o botão pressionado, a posição é validada já no `CLICK`, sem sair da reação.
+  6. **Intervalo de acomodação** em todo agendamento autônomo, em qualquer estado que decide.
+  7. **Energia:** um nível fora de `BAIXA`/`MEDIA`/`ALTA` é ignorado quando vem do painel e vira `MEDIA` na carga e nas configurações (SECURITY.md 7).
+  8. **Na raiz de composição:**
+     - o laço modal do menu roda depois do processamento do núcleo, e não dentro dele;
+     - o relógio de passo fixo recupera no máximo 250 ms de atraso de uma vez;
+     - depois de reler a topologia, a janela volta ao lugar do núcleo se tiver sido movida por fora;
+     - o relógio e a agenda passam a ser registrados no log de diagnóstico.
+- **Alternativas consideradas:**
+  - manter o comportamento anterior e só documentar, o que deixaria violações reais do invariante 14 e da regra de não persistir a posição temporária (SECURITY.md 5);
+  - manter "oculto por tela cheia" como condição separada do motivo, mais estado para pouco ganho;
+  - validar a posição sempre no `CLICK`, que mudaria a física no meio de um pulo a partir da Fase 4.
+- **Motivo:** a especificação já dava a intenção: ação manual prevalece, a posição temporária fica só em memória e evento do sistema não desfaz ação do usuário nem o modo de tela cheia. Faltavam as regras para as combinações.
+- **Trade-offs:** mais regras na tabela e mais estado (`Carregado`, `TelaCheiaMudouNoGesto`); o campo `TelaCheiaAdiada`, nunca usado, saiu.
+- **Consequências:** ARCHITECTURE.md 2.6 atualizado (linhas da tabela, precedência e invariantes 16 e 17); testes de transição, de tela cheia e de propriedade ampliados; as referências gravadas não mudaram.
+
+## DEC-021 — Arbitragem de input e captura do mouse (Fase 3)
+
+- **Data:** 2026-09-30
+- **Estado da decisão:** ACCEPTED por Claude sob a autorização de DEC-015 (decisão técnica de implementação de DEC-009 e ARCHITECTURE.md 2.7).
+- **STATUS:** PLANNED até o gate da Fase 3 ser registrado em TODO.md.
+- **Problema:** implementar clique, clique duplo, arraste e menu sem roubar o foco, sem hook global e sem deixar o personagem preso ao cursor, de forma testável sem janela.
+- **Decisão:**
+  1. **Árbitro puro** em `src/Buzzy.Core/Entrada/ArbitroDeGestos.cs`: recebe eventos de ponteiro com tempo e métricas e devolve gestos do núcleo e se a captura continua. Regras:
+     - limiar `SM_CXDRAG`/`SM_CYDRAG` "de cada lado", sem limite de tempo;
+     - clique duplo pela regra do sistema, medido entre os dois pressionar, com a metade inteira do retângulo de clique duplo;
+     - soltar rápido fora do limiar vira arraste;
+     - `DRAG_CANCEL` quando a captura se perde, quando chega um novo pressionar sem soltar ou quando há movimento sem `MK_LBUTTON`;
+     - o botão direito abre o menu só fora de um gesto.
+  2. **Adaptador** na janela do personagem:
+     - converte as coordenadas das mensagens com sinal para a tela (`ClientToScreen`);
+     - lê as métricas pelo DPI atual da janela (`GetSystemMetricsForDpi`, `GetDoubleClickTime`);
+     - chama `SetCapture` no primeiro botão pressionado e `ReleaseCapture` no fim do gesto, com uma marca que evita tomar a própria liberação por captura perdida;
+     - trata `WM_CAPTURECHANGED` como ponto único de interrupção, e `WM_CANCELMODE` também solta a captura;
+     - não registra a nova dona da captura, que pode ser de outro aplicativo (SECURITY.md 6).
+  3. **Raiz de composição:** aplica cada movimento de arraste no mesmo tratamento da mensagem e mede a latência M5, com resumo `ARRASTE` no log de diagnóstico. Durante o arraste, não grava cada posição; registra só a posição validada ao soltar.
+  4. **Verificação:**
+     - `Buzzy.Verificacao --fase 3` exercita os critérios com input SINTÉTICO;
+     - o ClickLock só é exercitado se o usuário já o tiver ligado, e a ferramenta nunca altera configurações globais (AGENTS.md);
+     - a janela de UAC depende de um pedido de elevação real e fica para verificação manual.
+- **Alternativas consideradas:**
+  - arraste pelo laço modal do Windows (`DragMove`/`HTCAPTION`), descartado em DEC-009;
+  - `GetKeyState` para conferir o botão, proibido pelo portão de APIs;
+  - limiar só por tempo, que prejudica o ClickLock;
+  - métricas pelo DPI do sistema em vez do DPI da janela, que erraria em escalas mistas;
+  - ligar o ClickLock "em memória" para o teste, como fez o protótipo P3, recusado porque altera configuração global.
+- **Motivo:** mantém a regra do Windows, a prioridade do usuário (DEC-004) e a segurança (nenhuma leitura de input fora do gesto), e deixa quase toda a lógica testável sem janela.
+- **Trade-offs:**
+  - a captura de uma janela que não está em primeiro plano só recebe o mouse com um botão pressionado, o que basta para o gesto;
+  - a latência medida vem do próprio app e não inclui o compositor;
+  - UAC, ClickLock ligado e escalas mistas dependem de verificação manual ou de hardware.
+- **Consequências:** ARCHITECTURE.md 2.7 registra as regras concretas; SECURITY.md registra as APIs novas no adaptador; TODO.md registra as evidências e as pendências da Fase 3.
+
+## DEC-022 — Movimento, superfícies e relógio de quadros (Fase 4)
+
+- **Data:** 2026-09-30
+- **Estado da decisão:** ACCEPTED por Claude sob a autorização de DEC-015 (decisão técnica dentro de ARCHITECTURE.md 2.5, 2.6 e 2.9 e de Q-05).
+- **STATUS:** PLANNED até o gate da Fase 4 ser registrado em TODO.md.
+- **Problema:** dar ao macaquinho liberdade para andar, escalar, pendurar-se, pular e cair num monitor, de forma determinística. Nenhuma janela de outro aplicativo pode servir de superfície, não pode haver timer em repouso e o movimento precisa ser suave na tela.
+- **Decisão:**
+  1. **Física no núcleo puro:**
+     - o passo fixo de 1/60 s do `TICK` move o personagem em `WALKING`, `CLIMBING`, `HANGING`, `JUMPING` e `FALLING`;
+     - a posição fina da âncora (pixels físicos, com fração) e a velocidade ficam no estado do núcleo; a janela usa a posição arredondada;
+     - integração semi-implícita: velocidade primeiro, depois posição;
+     - velocidades em DIPs por segundo, convertidas pela escala do monitor da âncora (ARCHITECTURE.md 2.9): caminhada 90, escalada 110, pendurado 80;
+     - gravidade de 2200 DIP/s² e queda máxima de 1500 DIP/s;
+     - os mesmos valores valem em todos os níveis de energia (invariante 12).
+  2. **Superfícies (Q-05, ARCHITECTURE.md 2.5):** são as do monitor da âncora, com o sprite inteiro na área útil:
+     - chão: a borda de baixo da área útil;
+     - paredes: as laterais em que nenhum outro monitor encosta com sobreposição vertical;
+     - borda superior: onde ele se pendura.
+
+     Uma lateral encostada em outro monitor é passagem. A travessia é da Fase 5, então na Fase 4 o personagem dá meia-volta ali.
+  3. **Ações e planos, com semente:**
+     - andar: direção sorteada e distância do perfil de energia; se não houver espaço à frente, vira;
+     - escalar: se já está numa parede, sobe; senão, anda até a parede escalável mais próxima e sobe. Sem parede escalável no monitor, a agenda não escolhe escalar;
+     - no topo, pendura-se e segue pela borda para dentro. No fim da borda, desce pela parede (se houver parede ali), volta pela borda ou se solta;
+     - pular: arco balístico com distância e altura do perfil de energia, calculado para pousar no chão;
+     - na parede, a agenda salta para longe dela ou se solta. Pendurado, continua pela borda, desce (só na quina), salta ou se solta;
+     - cair: gravidade até o chão; depois pousa e volta a `IDLE`.
+
+     O tempo na parede e o tempo pendurado ("por pouco tempo") são faixas do perfil de energia.
+  4. **Autonomia pausada ou painel aberto:** nada autônomo começa, e o movimento em curso termina com o personagem parado e com os pés no chão:
+     - a caminhada para na hora;
+     - a escalada desce até o chão;
+     - quem está pendurado se solta;
+     - pulo, queda e pouso terminam.
+  5. **Energia (critério 6):** Baixa, Média e Alta mudam pesos, intervalos, distâncias, alturas e os tempos na parede e pendurado; a física é a mesma. Valores iniciais:
+
+     | Faixa | Baixa | Média | Alta |
+     |---|---|---|---|
+     | Caminhada (DIP) | 80–250 | 150–500 | 250–900 |
+     | Distância do pulo (DIP) | 60–120 | 80–200 | 120–320 |
+     | Altura do pulo (DIP) | 30–60 | 50–100 | 70–150 |
+     | Tempo na parede (s) | 10–20 | 15–35 | 20–45 |
+     | Tempo pendurado (s) | 2–5 | 3–8 | 5–12 |
+
+     O tempo na parede cobre a subida inteira de um monitor de 1080 px a 100%, cerca de 8 s a 110 DIP/s. Na primeira calibração, com escalada a 70 DIP/s, a verificação de tela registrou um disparo aos 12 s que cortou uma subida de 12,9 s.
+  6. **Relógio de quadros no app:**
+     - enquanto o núcleo pede o relógio, a raiz se inscreve em `CompositionTarget.Rendering` (quadros do compositor do WPF);
+     - a cada quadro, aplica num lote os passos fixos acumulados e move a janela uma vez, para a posição do último passo;
+     - sem movimento, não há inscrição nem quadros (DEC-011);
+     - o acumulador recupera no máximo 250 ms, e o descarte vai para o log.
+  7. **Poses provisórias por estado:**
+     - a apresentação escolhe a pose da pixel art pelo retrato: andando em ciclo, escalando, pendurado, impulso ou no ar, caindo, pousando, sentado ou dormindo, segurado, reagindo e os gestos;
+     - a pose é espelhada para a esquerda e renderizada uma vez por pose, espelho, expressão e DPI;
+     - o tamanho da janela e a âncora (centro da base) são os mesmos em todas as poses.
+  8. **Menu e linha de comando:**
+     - o menu ganha "Pausar movimento" e "Retomar movimento" (`CMD_PAUSE_AUTONOMY`/`CMD_RESUME_AUTONOMY`);
+     - `--pausado` começa pausado (usado pelas verificações de tela e pelos testes de gesto);
+     - `--semente N` fixa a semente da agenda (diagnóstico e testes).
+- **Alternativas consideradas:**
+  - física no app, com animações do WPF, que tiraria o determinismo e os testes sem janela;
+  - `DispatcherTimer` a 60 Hz, que entregou cerca de 39 qps em P2 e não acompanha a taxa do monitor;
+  - uma thread com `DwmFlush` a cada quadro: mais precisa, porém com mais código e uma thread própria. Fica como alternativa se o compositor do WPF não bastar na medição;
+  - interpolação entre passos para monitores de 120 Hz ou mais, adiada para as Fases 6 e 11, com medição;
+  - poses só na Fase 6, o que deixaria o movimento da Fase 4 sem leitura visual.
+- **Motivo:** o núcleo continua sendo a única fonte de comportamento; o app só executa efeitos e desenha.
+- **Trade-offs:** o movimento fica limitado ao passo físico de 60 Hz. Em monitores de 120 Hz ou mais, o critério 5 da Fase 4 (um avanço a cada quadro apresentado) exige interpolação ou passo menor, a medir nas Fases 6 e 11.
+- **Consequências:** ARCHITECTURE.md 2.5, 2.9 e 2.13.4 descrevem o implementado; TODO.md registra as evidências e as pendências da Fase 4.
+
 ## Decisões de produto registradas pelo usuário
 
 Em 2026-09-26 e 2026-09-27 o usuário respondeu às escolhas abaixo em `docs/DECISOES_DO_USUARIO.md`. Elas estão aceitas como escopo planejado; ainda não significam que qualquer comportamento esteja implementado ou verificado.

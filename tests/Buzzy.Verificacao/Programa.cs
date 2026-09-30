@@ -28,15 +28,17 @@ internal static class Programa
     private const string OpcaoDeInjetar = "--injetar-input-na-tela";
 
     private const string TextoDeUso = """
-        Buzzy.Verificacao: verificação dos critérios [MANUAL] da Fase 1 com input SINTÉTICO.
+        Buzzy.Verificacao: verificação dos critérios [MANUAL] das Fases 1 e 3 com input SINTÉTICO.
 
         ATENÇÃO: abre o Buzzy e uma janela de teste, move o cursor e envia cliques e teclas por
-        SendInput. Rode só com o computador livre e depois de avisar quem o usa.
+        SendInput. Rode só com o computador livre e depois de avisar quem o usa. A Fase 3 também
+        arrasta o Buzzy pela tela e usa Alt+Tab e a tecla Windows no meio de um arraste.
 
         Uso:
-          Buzzy.Verificacao.exe --injetar-input-na-tela [--ocioso S] [--espera-ocioso S]
+          Buzzy.Verificacao.exe --injetar-input-na-tela [--fase 1|3] [--ocioso S] [--espera-ocioso S]
 
           --injetar-input-na-tela  obrigatória: confirma que a ferramenta pode agir na tela.
+          --fase N                 1 (padrão): shell do desktop; 3: input e arraste.
           --ocioso S               segundos sem input do usuário antes de começar (padrão 20).
           --espera-ocioso S        quanto esperar por essa ociosidade antes de desistir (padrão 180).
 
@@ -61,13 +63,18 @@ internal static class Programa
 
         Console.OutputEncoding = Encoding.UTF8;
         bool injetar = false;
-        int ociosoS = 20, esperaS = 180;
+        int ociosoS = 20, esperaS = 180, fase = 1;
         for (int i = 0; i < args.Length; i++)
         {
             switch (args[i])
             {
                 case OpcaoDeInjetar:
                     injetar = true;
+                    break;
+                case "--fase":
+                    if (i + 1 >= args.Length || args[i + 1] is not ("1" or "3"))
+                        return Uso("--fase precisa de 1 ou 3.");
+                    fase = args[++i] == "3" ? 3 : 1;
                     break;
                 case "--ocioso" or "--espera-ocioso":
                     if (i + 1 >= args.Length || !int.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out int segundos) || segundos < 1)
@@ -98,12 +105,12 @@ internal static class Programa
         string exeBuzzy = Path.Combine(raiz, "src", "Buzzy.App", "bin", configuracao, "net10.0-windows", "Buzzy.exe");
         string exeProprio = Environment.ProcessPath ?? throw new InvalidOperationException("Caminho do executável desconhecido.");
         string resultados = Path.Combine(raiz, "resultados");
-        using var rel = new Relatorio(Path.Combine(resultados, "verificacao-fase1.log"));
+        using var rel = new Relatorio(Path.Combine(resultados, $"verificacao-fase{fase}.log"));
         Console.CancelKeyPress += (_, e) => { e.Cancel = true; Cancelado = true; };
 
         rel.Linha("");
         rel.Linha("================================================================");
-        rel.Linha($"Buzzy.Verificacao — critérios manuais da Fase 1 com input SINTÉTICO — {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+        rel.Linha($"Buzzy.Verificacao — critérios manuais da Fase {fase} com input SINTÉTICO — {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
         rel.Linha($"SO: {RuntimeInformation.OSDescription}; runtime {RuntimeInformation.FrameworkDescription}; configuração {configuracao}");
         rel.Linha("Todo clique e tecla desta verificação é injetado por SendInput (marca de injetado): SINTÉTICO, não é gesto humano.");
         rel.Linha("Notificação da bandeja postada pela ferramenta (PostMessage) é SIMULADA: o resultado recebe SIMULADO, nunca OK,");
@@ -156,7 +163,7 @@ internal static class Programa
         rel.Linha($"Sem input do usuário há {Nativo.OciosoMs() / 1000.0:0.0} s; começando.");
 
         var v = new Verificacao(exeBuzzy, exeProprio, resultados, rel, ultimoInputDoUsuario);
-        Sumario s = v.Executar();
+        Sumario s = fase == 3 ? v.ExecutarFase3() : v.Executar();
         string simulados = s.Simulados.Count == 0 ? "nenhum" : string.Join(" | ", s.Simulados);
         string naoExercitados = s.NaoExercitados.Count == 0 ? "nenhum" : string.Join(" | ", s.NaoExercitados);
         rel.Linha($"==== Resultado: {(s.Falhas == 0 ? "sem falhas" : $"{s.Falhas} falha(s)")} — {s.Ok} OK, {s.NaoAplicavel} N/A, {s.Simulados.Count} SIMULADO " +

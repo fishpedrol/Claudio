@@ -7,24 +7,65 @@
 
 O usuário pediu que Claude volte a implementar o que falta. A diretiva está em [prompt_usuario.md](prompt_usuario.md); a autorização contínua de Claude está em DEC-015. A divisão anterior que deixava a Fase 2 com Codex foi substituída.
 
-**Próximo trabalho: validar e fechar a Fase 2.** O núcleo puro e a integração com o app precisam ser distinguidos:
+**Estado em 2026-09-30 12:30 (Claude), nada commitado:**
 
-- `docs/TODO.md` marca o núcleo puro implementado, as referências 02–05 revisadas e `Buzzy.Core.Testes` aprovado em 147/147 em 2026-09-29.
-- A leitura do checkout em 2026-09-30 encontrou a integração de `Nucleo` em `src/Buzzy.App/Composicao/Aplicacao.cs` e expectativas de `Loaded` em `tests/Buzzy.App.Testes/Integracao/IntegracaoTestes.cs`.
-- `docs/TODO.md` e `docs/PROJECT_CONTEXT.md` ainda registram a ligação e a verificação do app como pendentes. **A composição atual ainda não foi validada por build/testes após essa integração; o critério manual da Fase 2 também está pendente.** Não atualize o gate até obter evidência atual.
+- **Fase 2:** VERIFIED no `docs/TODO.md`. O critério 4 foi verificado com input SINTÉTICO.
+- **Fase 3:** implementada e verificada por automação e input SINTÉTICO; continua PLANNED por três pendências: UAC [MANUAL], DPI misto [HW] e ClickLock [MANUAL].
+- **Fase 4:** implementada e verificada numa **cópia isolada** fora do repositório:
+  - caminho: `C:\Users\Cliente\AppData\Local\Temp\claude\C--Users-Cliente-Documents-claudio\3b0e750b-9776-418f-aa13-3a4fa1644cac\scratchpad\f4`;
+  - motivo da cópia: um workflow de testes estava compilando a árvore principal;
+  - **a Fase 4 ainda não está no repositório.**
+
+Arquivos da Fase 4 em `f4` que precisam entrar na árvore principal:
+
+- núcleo:
+  - `src/Buzzy.Core/Personagem/Movimento.cs` (novo);
+  - `Configuracao.cs` (`Movimento`, `Fisica`, faixas de distância, pulo, parede e pendurado por energia);
+  - `EstadoDoNucleo.cs` (campo `Movimento`);
+  - `Maquina.cs` (física: `PassoAndando`, `PassoEscalando`, `PassoPendurado`, `PassoNoAr`, `Planejar*`, `SaltarDaParede`, `SairDoTeto`);
+- app: `Aplicacao.cs`, com a configuração `Acoes = Todas`, `QuedaFisica = true`, `Movimento = true`;
+- testes:
+  - `tests/Buzzy.Core.Testes/Movimento/*` (novos);
+  - `tests/Buzzy.App.Testes/Integracao/MovimentoIntegracaoTestes.cs` (novo);
+  - parâmetro `semente` em `BuzzyEmTeste.cs`;
+- harness: `tests/Buzzy.Verificacao/VerificacaoFase4.cs` (novo), `Programa.cs` (`--fase 4`) e `Injetor.cs` (`esperarCliqueDuplo`).
+
+Mescle arquivo por arquivo com diff, porque a árvore principal recebeu mudanças depois da cópia. Não copie a pasta inteira por cima.
+
+**Atenção:** `tests/Buzzy.App.Testes/Integracao/GestosTestes.cs` na árvore principal já espera a queda da Fase 4. Até a mescla, o teste de integração de arraste falha na árvore principal.
 
 ### Próximas ações em ordem
 
-1. Reconfira `git status --short`, diffs, os arquivos reais e os resultados. Leia as fontes exigidas em `AGENTS.md` e siga [prompt_usuario.md](prompt_usuario.md). Não assuma que este snapshot continua exato.
-2. Inspecione `Aplicacao.cs` e os testes da Fase 2 antes de editar. Execute `dotnet build Buzzy.slnx -c Release` e `powershell -NoProfile -File tools/testar.ps1`; corrija falhas e repita verificações afetadas.
-3. Para a suíte de integração, `powershell -NoProfile -File tools/testar.ps1 -Integracao` abre e fecha janelas do Buzzy. Avise o usuário antes. Faça a verificação manual do critério 4 se for possível sem interferir em outros aplicativos. Se não for, registre como pendente e continue trabalho independente.
-4. Com o gate satisfeito, sincronize os documentos na ordem de `AGENTS.md`, atualize evidências e status reais e avance para a Fase 3 sem pedir aprovação. Preserve pendências [MANUAL]/[HW] da Fase 1 para a integração final; não altere configurações globais do Windows.
+1. Esperar o workflow `fase2-cobertura-testes` (run `wf_3fd26000-099`), que escreve testes em `tests/Buzzy.Core.Testes/Personagem`. Revisar o que ele escreveu, inclusive qualquer relato `// DEFEITO:`.
+2. Mesclar a Fase 4 de `f4`, rodar `tools/testar.ps1`, `-Integracao` (avise o usuário antes) e `Buzzy.Verificacao --injetar-input-na-tela --fase 1|3|4` (abre janelas e move o cursor; avise antes).
+3. Sincronizar os documentos das Fases 3 e 4:
+   - TODO;
+   - PROJECT_CONTEXT;
+   - DEVELOPMENT_LOG;
+   - ARCHITECTURE 1, 2.5, 2.9 e 2.13.4;
+   - DEC-022, com o rascunho em `scratchpad\fase4\DEC-022.md` e os valores finais de `f4`;
+   - SECURITY (APIs `SetCapture`, `ReleaseCapture`, `GetDoubleClickTime` e `GetWindowRect` na própria janela);
+   - COMO_INICIAR;
+   - README.
+4. Seguir para a Fase 5 sem pedir aprovação (DEC-015).
 
 ## Estado e evidência que orientam o handoff
 
 - **Fase 0 / P3:** gate técnico passou no ambiente medido em 2026-09-29: 3/3 rodadas, 28/28 cenários por rodada. Input totalmente sintético; não é evidência humana nem valida DPI misto. Relatórios: `spikes/resultados/p3-receptor.log` e `spikes/resultados/p3.log`.
 - **Fase 1:** shell implementado, mas permanece PLANNED. O relatório `resultados/verificacao-fase1.log` tem 25 OK, 4 SIMULADO e 0 falhas, com input sintético. Pendem menu real pela bandeja, escalas do Windows 150%/200% e mudanças reais de resolução/escala/barra de tarefas. A linha de base de repouso durou 600 s; não valida metas de 1 h/8 h. Veja `docs/TODO.md` e `docs/PROJECT_CONTEXT.md`.
-- **Fase 2:** teste anterior do núcleo puro passou 147/147; isso não prova a integração atual. `Aplicacao.cs` contém criação do `Nucleo`, envio de `Loaded`/topologia/comandos/menu/fim de sessão, execução de efeitos, timers e logs `NUCLEO`. O teste de integração espera as transições `Booting → Settling → Idle`. Confira os asserts e os logs reais ao validar.
+- **Fase 2:** VERIFIED em 2026-09-30.
+  - `tools/testar.ps1` passou antes das mudanças de hoje (Core 147/147); a integração passou 22/22.
+  - Verificação de tela com o núcleo: 25 OK, 4 SIMULADO, 0 falhas.
+  - Repouso de 10 min com CPU média de 0,010%.
+  - Auditoria adversarial corrigida em DEC-020; a cobertura nova está sendo escrita.
+- **Fase 3:** árbitro puro `src/Buzzy.Core/Entrada/ArbitroDeGestos.cs` e adaptador em `JanelaPersonagem.cs` (DEC-021).
+  - Testes: Core 171/171 e integração 25/25.
+  - `--fase 3`: 33 OK, 2 N/A, 0 falhas.
+- **Fase 4 (em `f4`):**
+  - Core 180/180; integração 29/29.
+  - `--fase 4`: 17 OK, 0 falhas. Segurou no meio da queda; caminhada com passo máximo de 3 px e intervalo p95 de 31,9 ms; subiu 176/176, pendurou-se 146 vezes e voltou ao chão em 16 s; repouso com 0,000% de CPU e relógio desligado.
+  - Pendência [MANUAL]: critério 5, gravação a 120 qps.
+  - As 21 falhas de `PortaoApis` dentro de `f4` são do ambiente (sem `spikes/`), não do código.
 - **Identidade:** DEC-018/DEC-019 aprovaram pixel art fiel às pranchas e semelhança intencional com Luffy, incluindo chapéu de palha e faixa vermelha. O quadro parado e o ícone já estão integrados; animações pertencem à Fase 6. A fonte visual é `docs/IDENTIDADE_VISUAL.md` e os arquivos em `src/Buzzy.Visual/Pixel/` / `assets/identidade/pixel/`.
 
 ## Alertas históricos
@@ -40,3 +81,33 @@ Mantenha aqui um resumo do estado atual e acrescente uma entrada curta por marco
 ### Log de continuidade
 
 - **2026-09-30 — Codex:** reuniu `BACKUP_CLAUDE.md` e `BACKUP_CODEX.md`, eliminou divisões e direções visuais superadas, atualizou a diretiva para Claude retomar pela validação da Fase 2 e deixou as fontes canônicas inalteradas porque ainda falta validar o estado atual. Nenhum teste executado; verificação de código limitada à inspeção de `Aplicacao.cs` e dos asserts de integração. Próximo passo: seguir “Retomada atual”.
+- **2026-09-30 11:13 — Claude (Opus 5.5):** checkout limpo em `6028968`. Sem alterar código: `tools/testar.ps1` código 0 — build Release 0 avisos/0 erros, Core 147/147, portão 73/73, App 18/18 sem janelas, portão de APIs APROVADO, 0 pacotes vulneráveis. `tools/testar.ps1 -Integracao` código 0 — App 22/22 com os 4 testes de tela; o log real mostra `NUCLEO` `Loaded` Booting→Settling→Idle, `CmdHide` por minimização, `CmdShow` pela segunda instância e `CmdExit` por WM_CLOSE; M6 = 725 ms. Próximo: `Buzzy.Verificacao --injetar-input-na-tela` (input SINTÉTICO) como evidência do critério 4 da Fase 2, revisão do código de integração e fechamento do gate.
+- **2026-09-30 11:40 — Claude:** Fase 2, critério 4: `Buzzy.Verificacao --injetar-input-na-tela` com o núcleo ligado = 25 OK, 4 SIMULADO (bandeja), 0 falhas, código 0 (input SINTÉTICO; `resultados/verificacao-fase1.log`). Observação INFORMAL do usuário (não é teste): ele fechou sem querer a primeira medição; o log mostra menu do personagem (Esconder/Sair) e restauração por clique real no ícone da bandeja funcionando com o núcleo. Repouso de 10 min com o núcleo ligado (`resultados/desempenho-20260930-112125.txt`): CPU média 0,010% de um núcleo, p95 0,000%, privada 57,99→58,00 MB, 0 filhos, 0 rede, resolução do timer inalterada, M6 528 ms. Auditoria adversarial do gate da Fase 2 rodando em workflow (achados ainda não aplicados).
+- **2026-09-30 11:45 — Claude:** Fase 3 iniciada (sem commit): árbitro puro `src/Buzzy.Core/Entrada/ArbitroDeGestos.cs` (limiar SM_CXDRAG por DPI, clique duplo pelas regras do Windows, captura perdida, botão direito); adaptador em `JanelaPersonagem.cs` (SetCapture/ReleaseCapture, WM_CAPTURECHANGED/WM_CANCELMODE, MK_LBUTTON), raiz em `Aplicacao.cs` (menu adiado para fora do processamento, M5 no log `ARRASTE`, POSICAO só fora do arraste). `tools/testar.ps1` código 0: Core 171/171, portão APROVADO; `Buzzy.App.Testes --integracao` 25/25, incluindo 3 testes novos de gestos por mensagens POSTADAS (arraste, clique/duplo/direito, captura perdida). Próximo: verificação de tela da Fase 3 com input SINTÉTICO em `Buzzy.Verificacao`, depois fechar docs das Fases 2 e 3.
+- **2026-09-30 12:20 — Claude:** `Buzzy.Verificacao --injetar-input-na-tela --fase 3` (novo modo; input SINTÉTICO): 33 OK, 2 N/A, 0 falhas, código 0 (`resultados/verificacao-fase3.log`). Pendentes: critério 4 com UAC [MANUAL], critério 5 com escalas diferentes [HW], critério 7 ClickLock (desligado na máquina e NÃO alterado). CPU durante 7,4 s de arraste = 6,4% de um núcleo; M5 p95 0,52 ms. Auditoria adversarial da Fase 2 terminou com achados reais; corrigidos em `Maquina.cs` e `Aplicacao.cs` (DEC-020): precedência dos motivos, retorno da tela cheia nunca gravado nem reaproveitado, só a primeira carga vale, CLICK valida se o monitor mudou, piso de acomodação em todo agendamento, energia inválida, menu adiado, teto do relógio, janela reafirmada na releitura, RELOGIO/AGENDA no log. Docs ARCHITECTURE 1/2.6/2.7 e DECISIONS DEC-020/021 atualizados. Em andamento: workflow `fase2-cobertura-testes` escrevendo os testes pedidos pela auditoria em `tests/Buzzy.Core.Testes/Personagem` (não mexe em src/). Depois: build + `testar.ps1` + integração (3 testes novos em `ComposicaoTestes.cs`), fechar TODO/PROJECT_CONTEXT/DEVELOPMENT_LOG/SECURITY das Fases 2 e 3 e seguir para a Fase 4.
+- **2026-09-30 12:30 — Claude:** Fase 4 desenvolvida na cópia isolada `scratchpad\f4` (caminho em “Retomada atual”).
+  - Movimento determinístico pelo relógio de passo fixo ligado ao compositor (`CompositionTarget.Rendering`), com lote de passos e um `MoverJanela` por quadro.
+  - Andar, escalar, pendurar-se, pular, cair e pousar, com velocidades em DIP/s convertidas pela escala do monitor.
+  - Superfícies vindas da área útil; lateral é parede, ou passagem se houver vizinho encostado.
+  - Pausar/Retomar movimento no menu; argumentos `--pausado` e `--semente N`.
+  - Ajuste após a verificação de tela: escalada a 110 DIP/s, pendurado a 80 DIP/s e tempo na parede de 10–20, 15–35 ou 20–45 s. O disparo em 12 s cortava a subida de 12,9 s.
+  - Resultados:
+    - `f4`: Core 180/180, integração 29/29, `--fase 4` 17 OK / 0 falhas;
+    - energia por 10 min simulados: Baixa com 6,4 ações e 16 s em movimento; Média com 17,1 ações e 86 s; Alta com 35,5 ações e 275 s.
+  - `docs/TODO.md` atualizado com as Fases 2 (VERIFIED) e 3 (PLANNED com pendências). Workflow de cobertura ainda rodando.
+  - Próximo: mesclar `f4` na árvore principal.
+- **2026-09-30 12:45 — Claude:** o redator do workflow de cobertura achou um DEFEITO real, com o teste `TelaCheiaTestes.Q1_DesligarOModoComRetornoGuardado_NaoTornaAPosicaoTemporariaDefinitiva`.
+  - Defeito: `SETTINGS_CHANGED` desligando o modo de tela cheia descartava o retorno sem restaurá-lo, com o personagem escondido por outro motivo ou pressionado. A posição temporária virava definitiva.
+  - Correção feita **só em `f4`** (`Maquina.cs`: `MudarPreferencias`, `FimDoGestoDoUsuario` e `Esconder`). A regra está em ARCHITECTURE 2.6 (linha nova) e DEC-020. Também precisa ir para a árvore principal na mescla.
+  - `f4`, com os testes do redator copiados para lá, deu Core 238/238 (229 do redator + 9 de movimento).
+  - Um backup dos arquivos da Fase 4 de antes dessas mudanças está em `scratchpad\f4-fase4-original`.
+  - Documentos:
+    - DEC-022 registrada;
+    - ARCHITECTURE 1, 2.5, 2.9 e 2.13.4 atualizados para a Fase 4;
+    - SECURITY 3.1 com as APIs da Fase 3;
+    - COMO_INICIAR e README atualizados;
+    - `PROXIMA_SESSAO.md` virou só um ponteiro para este arquivo.
+  - `tools/medir-desempenho.ps1` ganhou `-Modo repouso|autonomia` e `-Semente`. `repouso`, o padrão, abre com `--pausado`.
+  - Rodando em paralelo:
+    - revisão do workflow de cobertura (`wf_3fd26000-099`);
+    - desenho da Fase 5, só leitura (`wf_0c1129a6-6ad`).

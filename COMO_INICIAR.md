@@ -1,8 +1,10 @@
 # Como iniciar o Buzzy
 
-> **Estado atual:** versão inicial. O Buzzy aparece como o macaquinho em pixel art com o chapéu de
-> palha (`docs/IDENTIDADE_VISUAL.md`), parado no canto da tela. Ele ainda não anda nem pode ser
-> arrastado; isso chega nas Fases 3 e 4, e as animações na Fase 6.
+> **Estado atual:** o Buzzy aparece como o macaquinho em pixel art com o chapéu de palha
+> (`docs/IDENTIDADE_VISUAL.md`). Pode ser arrastado com o mouse e, sozinho, anda pelo chão, escala as
+> laterais da tela, pendura-se na borda de cima, pula e descansa. Por enquanto fica no monitor em que
+> está: atravessar para outro monitor e lembrar a posição chegam na Fase 5. As poses ainda são quadros
+> fixos por estado; as animações completas chegam na Fase 6.
 
 ## 1. Antes da primeira vez
 
@@ -59,6 +61,9 @@ Não use "Executar como administrador": o Buzzy recusa rodar assim e mostra um a
 
 | Quero... | Como fazer |
 |---|---|
+| Mudar o Buzzy de lugar | Clique nele e arraste; ao soltar, ele desce até o chão |
+| Ver uma reação | Clique nele uma vez (ou duas) |
+| Fazer ele ficar quieto | Menu → **Pausar movimento**. Para voltar a circular: menu → **Retomar movimento** |
 | Abrir o menu | Botão direito no personagem, ou botão direito no ícone da bandeja |
 | Esconder o Buzzy | Menu → **Esconder Buzzy** |
 | Mostrar de novo | Clique no ícone da bandeja, ou menu da bandeja → **Mostrar Buzzy**, ou abra o `Buzzy.exe` outra vez |

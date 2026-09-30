@@ -55,9 +55,15 @@
     desligue a tela nem suspenda a máquina (SetThreadExecutionState); o pedido é do
     PowerShell, não do Buzzy, e termina com a medição.
 
+    A partir da Fase 4 o Buzzy se move sozinho. O modo padrão, -Modo repouso, abre o app com
+    --pausado (movimento pausado, como pelo menu "Pausar movimento") e mede a linha de base.
+    -Modo autonomia deixa a agenda ligada: o personagem anda, escala e pula pela tela durante a
+    medição, e o relatório dá o custo médio desse comportamento.
+
     Uso, na raiz do repositório, depois de compilar o Release de src/Buzzy.App:
       .\tools\medir-desempenho.ps1
       .\tools\medir-desempenho.ps1 -Minutos 60 -IntervaloSegundos 5
+      .\tools\medir-desempenho.ps1 -Modo autonomia -Semente 7
       .\tools\medir-desempenho.ps1 -Exe C:\caminho\Buzzy.exe -Destino C:\temp\medicao.txt
 
     Código de saída: 0 medição completa e encerramento limpo; 1 medição incompleta ou
@@ -84,7 +90,18 @@ param(
 
     # Arquivo do relatório. Padrão: resultados\desempenho-AAAAMMDD-HHMMSS.txt na raiz do
     # repositório; a pasta é criada se faltar.
-    [string] $Destino
+    [string] $Destino,
+
+    # O que medir. 'repouso' (padrão) abre o Buzzy com o movimento pausado (--pausado): é a
+    # linha de base de repouso (Fase 1, critério 11), que a Fase 4 não pode piorar.
+    # 'autonomia' abre com a agenda autônoma ligada (Fase 4): o personagem anda, escala, pula
+    # e descansa sozinho, e a medição dá o custo médio desse comportamento.
+    [ValidateSet('repouso', 'autonomia')]
+    [string] $Modo = 'repouso',
+
+    # Semente da agenda autônoma (--semente), para repetir a mesma sequência de ações.
+    # Negativa: o app usa a própria semente.
+    [long] $Semente = -1
 )
 
 $ErrorActionPreference = 'Stop'
@@ -97,6 +114,15 @@ $leituraTimerSegundos = 3          # resolução do timer lida antes de abrir e 
 $intervaloRedeSegundos = 10        # instantâneos de conexões de rede do PID
 $intervaloProgressoSegundos = 60   # linha de progresso no console
 $trocasDeUmTimer300ms = 1000.0 / 300.0   # um timer de 300 ms acorda a thread 3,33 vezes/s
+
+$argumentosDoBuzzy = '--diagnostico'
+if ($Modo -eq 'repouso') { $argumentosDoBuzzy += ' --pausado' }
+if ($Semente -ge 0) { $argumentosDoBuzzy += (' --semente {0}' -f $Semente) }
+$tituloDaMedicao = if ($Modo -eq 'repouso') {
+    'linha de base de desempenho em repouso, movimento pausado (Fase 1, critério 11)'
+} else {
+    'desempenho com a agenda autônoma ligada (Fase 4): anda, escala, pula e descansa sozinho'
+}
 
 $cultura = [Globalization.CultureInfo]::GetCultureInfo('pt-BR')
 $invariante = [Globalization.CultureInfo]::InvariantCulture
@@ -986,8 +1012,9 @@ function EscreverRelatorio {
     $completa = $medicaoConcluida -and $encerramento.Saiu -and -not $encerramento.Forcado
 
     $L.Add('================================================================')
-    $L.Add('Buzzy — linha de base de desempenho em repouso (Fase 1, critério 11)')
+    $L.Add('Buzzy — ' + $tituloDaMedicao)
     $L.Add(('Data/hora            : {0} (início da execução)' -f $inicioScript.ToString('yyyy-MM-dd HH:mm:ss')))
+    $L.Add(('Modo                 : {0} (argumentos do Buzzy: {1})' -f $Modo, $argumentosDoBuzzy))
     $L.Add('Ferramenta           : tools/medir-desempenho.ps1 (CIM + System.Diagnostics.Process + NtQuerySystemInformation, por PID)')
     if ($completa) {
         $L.Add('Resultado            : medição COMPLETA, encerramento limpo')
@@ -1153,6 +1180,10 @@ function EscreverRelatorio {
     $L.Add('   A Fase 1 só precisa REGISTRAR esta linha de base (TODO.md, Fase 1, critério 11). As metas')
     $L.Add('   abaixo são referência para as fases seguintes, verificadas na Fase 11; nada aqui aprova ou')
     $L.Add('   reprova a Fase 1.')
+    if ($Modo -eq 'autonomia') {
+        $L.Add('   Modo autonomia: o personagem se move durante parte da janela, então as metas de REPOUSO')
+        $L.Add('   não se aplicam diretamente; a comparação fica só como ordem de grandeza.')
+    }
     if ($amostrasCpu.Count -gt 0) {
         $janelaCurta = if ($script:duracaoMedida -lt 599) { ' (janela menor que os 10 min de Q-08: só indicativo)' } else { '' }
         $L.Add(('   - CPU média até 0,1% de um núcleo em 10 min : {0}% em {1} min -> {2}{3}' -f (Num $script:cpuMediaPeriodo), (Num ($script:duracaoMedida / 60.0) '0.0'), (Referencia ($script:cpuMediaPeriodo -le 0.1)), $janelaCurta))
@@ -1195,7 +1226,7 @@ function EscreverRelatorio {
 
 # ------------------------------------------------------------------ ambiente (antes de abrir)
 Write-Host ''
-Write-Host '=== Buzzy — medição de desempenho em repouso (Fase 1, critério 11) ===' -ForegroundColor Cyan
+Write-Host ('=== Buzzy — {0} ===' -f $tituloDaMedicao) -ForegroundColor Cyan
 Write-Host ('Executável: {0}' -f $Exe) -ForegroundColor DarkGray
 Write-Host ('Medição: {0} min, amostra a cada {1} s, aquecimento de {2} s descartado; duração total de cerca de {3} min.' -f $Minutos, $IntervaloSegundos, $AquecimentoSegundos, [Math]::Ceiling($Minutos + ($AquecimentoSegundos + 45) / 60.0)) -ForegroundColor DarkGray
 Write-Host ('Relatório: {0}' -f $Destino) -ForegroundColor DarkGray
@@ -1289,7 +1320,7 @@ $atribuicao = @{ Codigo = 'incompleta'; Texto = @('Leitura: sem leituras suficie
 try {
     $infoPartida = New-Object Diagnostics.ProcessStartInfo
     $infoPartida.FileName = $Exe
-    $infoPartida.Arguments = '--diagnostico'
+    $infoPartida.Arguments = $argumentosDoBuzzy
     $infoPartida.WorkingDirectory = Split-Path -Parent $Exe
     $infoPartida.UseShellExecute = $false
 

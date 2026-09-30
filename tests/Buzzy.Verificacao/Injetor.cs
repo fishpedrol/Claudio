@@ -98,6 +98,85 @@ internal sealed class Injetor
     internal bool TeclaVirtual(ushort vk, string oque, Func<bool> condicao)
         => Enviar([Tecla(vk, 0, 0), Tecla(vk, 0, KEYEVENTF_KEYUP)], oque, condicao);
 
+    /// <summary>
+    /// Combinação de teclas num lote só (por exemplo, Alt+Tab): pressiona na ordem dada e solta na
+    /// ordem inversa, só se <paramref name="condicao"/> for verdadeira imediatamente antes.
+    /// </summary>
+    internal bool Combinacao(ushort[] teclas, string oque, Func<bool> condicao)
+    {
+        var lote = new List<Nativo.INPUT>(teclas.Length * 2);
+        foreach (ushort vk in teclas) lote.Add(Tecla(vk, 0, 0));
+        foreach (ushort vk in teclas.Reverse()) lote.Add(Tecla(vk, 0, KEYEVENTF_KEYUP));
+        return Enviar([.. lote], oque, condicao);
+    }
+
+    // ------------------------------------------------------------------ arraste (Fase 3)
+
+    /// <summary>
+    /// Pressiona o botão esquerdo em (x, y) e o MANTÉM pressionado, com as mesmas conferências do
+    /// clique: espera do clique duplo, dono do ponto antes e depois de mover o cursor.
+    /// </summary>
+    internal void Pressionar(int x, int y, nint donoEsperado, Func<string?>? outraCondicao = null)
+    {
+        if (donoEsperado == 0) throw new ArgumentException("O dono esperado do ponto não pode ser nulo.", nameof(donoEsperado));
+        if (BotaoEsquerdoAbaixado) throw new FalhaDeVerificacao("pressionar com o botão esquerdo já pressionado");
+        ConferirCursor();
+        EsperarIntervaloDeCliqueDuplo();
+        ExigirDono(x, y, donoEsperado, outraCondicao, "esquerdo (pressionar)", "depois da espera de clique duplo");
+        Enviar([Mouse(x, y, MOUSEEVENTF_MOVE)], "mover para pressionar");
+        Posto(x, y);
+        ExigirDono(x, y, donoEsperado, outraCondicao, "esquerdo (pressionar)", "depois de mover o cursor");
+        Enviar([Mouse(x, y, MOUSEEVENTF_MOVE | MOUSEEVENTF_LEFTDOWN)], "pressionar esquerdo");
+    }
+
+    /// <summary>
+    /// Move o cursor com o botão esquerdo pressionado (o Buzzy tem a captura do gesto). Sem
+    /// conferência de dono: durante o arraste, o ponto é qualquer lugar da tela.
+    /// </summary>
+    internal void MoverSegurando(int x, int y)
+    {
+        if (!BotaoEsquerdoAbaixado) throw new FalhaDeVerificacao("mover segurando sem o botão esquerdo pressionado");
+        ConferirCursor();
+        Enviar([Mouse(x, y, MOUSEEVENTF_MOVE)], "mover segurando");
+        Posto(x, y);
+    }
+
+    /// <summary>Solta o botão esquerdo em (x, y), com o movimento até lá no mesmo evento.</summary>
+    internal void SoltarEsquerdo(int x, int y)
+    {
+        if (!BotaoEsquerdoAbaixado) throw new FalhaDeVerificacao("soltar sem o botão esquerdo pressionado");
+        ConferirCursor();
+        Enviar([Mouse(x, y, MOUSEEVENTF_MOVE | MOUSEEVENTF_LEFTUP)], "soltar esquerdo");
+        Posto(x, y);
+        _ultimoSoltar = Stopwatch.GetTimestamp();
+    }
+
+    /// <summary>Move o cursor sem botão pressionado (por exemplo, depois de um gesto, para ver se algo ficou preso ao cursor).</summary>
+    internal void MoverSemBotao(int x, int y)
+    {
+        if (BotaoEsquerdoAbaixado || BotaoDireitoAbaixado) throw new FalhaDeVerificacao("mover sem botão com um botão pressionado");
+        ConferirCursor();
+        Enviar([Mouse(x, y, MOUSEEVENTF_MOVE)], "mover sem botão");
+        Posto(x, y);
+    }
+
+    /// <summary>
+    /// Clique duplo esquerdo em (x, y): os dois cliques num lote só, dentro do tempo de clique
+    /// duplo do sistema, com as conferências de <see cref="CliqueEsquerdo"/>.
+    /// </summary>
+    internal void CliqueDuploEsquerdo(int x, int y, nint donoEsperado, Func<string?>? outraCondicao = null)
+    {
+        if (donoEsperado == 0) throw new ArgumentException("O dono esperado do ponto não pode ser nulo.", nameof(donoEsperado));
+        ConferirCursor();
+        EsperarIntervaloDeCliqueDuplo();
+        ExigirDono(x, y, donoEsperado, outraCondicao, "duplo", "depois da espera de clique duplo");
+        Enviar([Mouse(x, y, MOUSEEVENTF_MOVE)], "mover para o clique duplo");
+        Posto(x, y);
+        ExigirDono(x, y, donoEsperado, outraCondicao, "duplo", "depois de mover o cursor");
+        Enviar([Mouse(x, y, MOUSEEVENTF_MOVE | MOUSEEVENTF_LEFTDOWN), Mouse(x, y, MOUSEEVENTF_LEFTUP), Mouse(x, y, MOUSEEVENTF_LEFTDOWN), Mouse(x, y, MOUSEEVENTF_LEFTUP)], "clique duplo esquerdo");
+        _ultimoSoltar = Stopwatch.GetTimestamp();
+    }
+
     /// <summary>Digita texto como caracteres Unicode, com a mesma regra de condição de <see cref="TeclaVirtual"/>.</summary>
     internal bool Digitar(string texto, Func<bool> condicao)
     {

@@ -8,11 +8,19 @@
 > - **[MANUAL]** inspeção manual em Windows, com resultado registrado no DEVELOPMENT_LOG.md.
 > - **[HW]** exige hardware específico: mais de um monitor, escalas diferentes, monitor em retrato ou possibilidade de conectar e desconectar. Nunca é declarado feito sem o hardware.
 >
-> Última atualização: 2026-09-29
+> Última atualização: 2026-09-30
 
 ## Fase atual
 
-**Fase atual: Fase 2 — núcleo do personagem. STATUS: PLANNED, em implementação.** A Etapa 0B fechou tecnicamente em 2026-09-29 com P3 aprovado no ambiente medido por evidência sintética. A identidade visual original foi criada. A Fase 1 está implementada e verificada por automação e input sintético, mas permanece PLANNED enquanto os critérios manuais 3 (bandeja real), 8 (escalas 150% e 200%) e 9 (mudanças reais de resolução/escala/barra) não forem verificados. O usuário autorizou a execução das fases 1–11 sem aprovação rotineira (DEC-015); prossiga com trabalho independente.
+**Fase atual: Fase 4 — movimento e superfícies, em integração.** Situação das etapas anteriores:
+
+- Etapa 0B: fechou tecnicamente em 2026-09-29, com P3 aprovado no ambiente medido por evidência sintética.
+- Identidade visual original: criada.
+- Fase 1: implementada e verificada por automação e input sintético. Continua PLANNED enquanto faltarem os critérios manuais 3 (bandeja real), 8 (escalas 150% e 200%) e 9 (mudanças reais de resolução, escala e barra).
+- Fase 2: VERIFIED em 2026-09-30.
+- Fase 3: implementada e verificada por automação e input sintético. Continua PLANNED por três pendências: UAC [MANUAL], escalas diferentes [HW] e ClickLock [MANUAL].
+
+O usuário autorizou a execução das Fases 1–11 sem aprovação rotineira (DEC-015). Prossiga com trabalho independente.
 
 Não conte os dez movimentos de mouse de 26/09 como evidência humana: foram exploração informal da namorada do usuário. Todo input de SendInput citado nesta página é sintético.
 
@@ -105,7 +113,7 @@ STATUS: PLANNED. Implementação verificada por build, testes automatizados e ha
 
 ### Fase 2 — Núcleo do personagem
 
-STATUS: PLANNED, em implementação. O núcleo puro está implementado e seus testes passaram 147/147 em 2026-09-29; a ligação com `Aplicacao.cs` e a verificação do app continuam pendentes.
+STATUS: VERIFIED em 2026-09-30 nos critérios da fase. O critério 4 foi verificado com input SINTÉTICO, não por gesto humano. As pendências manuais da Fase 1 (bandeja real, escalas de 150% e 200%, mudanças reais de resolução, escala e barra) continuam registradas na Fase 1.
 
 - **Objetivo:** núcleo determinístico, testável sem janela, com máquina de estados, eventos, relógio lógico e expressão separada.
 - **Inclui:** tipos de estado, evento, retrato e efeito; tabela de transições de ARCHITECTURE.md, seção 2.6; fila com prioridade; agenda autônoma com semente; nível de energia como parâmetro do núcleo (padrão Média; a escolha pelo usuário chega na Fase 8); autonomia pausada e gesto curto como dimensões (ARCHITECTURE.md 2.6); expressão como dimensão independente; relógio que para quando nada muda; gravação e reprodução de sequências de eventos para testes; ligação do núcleo à janela da Fase 1.
@@ -117,9 +125,27 @@ STATUS: PLANNED, em implementação. O núcleo puro está implementado e seus te
   3. Sem movimento nem animação, nenhum `TICK` fica agendado. [AUTO]
   4. O app da Fase 1 continua funcionando com o núcleo ligado. [MANUAL]
 - **Testes automatizados:** testes de unidade, testes de propriedade com sequências aleatórias e reproduções gravadas comparadas com um resultado de referência. [AUTO]
-- **Subtarefas:** [x] núcleo puro, fila, agenda e gravação/reprodução implementados; referências 02–05 revistas; `Buzzy.Core.Testes` 147/147 em 2026-09-29. [ ] ligar o núcleo a `Aplicacao.cs`, mapear eventos/efeitos e manter os logs usados pelos testes existentes. [ ] executar a integração da tela e verificar o critério 4. [ ] sincronizar a documentação da fase.
+- **Evidências de 2026-09-30:**
+  - Critérios 1 a 3 [AUTO] (contagens atuais em DEVELOPMENT_LOG.md):
+    - tabela de transições em `TransicoesTestes.cs`, `TransicoesComplementaresTestes.cs` e `TelaCheiaTestes.cs`;
+    - propriedade com 2.000 sequências de 200 eventos, inclusive lotes processados de uma vez, em `InvariantesTestes.cs`;
+    - reproduções gravadas 01–05;
+    - relógio desligado sem movimento nem animação, conferido no núcleo e no app (`ComposicaoTestes`, log `RELOGIO`/`AGENDA`).
+  - Uma auditoria adversarial independente (quatro auditores e verificação cética) confirmou lacunas da tabela no modo de tela cheia, na gravação da posição temporária, na carga e na energia inválida. Foram corrigidas (DEC-020), com cobertura nova.
+  - Critério 4 [MANUAL], com input SINTÉTICO:
+    - `Buzzy.Verificacao --injetar-input-na-tela` com o núcleo ligado deu 25 OK, 4 SIMULADO (os mesmos da bandeja na Fase 1) e 0 falhas;
+    - a integração na tela ficou verde;
+    - houve uma observação INFORMAL do usuário: menu do personagem e restauração pelo clique real no ícone da bandeja funcionando com o núcleo.
+  - Repouso de 10 min com o núcleo (`resultados/desempenho-20260930-112125.txt`): CPU média de 0,010% de um núcleo, p95 0,000%, memória privada 57,99 → 58,00 MB, nenhuma rede, nenhum processo filho, resolução do timer inalterada.
+- **Subtarefas:**
+  - [x] núcleo puro, fila, agenda e gravação/reprodução (2026-09-29);
+  - [x] núcleo ligado a `Aplicacao.cs`, com eventos, efeitos e logs (2026-09-30);
+  - [x] integração da tela e critério 4 com input sintético (2026-09-30);
+  - [x] documentação da fase sincronizada (2026-09-30).
 
 ### Fase 3 — Input e arraste
+
+STATUS: PLANNED. A implementação está verificada por testes automáticos, integração por mensagens postadas e verificação de tela com input SINTÉTICO (2026-09-30). Pendem o critério 4 com janela de UAC [MANUAL], o critério 5 com escalas diferentes [HW] e o critério 7 com ClickLock ligado [MANUAL].
 
 - **Objetivo:** clique e arraste com prioridade absoluta do usuário.
 - **Inclui:** arbitragem de gestos com o limiar de arraste do sistema lido por DPI; clique, clique duplo, botão direito e perda de captura; arraste manual, sem o loop modal de mover do Windows, a menos que P3 indique outra solução; validação ao soltar; menu de contexto mínimo; posicionamento no chão ao soltar sem apoio (a queda animada entra na Fase 4).
@@ -136,6 +162,22 @@ STATUS: PLANNED, em implementação. O núcleo puro está implementado e seus te
   8. O consumo de CPU durante o arraste fica medido e registrado. [MANUAL, instrumentado]
   9. Clique duplo é reconhecido dentro do intervalo do Windows e botão direito solicita o menu de contexto. [AUTO e MANUAL]
 - **Testes automatizados:** reconhecedor de gestos (limiar por DPI, clique duplo, perda de captura, botão direito); invariantes 1 e 2 sob sequências aleatórias; validação ao soltar sobre as topologias de exemplo. [AUTO]
+- **Evidências de 2026-09-30:**
+  - [AUTO]:
+    - árbitro puro (`ArbitroDeGestosTestes`: limiar por DPI, clique duplo pelas regras do Windows, captura perdida, botão direito, soltar rápido fora do limiar, ClickLock sem limite de tempo);
+    - propriedade com 2.500 sequências e 361 mil passos, que conferiu gramática, captura, coerência com o núcleo e os invariantes 1, 2 e 5 (`ArbitroPropriedadesTestes`);
+    - 8.381 soltares sobre as 17 topologias de exemplo, 5.140 em vãos ou fora dos monitores (`SoltarNasTopologiasTestes`);
+    - integração por mensagens postadas (`GestosTestes`: arraste, clique, clique duplo, menu pelo botão direito, captura perdida).
+  - [MANUAL] com input SINTÉTICO (`Buzzy.Verificacao --fase 3`, `resultados/verificacao-fase3.log`): 33 OK, 2 N/A e 0 falhas.
+    - Passaram os critérios 1, 2, 3 e 6.
+    - Critério 4: Alt+Tab e tecla Windows.
+    - Critério 5: coordenadas negativas, os dois monitores a 96 DPI.
+    - Critério 8: CPU de 6,4% de um núcleo em 7,4 s de arraste contínuo; M5 medido pelo app com p95 de 0,52 ms, dentro de Q-08.
+    - Critério 9: clique duplo e menu.
+  - Pendentes:
+    - janela de UAC no meio do arraste (exige um pedido de elevação real);
+    - escalas diferentes (hardware; P6);
+    - ClickLock ligado: está desligado na máquina e não foi alterado, porque é configuração global. O árbitro não tem regra de tempo.
 
 ### Fase 4 — Movimento e superfícies
 

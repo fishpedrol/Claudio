@@ -1,8 +1,8 @@
 # SECURITY.md — Modelo de segurança do Buzzy
 
-> Regras de segurança do produto. A Fase 1 está implementada e verificada nos limites descritos na seção 10; a Fase 2 está em andamento. O modelo completo de segurança continua PLANNED.
+> Regras de segurança do produto. As Fases 1 a 3 estão implementadas e verificadas nos limites descritos na seção 10; a Fase 4 está em integração. O modelo completo de segurança continua PLANNED até a Fase 9.
 >
-> Última atualização: 2026-09-29
+> Última atualização: 2026-09-30
 
 ## 1. Modelo de segurança
 
@@ -42,7 +42,7 @@ Os riscos da stack WPF selecionada estão resumidos na seção 4.
 STATUS: PLANNED.
 
 - Criar, mover, mostrar e esconder as próprias janelas.
-- Ler posição do cursor e botões apenas nas mensagens entregues às próprias janelas, ou durante a captura de um arraste iniciado pelo usuário.
+- Ler posição do cursor e botões apenas nas mensagens entregues às próprias janelas, ou durante a captura de um arraste iniciado pelo usuário. *Implementação (Fase 3, DEC-021):* `SetCapture` só depois de um botão pressionado sobre um pixel visível do Buzzy, e `ReleaseCapture` no fim do gesto. `WM_MOUSEMOVE` só é tratado enquanto a janela tem a captura. A perda da captura (`WM_CAPTURECHANGED`, `WM_CANCELMODE`) encerra o gesto. O limiar de arraste e as regras de clique duplo são lidos do sistema (`GetSystemMetricsForDpi`, `GetDoubleClickTime`) sem alterar nada. `GetWindowRect` só é chamado sobre a janela do próprio Buzzy.
 - Ler geometria, escala e orientação dos monitores e a área útil de cada um.
 - Observar eventos de mudança de janela em primeiro plano e de geometria via `SetWinEventHook` em modo out-of-context, filtrados para a janela de nível superior ativa; ler somente `GetWindowRect` e o monitor associado. Converter em uma lista transitória dos monitores ocupados e descartar HWND/retângulo após o cálculo. Nunca ler título, nome, caminho de processo, texto, pixels ou conteúdo; nunca enumerar janelas/processos; nunca persistir ou registrar esses dados. (DEC-013)
 - Receber mensagens de sessão, energia, bloqueio e encerramento.

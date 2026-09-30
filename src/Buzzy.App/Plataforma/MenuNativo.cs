@@ -3,12 +3,15 @@ using Buzzy.Core;
 
 namespace Buzzy.App.Plataforma;
 
-/// <summary>Comandos do menu da Fase 1.</summary>
+/// <summary>Comandos do menu.</summary>
 internal enum ComandoDoMenu
 {
     Nenhum = 0,
     AlternarVisibilidade = 1,
     Sair = 2,
+
+    /// <summary>Pausar ou retomar o movimento autônomo (CMD_PAUSE_AUTONOMY / CMD_RESUME_AUTONOMY).</summary>
+    AlternarMovimento = 3,
 }
 
 /// <summary>
@@ -24,7 +27,7 @@ internal enum ComandoDoMenu
 /// </summary>
 internal static class MenuNativo
 {
-    internal static ComandoDoMenu Mostrar(PontoPx ponto, bool buzzyVisivel, bool abrirParaCima)
+    internal static ComandoDoMenu Mostrar(PontoPx ponto, bool buzzyVisivel, bool movimentoPausado, bool abrirParaCima)
     {
         using var dono = new HwndSource(new HwndSourceParameters("Buzzy.Menu")
         {
@@ -41,6 +44,7 @@ internal static class MenuNativo
         try
         {
             Win32.AppendMenu(menu, Win32.MF_STRING, (nint)ComandoDoMenu.AlternarVisibilidade, buzzyVisivel ? Textos.MenuEsconder : Textos.MenuMostrar);
+            Win32.AppendMenu(menu, Win32.MF_STRING, (nint)ComandoDoMenu.AlternarMovimento, movimentoPausado ? Textos.MenuRetomar : Textos.MenuPausar);
             Win32.AppendMenu(menu, Win32.MF_SEPARATOR, 0, null);
             Win32.AppendMenu(menu, Win32.MF_STRING, (nint)ComandoDoMenu.Sair, Textos.MenuSair);
 

@@ -4,7 +4,13 @@ Mascote original e não verbal para desktop Windows. A especificação e as fase
 
 **Para compilar e abrir o mascote:** [COMO_INICIAR.md](COMO_INICIAR.md).
 
-**Status:** P3 tem evidência nos cenários centrais, mas o relatório agregado ainda falha numa tentativa adicional B4b; veja PROJECT_CONTEXT.md. Arquivos iniciais do aplicativo e testes já existem em src/ e tests/; Fase 1 segue PLANNED até cumprir critérios e verificações. O usuário autorizou Claude a criar a identidade visual e avançar fases sem aprovações rotineiras.
+**Status (2026-09-30):** o aplicativo existe em `src/`, com testes em `tests/`. O mascote aparece, pode ser clicado e arrastado e circula sozinho num monitor. Situação das fases:
+
+- Fase 2: VERIFIED.
+- Fases 1 e 3: implementadas, mas ainda PLANNED, por verificações manuais e de hardware pendentes.
+- Fase 4: em integração.
+
+O estado exato e as evidências estão em [PROJECT_CONTEXT.md](docs/PROJECT_CONTEXT.md). O usuário autorizou Claude a avançar as fases sem aprovações rotineiras (DEC-015).
 
 ## Fontes
 

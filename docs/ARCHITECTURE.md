@@ -2,21 +2,27 @@
 
 > Esta página separa fatos implementados de desenho planejado. Nenhuma proposta aparece como arquitetura existente. Cada seção planejada carrega `STATUS: PLANNED`; escolhas que aguardam decisão do usuário carregam `STATUS: UNCERTAIN` e apontam para [DECISIONS.md](DECISIONS.md).
 >
-> Última atualização: 2026-09-29
+> Última atualização: 2026-09-30
 
 ## 1. Arquitetura implementada
 
-Código da Fase 1 em `src/`, organizado pelas três camadas de DEC-007 (detalhes em DEC-016). O estado de verificação de cada critério está em TODO.md; nada aqui é VERIFIED por estar escrito. O código em `spikes/` continua descartável e não conta como módulo do Buzzy.
+Código das Fases 1 a 4 em `src/`, organizado pelas três camadas de DEC-007 (detalhes em DEC-016, DEC-020, DEC-021 e DEC-022). O estado de verificação de cada critério está em TODO.md; nada aqui é VERIFIED por estar escrito. O código em `spikes/` continua descartável e não conta como módulo do Buzzy.
 
 | Projeto ou pasta | Camada | O que existe |
 |---|---|---|
-| `src/Buzzy.Core` | núcleo puro (`net10.0`, sem WPF nem Windows) | Geometria em pixels físicos e DIPs; `Topologia` (monitores, principal, impressão digital, monitor que contém um ponto, monitor mais próximo, prender na área útil); `Posicionador` (âncora no centro da base, posição inicial, reacomodação pela posição relativa quando a topologia muda). |
+| `src/Buzzy.Core` | núcleo puro (`net10.0`, sem WPF nem Windows) | Geometria em pixels físicos e DIPs; `Topologia` (monitores, principal, impressão digital, monitor que contém um ponto, monitor mais próximo, prender na área útil); `Posicionador` (âncora no centro da base, posição inicial, reacomodação pela posição relativa quando a topologia muda). `Personagem/` (Fase 2): máquina de estados da seção 2.6 como função pura de (estado, evento) para (estado, efeitos), fila com prioridade, agenda autônoma com semente, perfis de energia, retrato e gravação/reprodução de sequências. `Personagem/Movimento.cs` (Fase 4): superfícies do monitor da âncora (seção 2.5) e parâmetros da física de passo fixo (seção 2.9), aplicada pela máquina de estados. `Entrada/` (Fase 3): árbitro de gestos da seção 2.7. |
 | `src/Buzzy.App/Plataforma` | adaptador de plataforma | Único arquivo com importações do Windows (`Win32.cs`); leitura da topologia; janela de serviço oculta que recebe as mensagens de topologia, bandeja e `TaskbarCreated`; bandeja v4; menu nativo; instância única; log de diagnóstico opcional. |
-| `src/Buzzy.App/Apresentacao` | apresentação | Janela WPF do personagem (sem borda, `AllowsTransparency`, não ativa, janela de ferramenta, sempre no topo, do tamanho do sprite; responde `MA_NOACTIVATE` e `WM_GETDPISCALEDSIZE`) e o sprite provisório gerado em código. |
-| `src/Buzzy.App/Composicao` | raiz de composição | `Aplicacao` liga janela, serviço, bandeja, menu e topologia. O único timer é de disparo único, para agrupar mudanças de topologia; não há timer periódico. |
+| `src/Buzzy.App/Apresentacao` | apresentação e adaptador do ponteiro | Janela WPF do personagem (sem borda, `AllowsTransparency`, não ativa, janela de ferramenta, sempre no topo, do tamanho do sprite; responde `MA_NOACTIVATE` e `WM_GETDPISCALEDSIZE`) e o sprite provisório gerado em código. Converte as mensagens de mouse entregues a ela em eventos de ponteiro em pixels físicos e segura a captura do mouse só durante um gesto começado no personagem (Fase 3). Escolhe a pose provisória da pixel art pelo retrato (`PoseDoPersonagem`, Fase 4) e a renderiza uma vez por pose, espelho, expressão e DPI. |
+| `src/Buzzy.App/Composicao` | raiz de composição | `Aplicacao` liga janela, serviço, bandeja, menu, topologia, arbitragem e núcleo, e executa os efeitos do núcleo. Em repouso, só há timers de disparo único: agrupamento de topologia, novas tentativas da bandeja e a próxima decisão da agenda autônoma. O relógio de passo fixo só corre quando o núcleo pede (reação, pouso, gesto curto e movimento). Enquanto corre, segue os quadros do compositor do WPF (`CompositionTarget.Rendering`): aplica num lote os passos acumulados e move a janela uma vez por quadro. O arraste não usa relógio. |
 | `src/Buzzy.Visual` | apresentação, a partir da Fase 6 | Gerador da identidade em pixel art (`Pixel/`, DEC-018) e o renderizador vetorial da direção anterior, arquivada (DEC-017); ainda não é usado pelo app. |
 
-Fluxo implementado: o Windows avisa a janela de serviço; a raiz agrupa as mensagens e pede a leitura ao adaptador; o núcleo calcula a nova posição; a raiz move a janela em pixels físicos. Máquina de estados, arbitragem de input, movimento e persistência ainda não existem (Fases 2 a 5).
+Fluxo implementado:
+
+- **Topologia:** o Windows avisa a janela de serviço; a raiz agrupa as mensagens e lê a topologia; o núcleo revalida a posição. Se a janela tiver saído do lugar do núcleo, a raiz reaplica esse lugar.
+- **Mouse:** a janela do personagem converte o mouse em eventos de ponteiro; a arbitragem produz gestos e diz se a captura continua; o núcleo aplica os gestos e devolve os efeitos.
+- **Efeitos:** a raiz executa os efeitos do núcleo (mover, mostrar, esconder, relógio, agenda, menu adiado para fora do processamento, soltar a captura), no mesmo tratamento da mensagem.
+
+Travessia entre monitores (Fase 5), persistência (Fases 5 e 8), animação (Fase 6), painel de energia e tela cheia (Fase 8) ainda não existem. O núcleo já tem as regras da tabela para eles; o app só liga cada capacidade quando a fase dela chega. Na Fase 4, o app liga todas as ações autônomas, a queda física e o movimento.
 
 ## 2. Arquitetura planejada
 
@@ -96,6 +102,15 @@ Proposta para o MVP: as superfícies são derivadas apenas das áreas úteis dos
 - O chão de um monitor continua sólido mesmo com outro monitor logo abaixo. A travessia para baixo só ocorre por um caminho apoiado ou por salto dentro do alcance; nunca por queda espontânea causada apenas por um monitor estar abaixo.
 - As superfícies são recalculadas a cada `TOPOLOGY_CHANGED`.
 
+**Implementado na Fase 4 (DEC-022), num monitor.** `Superficies.Do` calcula, para o monitor da âncora e o tamanho do sprite nele:
+
+- chão: a base da área útil;
+- teto: o topo da área útil mais a altura do sprite, para a borda superior;
+- limites laterais da âncora: o sprite inteiro fica dentro da área útil;
+- se cada lateral é parede ou passagem: é passagem quando outro monitor encosta nela com sobreposição vertical.
+
+As superfícies são recalculadas a cada passo, a partir da topologia em cache. Uma passagem ainda não é atravessada, porque a travessia é da Fase 5: o personagem dá meia-volta ali, e a agenda só escolhe escalar se houver parede no monitor.
+
 ### 2.6 Máquina de estados
 
 STATUS: PLANNED. Estado de comportamento e expressão são dimensões independentes. Uma troca de expressão nunca muda o estado de comportamento.
@@ -117,7 +132,7 @@ STATUS: PLANNED. Estado de comportamento e expressão são dimensões independen
 | `DRAGGING` | usuário | Personagem preso ao cursor. |
 | `SETTLING` | usuário | Validação logo depois de soltar ou depois de uma mudança de topologia. |
 | `REACTING` | usuário | Reação curta a um clique. |
-| `HIDDEN` | sistema | Escondido. Sem relógio, sem desenho. Guarda **por que** foi escondido: `POR_USUARIO`, `POR_SESSAO` ou `POR_SUSPENSAO`. |
+| `HIDDEN` | sistema | Escondido. Sem relógio, sem desenho. Guarda **por que** foi escondido: `POR_USUARIO`, `POR_SESSAO`, `POR_SUSPENSAO` ou `POR_TELA_CHEIA`. |
 | `EXITING` | sistema | Grava estado e encerra. |
 
 **Dimensões ortogonais.** As informações abaixo acompanham o personagem sem fazer parte do estado de comportamento:
@@ -128,9 +143,9 @@ STATUS: PLANNED. Estado de comportamento e expressão são dimensões independen
 | Gesto curto | nenhum, espiar, olhar ao redor, coçar-se, espreguiçar-se, brincar e demais definidos no manifesto | Ação visual de macaquinho com duração limitada, executada na superfície atual (`IDLE`, `CLIMBING` parado ou `HANGING`); não muda estado de comportamento, posição nem superfície; qualquer `PRESS`, `CMD_*` ou evento do sistema a encerra na hora |
 | Autonomia pausada | sim ou não | Definida por `CMD_PAUSE_AUTONOMY`/`CMD_RESUME_AUTONOMY`. Enquanto sim, nenhum `AUTONOMY_TIMER` é agendado; queda ou pouso em curso terminam; arraste, clique, painel, ocultação e modo de tela cheia continuam funcionando |
 | Painel de energia | aberto ou fechado | Enquanto aberto, pausa a autonomia; o movimento físico em curso pode terminar. Arrastar o mascote fecha o painel. Ele contém somente o seletor Baixa/Média/Alta, sem conversa ou campo de texto. |
-| Motivo do ocultamento | `POR_USUARIO`, `POR_SESSAO`, `POR_SUSPENSAO`, `POR_TELA_CHEIA` | Decide quais eventos podem tirar o personagem de `HIDDEN`; tela cheia não desfaz uma ocultação feita pelo usuário |
+| Motivo do ocultamento | `POR_USUARIO`, `POR_SESSAO`, `POR_SUSPENSAO`, `POR_TELA_CHEIA` | Decide quais eventos podem tirar o personagem de `HIDDEN`; tela cheia não desfaz uma ocultação feita pelo usuário. Precedência (DEC-020): `POR_USUARIO` > `POR_SESSAO` > `POR_SUSPENSAO` > `POR_TELA_CHEIA`; em `HIDDEN`, um motivo só substitui outro de precedência menor |
 | Nível de energia | `BAIXA`, `MEDIA`, `ALTA` | Altera frequência e duração das ações autônomas e a frequência de expressões; padrão `MEDIA` |
-| Retorno temporário do modo de tela cheia | posição e chave do monitor apenas em memória, ou vazio | Restaura a posição prévia sem substituir a posição persistida escolhida pelo usuário. É descartado quando o usuário arrasta o personagem ou o mostra manualmente durante o modo: a escolha manual passa a valer |
+| Retorno temporário do modo de tela cheia | posição e chave do monitor apenas em memória, ou vazio | Restaura a posição prévia sem substituir a posição persistida escolhida pelo usuário. É descartado quando o usuário arrasta o personagem ou o mostra manualmente durante o modo: a escolha manual passa a valer. A posição gravada ao esconder ou sair é sempre o retorno, se houver, e nunca a posição temporária (DEC-020) |
 
 **Eventos**
 
@@ -149,10 +164,10 @@ STATUS: PLANNED. Estado de comportamento e expressão são dimensões independen
 
 | De | Evento | Para | Regra |
 |---|---|---|---|
-| `BOOTING` | configurações e topologia carregadas | `SETTLING` | Posição restaurada pela seção 2.8. |
+| `BOOTING` | configurações e topologia carregadas | `SETTLING` | Posição restaurada pela seção 2.8. Só a primeira carga vale; pedidos anteriores a ela (mostrar, esconder, sessão, topologia) ficam guardados e o personagem só aparece com a carga. Se o monitor restaurado estiver ocupado pela tela cheia (monitores em cache), aplica-se a linha de `FULLSCREEN_TARGETS_CHANGED` (DEC-020). |
 | qualquer autônomo ou físico | `PRESS` sobre pixel opaco | `PRESSED` | Movimento autônomo congela no quadro atual. Vale também no meio de um pulo ou queda. |
 | `PRESSED` | `DRAG_START` | `DRAGGING` | Plano autônomo descartado. |
-| `PRESSED` | `CLICK` | `REACTING` | Reação curta. Depois, `SETTLING` decide o próximo estado. |
+| `PRESSED` | `CLICK` | `REACTING` | Reação curta. Depois, `SETTLING` decide o próximo estado. Se o monitor do personagem mudou ou sumiu enquanto o botão estava pressionado, a posição é validada já no `CLICK` (DEC-020). |
 | `DRAGGING` | `DRAG_MOVE(p)` | `DRAGGING` | Posição = cursor menos o deslocamento da pegada. |
 | `DRAGGING` | `DRAG_END` ou `DRAG_CANCEL` | `SETTLING` | Validação da seção 2.7. |
 | `SETTLING` | com apoio | `IDLE` | Autonomia retomada depois de um intervalo de acomodação, exceto se o painel de energia estiver aberto. |
@@ -168,25 +183,30 @@ STATUS: PLANNED. Estado de comportamento e expressão são dimensões independen
 | `HANGING` | deslocamento autônomo, `AUTONOMY_TIMER` ou passagem compatível | `HANGING`, `CLIMBING`, `JUMPING` ou `FALLING` | Move-se apenas ao longo de uma borda alcançável; soltar-se leva a `FALLING`. |
 | `RESTING` | `AUTONOMY_TIMER` | `IDLE` | Acorda e volta a decidir. O relógio só é religado neste momento. |
 | qualquer estado visível, exceto `PRESSED`, `DRAGGING` e `EXITING` | `FULLSCREEN_TARGETS_CHANGED(monitoresOcupados)` | `SETTLING` no monitor livre, `HIDDEN(POR_TELA_CHEIA)` ou estado atual | Uma vez por mudança e só se a âncora estiver num monitor ocupado: transfere instantaneamente para um monitor livre sem ativar a janela; se todos estiverem ocupados, fecha o painel e oculta. Guarda a posição anterior só em memória, se ainda não houver uma guardada. |
-| `PRESSED`, `DRAGGING` | `FULLSCREEN_TARGETS_CHANGED` | sem troca de estado | Só atualiza os monitores ocupados em cache. O gesto do usuário nunca é interrompido; ao soltar, `SETTLING` respeita o ponto escolhido pelo usuário, mesmo que seja um monitor ocupado, e descarta o retorno temporário. |
+| `PRESSED`, `DRAGGING` | `FULLSCREEN_TARGETS_CHANGED` | sem troca de estado | Só atualiza os monitores ocupados em cache. O gesto do usuário nunca é interrompido; ao soltar, `SETTLING` respeita o ponto escolhido pelo usuário, mesmo que seja um monitor ocupado, e descarta o retorno temporário. Um arraste (`DRAG_END` ou `DRAG_CANCEL` em `DRAGGING`) sempre descarta o retorno; um clique, clique duplo ou cancelamento em `PRESSED` só o descarta se a tela cheia mudou durante o gesto (DEC-020). |
 | `HIDDEN(POR_TELA_CHEIA)` | `FULLSCREEN_TARGETS_CHANGED` com monitor livre | `SETTLING` | Reaparece no monitor livre; mantém o retorno temporário. |
 | visível ou `HIDDEN(POR_TELA_CHEIA)` com retorno temporário guardado | `FULLSCREEN_TARGETS_CHANGED(vazio)` | `SETTLING` | Restaura a posição anterior validada pela seção 2.8 e limpa o retorno temporário. Se o retorno foi descartado por ação manual, o personagem fica onde o usuário o deixou. |
 | `HIDDEN(POR_TELA_CHEIA)` | `CMD_SHOW` | `SETTLING` | O usuário pediu: aparece na posição anterior validada, descarta o retorno temporário e o modo não o oculta de novo até a próxima mudança de tela cheia. |
-| `HIDDEN(POR_TELA_CHEIA)` | `CMD_HIDE` | `HIDDEN(POR_USUARIO)` | A ocultação passa a ser do usuário; o fim da tela cheia não o faz reaparecer. |
+| `HIDDEN(POR_TELA_CHEIA)` | `CMD_HIDE` | `HIDDEN(POR_USUARIO)` | A ocultação passa a ser do usuário; o fim da tela cheia não o faz reaparecer. O retorno temporário vira a posição do personagem e é descartado (vale também para `SESSION_LOCKED` e `SUSPENDING`, que substituem `POR_TELA_CHEIA` pela precedência; DEC-020). |
+| `HIDDEN` por outro motivo, com retorno temporário guardado | `FULLSCREEN_TARGETS_CHANGED(vazio)` | sem troca de estado | O episódio de tela cheia acabou com o personagem escondido pelo usuário, pela sessão ou pela suspensão: ele não reaparece, a posição de antes da tela cheia volta a valer e o retorno é descartado (DEC-020). |
+| `HIDDEN` por outro motivo, durante um episódio de tela cheia | `CMD_SHOW` | `SETTLING` | Escolha manual: reaparece onde estava e o retorno temporário é descartado; o fim da tela cheia não o move mais (invariante 14; DEC-020). |
+| qualquer, com retorno temporário guardado | `SETTINGS_CHANGED` que desliga o modo de tela cheia | `SETTLING`, sem troca de estado ou fim do gesto | Desligar o modo desfaz o efeito temporário (Q-09):<br>• visível ou `HIDDEN(POR_TELA_CHEIA)`: o personagem volta à posição anterior validada;<br>• escondido por outro motivo: não reaparece, mas a posição anterior volta a valer;<br>• `PRESSED` e `DRAGGING`: o gesto não é interrompido. Um arraste escolhe a posição; um clique, clique duplo ou cancelamento em `PRESSED` leva de volta à posição anterior; esconder no meio do gesto grava e guarda a posição anterior.<br>Com o modo desligado, o retorno não sobra fora de um gesto (DEC-020). |
 | qualquer estado visível | `CMD_PAUSE_AUTONOMY`, `CMD_RESUME_AUTONOMY` | permanece | Liga ou desliga a dimensão "autonomia pausada"; retomar agenda a próxima decisão após o intervalo de acomodação. |
 | `RESTING`, `CLIMBING` | `PRESS`, `DOUBLE_CLICK`, `CMD_*` | conforme a linha correspondente | Nenhum estado autônomo bloqueia interação do usuário (DEC-004). |
 | `JUMPING`, `FALLING` | contato com o chão | `LANDING`, depois `IDLE` | Vale com o painel aberto ou fechado; o painel não altera a física. |
 | estados autônomos, físicos e `REACTING` | `TOPOLOGY_CHANGED` | `SETTLING` | Revalida a posição. |
 | `PRESSED`, `DRAGGING` | `TOPOLOGY_CHANGED` | sem troca de estado | Só atualiza a topologia em cache; a validação acontece ao soltar. |
 | `BOOTING`, `HIDDEN`, `EXITING` | `TOPOLOGY_CHANGED` | sem troca de estado | Só atualiza a topologia em cache. `HIDDEN` valida ao reaparecer; `BOOTING` valida ao terminar de carregar. |
-| qualquer, exceto `EXITING` | `CMD_HIDE` | `HIDDEN(POR_USUARIO)` | Fecha o painel, encerra captura e arraste, grava a posição. |
-| qualquer, exceto `EXITING` | `SESSION_LOCKED` | `HIDDEN(POR_SESSAO)` | Idem. Se já estava em `HIDDEN(POR_USUARIO)`, o motivo do usuário é preservado. |
-| qualquer, exceto `EXITING` | `SUSPENDING` | `HIDDEN(POR_SUSPENSAO)` | Idem, com a mesma preservação. |
+| qualquer, exceto `EXITING` | `CMD_HIDE` | `HIDDEN(POR_USUARIO)` | Fecha o painel, encerra captura e arraste, grava a posição escolhida pelo usuário (o retorno temporário, se houver; DEC-020). |
+| qualquer, exceto `EXITING` | `SESSION_LOCKED` | `HIDDEN(POR_SESSAO)` | Idem. Em `HIDDEN`, segue a precedência dos motivos: o motivo do usuário é preservado, e o da sessão substitui a suspensão e a tela cheia. |
+| qualquer, exceto `EXITING` | `SUSPENDING` | `HIDDEN(POR_SUSPENSAO)` | Idem, com a mesma precedência: preserva o usuário e a sessão bloqueada (com a sessão bloqueada, `RESUMED` não mostra o personagem) e substitui a tela cheia. |
 | `HIDDEN(POR_USUARIO)` | `CMD_SHOW` | `SETTLING` | Só o usuário desfaz o que o usuário pediu. |
-| `HIDDEN(POR_SESSAO)` | `SESSION_UNLOCKED` ou `CMD_SHOW` | `SETTLING` | Revalida a posição contra a topologia atual. |
-| `HIDDEN(POR_SUSPENSAO)` | `RESUMED` ou `CMD_SHOW` | `SETTLING` | Idem. |
+| `HIDDEN(POR_SESSAO)` | `SESSION_UNLOCKED` ou `CMD_SHOW` | `SETTLING` | Revalida a posição contra a topologia atual. No `SESSION_UNLOCKED`, se o monitor em que ele reaparece estiver ocupado pela tela cheia (monitores em cache), aplica-se a linha de `FULLSCREEN_TARGETS_CHANGED`; o `CMD_SHOW` é escolha do usuário e não a reaplica (DEC-020). |
+| `HIDDEN(POR_SUSPENSAO)` | `RESUMED` ou `CMD_SHOW` | `SETTLING` | Idem, com `RESUMED` no lugar de `SESSION_UNLOCKED`. |
 | `HIDDEN(POR_USUARIO)` | `SESSION_UNLOCKED`, `RESUMED` | `HIDDEN(POR_USUARIO)` | O personagem **não** reaparece: um evento do sistema não desfaz uma ação direta do usuário. |
-| qualquer | `CMD_EXIT`, `SESSION_ENDING` | `EXITING` | Grava configurações e encerra. |
+| qualquer | `CMD_EXIT`, `SESSION_ENDING` | `EXITING` | Grava configurações e a posição escolhida pelo usuário (o retorno temporário, se houver) e encerra. |
+
+Toda decisão autônoma agendada respeita o intervalo de acomodação, em qualquer estado que decide (DEC-020).
 
 **Invariantes, verificáveis por teste automático**
 
@@ -205,10 +225,12 @@ STATUS: PLANNED. Estado de comportamento e expressão são dimensões independen
 13. O adaptador nunca envia identidade ou conteúdo de outra janela ao núcleo; o modo de tela cheia recebe apenas os monitores cobertos pela janela ativa.
 14. Em `PRESSED` e `DRAGGING`, `FULLSCREEN_TARGETS_CHANGED` não muda estado nem posição. Depois de um arraste ou de `CMD_SHOW` manual durante o modo de tela cheia, o fim da tela cheia não move o personagem.
 15. Um gesto curto nunca muda estado de comportamento, posição ou superfície, e termina ao chegar qualquer evento de prioridade maior.
+16. A posição gravada (`GravarPosicao`) nunca é a posição temporária do modo de tela cheia (DEC-020).
+17. Todo `AgendarDecisao` tem atraso maior ou igual ao intervalo de acomodação (DEC-020).
 
 ### 2.7 Arbitragem de input, clique, arraste e painel de energia
 
-STATUS: PLANNED. Desenho aceito sob delegação do usuário em DEC-009; P3 valida a janela do personagem antes da Fase 1. P4 foi retirado porque o produto não terá chat, conversa nem entrada de texto.
+STATUS: PLANNED. Desenho aceito sob delegação do usuário em DEC-009; P3 validou a janela do personagem antes da Fase 1. P4 foi retirado porque o produto não terá chat, conversa nem entrada de texto. A arbitragem e o ciclo de arraste foram implementados na Fase 3 (`src/Buzzy.Core/Entrada/ArbitroDeGestos.cs`, adaptador em `JanelaPersonagem.cs`; detalhes de implementação em DEC-021); o estado de verificação de cada critério está em TODO.md.
 
 **Quem recebe o input**
 
@@ -226,11 +248,19 @@ STATUS: PLANNED. Desenho aceito sob delegação do usuário em DEC-009; P3 valid
 5. Botão direito solto sobre o personagem gera `CONTEXT_MENU`.
 6. `CAPTURE_LOST` durante o arraste, por Alt+Tab, janela de UAC ou outra captura, gera `DRAG_CANCEL`. O personagem fica onde estava e passa pela validação normal. Ele não volta ao ponto de origem.
 
+Regras concretas implementadas na Fase 3 (DEC-021):
+
+- O limiar vale para cada lado do ponto de pressão: o gesto vira arraste quando o cursor anda mais que `SM_CXDRAG` na horizontal ou mais que `SM_CYDRAG` na vertical. As métricas vêm do DPI atual da janela do personagem, que é o do monitor em que ele foi pressionado.
+- O clique duplo segue a regra do sistema. O segundo botão pressionado precisa chegar antes do tempo de clique duplo, contado desde o primeiro pressionar. A distância precisa ser menor que a metade inteira do retângulo de clique duplo, nas métricas do primeiro clique. Um terceiro clique rápido começa uma sequência nova, e um arraste interrompe a sequência.
+- Soltar fora do retângulo sem nenhum movimento intermediário (gesto muito rápido) gera `DRAG_START` e `DRAG_END` no ponto solto.
+- Nada fica preso ao cursor. Três situações encerram o gesto com `DRAG_CANCEL`: um movimento sem o botão esquerdo logicamente pressionado (`MK_LBUTTON`), um novo botão pressionado sem o soltar anterior e `WM_CANCELMODE`. Com o ClickLock ligado, o Windows mantém o botão logicamente pressionado, e o gesto segue até o clique de liberação.
+- O botão direito só abre o menu fora de um gesto do botão esquerdo. O laço modal do menu roda depois do processamento do núcleo, nunca dentro dele.
+
 **Ciclo de arraste**
 
 1. `PRESS` leva a `PRESSED` e o movimento autônomo congela.
 2. `DRAG_START` leva a `DRAGGING`: o plano autônomo é descartado, pulo, queda e escalada são interrompidos e a agenda autônoma é suspensa.
-3. A cada `DRAG_MOVE`, a janela vai para cursor menos o deslocamento da pegada. Movimentos são agrupados por quadro, sempre com a posição mais recente. Não há física nem suavização durante o arraste.
+3. A cada `DRAG_MOVE`, a janela vai para cursor menos o deslocamento da pegada. O próprio Windows agrupa os movimentos pendentes na fila, sempre com a posição mais recente; cada movimento vira posição da janela no mesmo tratamento da mensagem (latência M5 registrada pelo app em modo de diagnóstico). Não há física nem suavização durante o arraste.
 4. `DRAG_END` leva a `SETTLING`. A validação calcula a âncora, escolhe o monitor que contém a âncora ou o mais próximo e prende a âncora na área útil desse monitor.
 5. O personagem identifica a superfície sob os pés. Com apoio, vai para `IDLE`. Sem apoio, vai para `FALLING` até o chão do monitor. Soltar o personagem junto a uma parede não inicia escalada.
 6. Depois de um intervalo de acomodação, a agenda autônoma volta a funcionar.
@@ -285,6 +315,18 @@ STATUS: PLANNED. O modelo físico detalhado segue as superfícies escolhidas em 
 - **Saltar:** trajetória balística calculada para atingir um alvo. O alvo e a velocidade inicial são determinísticos, dada a semente.
 - **Cair:** gravidade com velocidade máxima até tocar o chão.
 - Velocidades e gravidade são definidas em DIPs por segundo e convertidas pela escala do monitor atual.
+
+**Implementado na Fase 4 (DEC-022), num monitor:**
+
+- **Passo fixo:** confirmado em 1/60 s (`ConfiguracaoDoNucleo.PassosPorSegundo`).
+- **Estado:** o núcleo guarda a posição fina da âncora e a velocidade em pixels físicos (`EstadoDoMovimento`). A janela recebe a posição arredondada, e a posição relativa acompanha o movimento para sobreviver a uma mudança de topologia.
+- **Velocidades e gravidade** (`ParametrosDeMovimento`), as mesmas em todos os níveis de energia:
+  - caminhada 90 DIP/s, escalada 110 DIP/s, pendurado 80 DIP/s;
+  - gravidade 2200 DIP/s², queda máxima 1500 DIP/s;
+  - impulso ao saltar da parede: 220 DIP/s, com 40 DIP de altura.
+- **Pulo:** a velocidade inicial vem da altura do arco (`vy0 = −√(2gH)`), e a velocidade horizontal cobre a distância sorteada no tempo de voo. No ar, a área útil limita as laterais e o topo.
+- **Pausa ou painel aberto:** o movimento em curso termina num lugar estável. A caminhada para, a escalada desce, quem está pendurado se solta, e pulo, queda e pouso terminam.
+- **Energia:** distâncias, alturas, tempos na parede e tempos pendurado são faixas dos perfis de energia (seção 2.11).
 
 ### 2.10 Apresentação, assets e expressões
 
@@ -377,6 +419,13 @@ Cada linha liga uma decisão das seções anteriores ao mecanismo que a realiza.
 
 WPF apresenta o sprite numa janela layered. O projeto não pressupõe que o framework seja barato em repouso: a aplicação deve suspender `CompositionTarget.Rendering`, animações e timers periódicos quando nada muda, e reativá-los apenas durante movimento, animação ou arraste. P2 mede CPU, memória, GPU e acordadas em repouso e em duas taxas de animação. Otimizações de desenho só são escolhidas com dados, na Fase 6.
 
+**Implementado na Fase 4 (DEC-022):**
+
+- **Inscrição:** a raiz só se inscreve em `CompositionTarget.Rendering` enquanto o núcleo pede o relógio (`LigarRelogio`) e cancela a inscrição no `DesligarRelogio`. Em repouso, inclusive em `RESTING`, não há inscrição.
+- **Lote por quadro:** a cada quadro, o tempo decorrido vira passos fixos, que entram num lote na fila do núcleo. Só o último `MoverJanela` do lote é aplicado, e o sprite é trocado só quando a pose muda.
+- **Atraso:** o acumulador recupera no máximo 250 ms; o excesso é descartado e registrado no log.
+- **Log de diagnóstico:** a posição só é registrada quando o personagem para, fora do movimento e do arraste.
+
 #### 2.13.5 Limites que os protótipos precisam esclarecer
 
 - P1 confirma o clique por pixel em janela WPF e define regra de alfa para os assets.
@@ -423,3 +472,7 @@ As escolhas do usuário e as pendências ainda abertas estão numeradas (Q-01 em
 | 2026-09-28 | Revisão documental de coerência (Claude): prioridade alinhada ao PRODUCT_SPEC; dimensões "gesto curto" e "autonomia pausada"; `DOUBLE_CLICK` a partir de `PRESSED`; modo de tela cheia não interrompe `PRESSED`/`DRAGGING`, e arraste ou `CMD_SHOW` manual descartam o retorno temporário; `CMD_SHOW`/`CMD_HIDE` em `HIDDEN(POR_TELA_CHEIA)`; `HANGING` no movimento; risco de frequência do evento de geometria levado a P7; invariantes 14 e 15. Tudo PLANNED. | DEC-004, DEC-013, DEC-014 |
 | 2026-09-29 | Fase 1 implementada nas três camadas de DEC-007 (seção 1); menu de contexto nativo com dono temporário no lugar do menu WPF; renderizador vetorial da identidade em `src/Buzzy.Visual` para a Fase 6. Verificação dos critérios em TODO.md. | DEC-016, DEC-017 |
 | 2026-09-29 | A pedido do usuário, a identidade passou a ser pixel art fiel às pranchas: quadro de 64 × 64 pixels mostrado em 128 DIP (ampliação inteira 2×/3×/4× em 100/150/200%), gerado por `src/Buzzy.Visual/Pixel/`. A direção vetorial foi arquivada. | DEC-018 |
+| 2026-09-30 | Fase 2 ligada e auditada: a máquina de estados do núcleo passou a comandar a janela pela raiz de composição. A auditoria independente esclareceu a tabela: precedência dos motivos de ocultamento; retorno temporário da tela cheia (nunca gravado, descartado por escolha manual, sem sobrar para o episódio seguinte); só a primeira carga vale; `CLICK` valida se o monitor mudou; intervalo de acomodação em todo agendamento. Invariantes 16 e 17. Na raiz: menu adiado para fora do processamento, teto do relógio e lugar da janela reafirmado na releitura da topologia. | DEC-020 |
+| 2026-09-30 | Fase 3: árbitro de gestos no núcleo puro (`Entrada/`) e captura do mouse no adaptador da janela do personagem, com as regras concretas da seção 2.7. | DEC-021 |
+| 2026-09-30 | Linha nova da tabela 2.6: desligar o modo de tela cheia desfaz o efeito temporário, inclusive no fim de um gesto que não escolheu posição. | DEC-020 |
+| 2026-09-30 | Fase 4: física de passo fixo no núcleo (andar, escalar, pendurar-se, pular, cair), superfícies do monitor da âncora, relógio pelos quadros do compositor e poses provisórias por estado (seções 2.5, 2.9 e 2.13.4). | DEC-022 |

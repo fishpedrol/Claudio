@@ -5,6 +5,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Buzzy.App.Plataforma;
 using Buzzy.Core;
+using Buzzy.Core.Entrada;
 
 namespace Buzzy.App.Apresentacao;
 
@@ -13,8 +14,11 @@ namespace Buzzy.App.Apresentacao;
 /// transparência por pixel (janela layered do WPF, confirmada em P1), sempre no topo, fora da
 /// barra de tarefas e do Alt+Tab (Q-03) e que NÃO ativa ao ser clicada (DEC-009, P3).
 ///
-/// Na Fase 1 ela não se move sozinha nem é arrastada: só mostra o sprite, reage ao botão
-/// direito abrindo o menu e avisa quando o DPI muda ou quando o Windows tenta minimizá-la.
+/// Adaptador do ponteiro (Fase 3): converte as mensagens de mouse que o Windows entrega a esta
+/// janela em eventos de ponteiro do núcleo, em pixels físicos do desktop virtual, e segura a
+/// captura do mouse só enquanto a raiz de composição pede (um gesto começado no personagem).
+/// O Windows só entrega aqui cliques em pixels com alfa diferente de 0; fora de um gesto, nada
+/// do mouse de outros aplicativos chega (SECURITY.md 3.1).
 /// </summary>
 internal sealed class JanelaPersonagem : Window
 {
@@ -25,6 +29,13 @@ internal sealed class JanelaPersonagem : Window
         VerticalAlignment = VerticalAlignment.Top,
         SnapsToDevicePixels = true,
     };
+
+    private bool _capturando;
+
+    // Verdadeiro só durante o ReleaseCapture pedido pela raiz. ReleaseCapture manda
+    // WM_CAPTURECHANGED de forma síncrona; sem esta marca, o fim normal do gesto pareceria uma
+    // captura perdida (a mesma lição do protótipo P3).
+    private bool _soltandoPorNos;
 
     internal JanelaPersonagem()
     {
@@ -60,14 +71,17 @@ internal sealed class JanelaPersonagem : Window
 
     internal nint Hwnd { get; private set; }
 
-    /// <summary>Botão direito solto sobre o personagem, com o ponto em coordenadas de tela.</summary>
-    internal event Action<PontoPx>? MenuSolicitado;
+    /// <summary>Evento de ponteiro já normalizado (pixels físicos, relógio monotônico em ms).</summary>
+    internal event Action<EventoDePonteiro>? Ponteiro;
 
     /// <summary>O Windows mudou o DPI da janela (troca de escala ou de monitor).</summary>
     internal event Action<int>? DpiMudou;
 
     /// <summary>O Windows tentou minimizar a janela (Q-03: minimizar esconde).</summary>
     internal event Action? Minimizada;
+
+    /// <summary>Se a janela está com a captura do mouse de um gesto em curso.</summary>
+    internal bool Capturando => _capturando;
 
     protected override void OnSourceInitialized(EventArgs e)
     {
@@ -89,12 +103,40 @@ internal sealed class JanelaPersonagem : Window
     internal void AplicarRetangulo(RetanguloPx r)
         => Win32.SetWindowPos(Hwnd, 0, r.Esquerda, r.Topo, r.Largura, r.Altura, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
 
+    /// <summary>Onde a janela está de fato, em pixels físicos; nulo se o Windows não informar.</summary>
+    internal RetanguloPx? RetanguloReal()
+        => Hwnd != 0 && Win32.GetWindowRect(Hwnd, out Win32.RECT r) ? new RetanguloPx(r.Left, r.Top, r.Right, r.Bottom) : null;
+
     /// <summary>
     /// Recoloca a janela no topo do grupo "sempre no topo", uma vez, sem ativar. Só é chamado
     /// por ação explícita do usuário (mostrar), nunca por timer (SECURITY.md 2).
     /// </summary>
     internal void ReafirmarTopo()
         => Win32.SetWindowPos(Hwnd, Win32.HWND_TOPMOST, 0, 0, 0, 0, Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
+
+    /// <summary>Captura o mouse para o gesto em curso (ARCHITECTURE.md 2.7, passo 1 do ciclo de arraste).</summary>
+    internal void Capturar()
+    {
+        if (_capturando || Hwnd == 0) return;
+        Win32.SetCapture(Hwnd);
+        _capturando = true;
+    }
+
+    /// <summary>Solta a captura do gesto, sem que isso conte como captura perdida.</summary>
+    internal void SoltarCaptura()
+    {
+        if (!_capturando) return;
+        _capturando = false;
+        _soltandoPorNos = true;
+        try
+        {
+            Win32.ReleaseCapture();
+        }
+        finally
+        {
+            _soltandoPorNos = false;
+        }
+    }
 
     private nint Gancho(nint hwnd, int msg, nint wParam, nint lParam, ref bool tratado)
     {
@@ -121,26 +163,91 @@ internal sealed class JanelaPersonagem : Window
             }
 
             case Win32.WM_LBUTTONDOWN:
-                Diagnostico.Evento("CLIQUE", ("botao", "esquerdo"), ("cliente", $"{Win32.XComSinal(lParam)},{Win32.YComSinal(lParam)}"));
-                break;
+            case Win32.WM_LBUTTONDBLCLK:
+                // O segundo botão pressionado de um clique duplo pode chegar como WM_LBUTTONDBLCLK;
+                // quem decide o clique duplo é a arbitragem, pelas regras do sistema.
+                Diagnostico.Evento("CLIQUE", ("botao", "esquerdo"), ("cliente", Cliente(lParam)));
+                Ponteiro?.Invoke(new PonteiroPressionado(NaTela(hwnd, lParam), BotaoDoPonteiro.Esquerdo, Environment.TickCount64, Metricas()));
+                tratado = true;
+                return 0;
+
+            case Win32.WM_MOUSEMOVE:
+                // Fora de um gesto, passar o mouse sobre o personagem não interessa ao núcleo.
+                if (!_capturando) break;
+                Ponteiro?.Invoke(new PonteiroMovido(NaTela(hwnd, lParam), ((long)wParam & Win32.MK_LBUTTON) != 0, Environment.TickCount64));
+                tratado = true;
+                return 0;
+
+            case Win32.WM_LBUTTONUP:
+                Ponteiro?.Invoke(new PonteiroSolto(NaTela(hwnd, lParam), BotaoDoPonteiro.Esquerdo, Environment.TickCount64));
+                tratado = true;
+                return 0;
+
+            case Win32.WM_RBUTTONDOWN:
+                Ponteiro?.Invoke(new PonteiroPressionado(NaTela(hwnd, lParam), BotaoDoPonteiro.Direito, Environment.TickCount64, MetricasDeGesto.Padrao));
+                tratado = true;
+                return 0;
 
             case Win32.WM_RBUTTONUP:
-            {
-                var p = new Win32.POINT { X = Win32.XComSinal(lParam), Y = Win32.YComSinal(lParam) };
-                Diagnostico.Evento("CLIQUE", ("botao", "direito"), ("cliente", $"{p.X},{p.Y}"));
-                Win32.ClientToScreen(hwnd, ref p);
-                MenuSolicitado?.Invoke(new PontoPx(p.X, p.Y));
+                Diagnostico.Evento("CLIQUE", ("botao", "direito"), ("cliente", Cliente(lParam)));
+                Ponteiro?.Invoke(new PonteiroSolto(NaTela(hwnd, lParam), BotaoDoPonteiro.Direito, Environment.TickCount64));
                 tratado = true;
                 return 0;
-            }
 
             case Win32.WM_CONTEXTMENU:
-                // Já tratado no WM_RBUTTONUP; a janela nunca tem foco de teclado.
+                // O menu sai do botão direito solto, pela arbitragem; a janela nunca tem foco de teclado.
                 tratado = true;
                 return 0;
+
+            case Win32.WM_CANCELMODE:
+                // "Cancelar modos, como a captura do mouse": o DefWindowProc solta a captura em nome
+                // da janela. Feito aqui de forma explícita, para não depender do tratamento do WPF;
+                // o WM_CAPTURECHANGED que vem em seguida encerra o gesto como captura perdida.
+                if (_capturando) Win32.ReleaseCapture();
+                break;
+
+            case Win32.WM_CAPTURECHANGED:
+                // Ponto único de término de um gesto interrompido (ARCHITECTURE.md 2.13.3): Alt+Tab,
+                // tecla Windows, UAC ou outra janela ficou com o mouse. Só o fato é registrado,
+                // nunca qual janela é a nova dona (SECURITY.md 6).
+                if (_capturando && !_soltandoPorNos && lParam != hwnd)
+                {
+                    _capturando = false;
+                    Diagnostico.Evento("CAPTURA", ("perdida", "sim"));
+                    Ponteiro?.Invoke(new CapturaPerdida(Environment.TickCount64));
+                }
+                break;
         }
         return 0;
     }
+
+    /// <summary>
+    /// Métricas de gesto no DPI atual da janela, que é o do monitor em que o personagem foi
+    /// pressionado (ARCHITECTURE.md 2.7: retângulo de arraste "lido para o DPI do monitor").
+    /// </summary>
+    private MetricasDeGesto Metricas()
+    {
+        uint dpi = (uint)Math.Max(1, Math.Round(VisualTreeHelper.GetDpi(this).PixelsPerInchX));
+        return new MetricasDeGesto(
+            Win32.GetSystemMetricsForDpi(Win32.SM_CXDRAG, dpi),
+            Win32.GetSystemMetricsForDpi(Win32.SM_CYDRAG, dpi),
+            Win32.GetSystemMetricsForDpi(Win32.SM_CXDOUBLECLK, dpi),
+            Win32.GetSystemMetricsForDpi(Win32.SM_CYDOUBLECLK, dpi),
+            (int)Math.Min(Win32.GetDoubleClickTime(), int.MaxValue));
+    }
+
+    /// <summary>
+    /// Coordenadas da mensagem (cliente, com sinal) em pixels físicos do desktop virtual. A janela
+    /// só se move nesta mesma thread, então ela está onde estava quando a mensagem foi gerada.
+    /// </summary>
+    private static PontoPx NaTela(nint hwnd, nint lParam)
+    {
+        var p = new Win32.POINT { X = Win32.XComSinal(lParam), Y = Win32.YComSinal(lParam) };
+        Win32.ClientToScreen(hwnd, ref p);
+        return new PontoPx(p.X, p.Y);
+    }
+
+    private static string Cliente(nint lParam) => $"{Win32.XComSinal(lParam)},{Win32.YComSinal(lParam)}";
 
     private void AoMudarEstado(object? remetente, EventArgs e)
     {

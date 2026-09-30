@@ -16,6 +16,23 @@ internal sealed class Cenario
     /// <summary>Um ponto sobre o corpo do sprite, acima da âncora.</summary>
     public static readonly PontoPx PontoOpaco = new(1632, 1000);
 
+    /// <summary>
+    /// Três monitores 1920x1080 a 96 DPI em linha, com a barra de 48 px embaixo e o principal à
+    /// esquerda. Do monitor do meio, o da direita fica mais perto que o principal: os cenários que
+    /// distinguem "o monitor mais próximo" de "o principal" e de "o primeiro da lista" usam esta.
+    /// <code>
+    /// [ 1* ][ 2  ][ 3  ]
+    /// </code>
+    /// </summary>
+    public static Topologia TresEmLinha => new([
+        TopologiasDeExemplo.Principal(TopologiasDeExemplo.Display1, TopologiasDeExemplo.Ret(0, 0, 1920, 1080), TopologiasDeExemplo.Ret(0, 0, 1920, 1032), 96),
+        TopologiasDeExemplo.Secundario(TopologiasDeExemplo.Display2, TopologiasDeExemplo.Ret(1920, 0, 3840, 1080), TopologiasDeExemplo.Ret(1920, 0, 3840, 1032), 96),
+        TopologiasDeExemplo.Secundario(TopologiasDeExemplo.Display3, TopologiasDeExemplo.Ret(3840, 0, 5760, 1080), TopologiasDeExemplo.Ret(3840, 0, 5760, 1032), 96),
+    ]);
+
+    /// <summary><see cref="TresEmLinha"/> depois de desconectar o DISPLAY2: [ 1* ]      [ 3  ].</summary>
+    public static Topologia TresEmLinhaSemODoMeio => TopologiasDeExemplo.SemMonitor(TresEmLinha, TopologiasDeExemplo.Display2);
+
     public Cenario(ConfiguracaoDoNucleo? config = null, ulong semente = 7)
     {
         Config = config ?? new ConfiguracaoDoNucleo();

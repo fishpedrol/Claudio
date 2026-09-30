@@ -215,6 +215,20 @@ internal static class Nativo
     [DllImport("shell32.dll")]
     internal static extern int Shell_NotifyIconGetRect(ref NOTIFYICONIDENTIFIER identifier, out RECT iconLocation);
 
+    internal const uint SPI_GETMOUSECLICKLOCK = 0x101E;
+    internal const uint SPI_GETMOUSECLICKLOCKTIME = 0x2008;
+
+    /// <summary>
+    /// Só LEITURA de parâmetros do sistema (ClickLock ligado e seu tempo). A verificação nunca
+    /// grava configuração global do Windows (AGENTS.md).
+    /// </summary>
+    [DllImport("user32.dll", EntryPoint = "SystemParametersInfoW", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SystemParametersInfo(uint acao, uint parametro, out int valor, uint winIni);
+
+    /// <summary>Lê um parâmetro inteiro ou booleano do sistema; nulo se o Windows não informar.</summary>
+    internal static int? LerParametroDoSistema(uint acao) => SystemParametersInfo(acao, 0, out int valor, 0) ? valor : null;
+
     internal static nint Raiz(nint h) => h == 0 ? 0 : GetAncestor(h, GA_ROOT);
 
     internal static nint DonoDoPonto(int x, int y) => Raiz(WindowFromPoint(new POINT(x, y)));

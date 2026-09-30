@@ -46,6 +46,8 @@ internal sealed class PlataformaTestes
 
         Afirmar.Igual("&Esconder Buzzy", Textos.MenuEsconder);
         Afirmar.Igual("&Mostrar Buzzy", Textos.MenuMostrar);
+        Afirmar.Igual("&Pausar movimento", Textos.MenuPausar);
+        Afirmar.Igual("&Retomar movimento", Textos.MenuRetomar);
         Afirmar.Igual("&Sair", Textos.MenuSair);
         Afirmar.Igual("Buzzy", Textos.DicaDaBandeja);
     }
@@ -53,10 +55,17 @@ internal sealed class PlataformaTestes
     [Teste]
     public void TeclasDeAcessoDoMenuNaoSeRepetem()
     {
+        // O menu mostra um item de cada par (Esconder/Mostrar, Pausar/Retomar) mais Sair: as teclas
+        // de todas as combinações precisam ser diferentes.
         char Tecla(string t) => char.ToUpperInvariant(t[t.IndexOf('&', StringComparison.Ordinal) + 1]);
-        char esconder = Tecla(Textos.MenuEsconder), mostrar = Tecla(Textos.MenuMostrar), sair = Tecla(Textos.MenuSair);
-        Afirmar.Diferente(sair, esconder);
-        Afirmar.Diferente(sair, mostrar);
+        foreach (string visibilidade in new[] { Textos.MenuEsconder, Textos.MenuMostrar })
+        {
+            foreach (string movimento in new[] { Textos.MenuPausar, Textos.MenuRetomar })
+            {
+                char[] teclas = [Tecla(visibilidade), Tecla(movimento), Tecla(Textos.MenuSair)];
+                Afirmar.Igual(3, teclas.Distinct().Count(), $"teclas de acesso distintas em [{string.Join(", ", teclas)}]");
+            }
+        }
     }
 
     [Teste]

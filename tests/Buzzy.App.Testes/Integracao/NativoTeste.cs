@@ -21,7 +21,14 @@ internal static class NativoTeste
 
     internal const int WM_CLOSE = 0x0010;
     internal const int WM_SETTINGCHANGE = 0x001A;
+    internal const int WM_CANCELMODE = 0x001F;
     internal const int WM_DISPLAYCHANGE = 0x007E;
+    internal const int WM_MOUSEMOVE = 0x0200;
+    internal const int WM_LBUTTONDOWN = 0x0201;
+    internal const int WM_LBUTTONUP = 0x0202;
+    internal const int WM_RBUTTONDOWN = 0x0204;
+    internal const int WM_RBUTTONUP = 0x0205;
+    internal const int MK_LBUTTON = 0x0001;
     internal const int SPI_SETWORKAREA = 0x002F;
     internal const int SW_SHOWMINNOACTIVE = 7;
 
@@ -85,6 +92,15 @@ internal static class NativoTeste
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool ShowWindow(nint hWnd, int nCmdShow);
+
+    internal const uint SWP_NOSIZE = 0x0001;
+    internal const uint SWP_NOZORDER = 0x0004;
+    internal const uint SWP_NOACTIVATE = 0x0010;
+
+    /// <summary>Só para mover a janela do Buzzy aberto pelo próprio teste, "por fora" do núcleo.</summary>
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool SetWindowPos(nint hWnd, nint hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
 
     [DllImport("user32.dll", EntryPoint = "RegisterWindowMessageW", CharSet = CharSet.Unicode)]
     internal static extern int RegisterWindowMessage(string lpString);

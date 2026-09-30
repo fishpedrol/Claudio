@@ -10,8 +10,14 @@ namespace Buzzy.App;
 /// <summary>
 /// Ponto de entrada do Buzzy.
 ///
-/// Uso: <c>Buzzy.exe [--diagnostico]</c>. <c>--diagnostico</c> liga o log em
-/// <c>%LOCALAPPDATA%\Buzzy\diagnostico.log</c>; sem ele, o Buzzy não grava nada.
+/// Uso: <c>Buzzy.exe [--diagnostico] [--pausado] [--semente N]</c>.
+/// <list type="bullet">
+/// <item><c>--diagnostico</c> liga o log em <c>%LOCALAPPDATA%\Buzzy\diagnostico.log</c>; sem ele, o
+/// Buzzy não grava nada.</item>
+/// <item><c>--pausado</c> começa com o movimento autônomo pausado (o mesmo que "Pausar movimento" no
+/// menu); as verificações de tela usam para ter o personagem parado no lugar inicial.</item>
+/// <item><c>--semente N</c> fixa a semente da agenda autônoma, para reproduzir um comportamento.</item>
+/// </list>
 /// </summary>
 internal static class Programa
 {
@@ -20,6 +26,7 @@ internal static class Programa
     {
         if (argumentos.Contains("--diagnostico", StringComparer.Ordinal))
             Diagnostico.Ligar();
+        OpcoesDaAplicacao opcoes = LerOpcoes(argumentos);
 
         Diagnostico.Evento("INICIO",
             ("pid", Environment.ProcessId),
@@ -62,12 +69,28 @@ internal static class Programa
             }
 
             var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-            var aplicacao = new Aplicacao(app, instancia);
+            var aplicacao = new Aplicacao(app, instancia, opcoes);
             app.Startup += (_, _) => aplicacao.Iniciar();
             int codigo = app.Run();
 
             Diagnostico.Evento("FIM", ("codigo", codigo), ("pid", Environment.ProcessId));
             return codigo;
         }
+    }
+
+    /// <summary>Opções da linha de comando; um valor ilegível é ignorado e registrado no diagnóstico.</summary>
+    private static OpcoesDaAplicacao LerOpcoes(string[] argumentos)
+    {
+        bool pausado = argumentos.Contains("--pausado", StringComparer.Ordinal);
+        ulong? semente = null;
+        int i = Array.IndexOf(argumentos, "--semente");
+        if (i >= 0)
+        {
+            if (i + 1 < argumentos.Length && ulong.TryParse(argumentos[i + 1], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out ulong valor))
+                semente = valor;
+            else
+                Diagnostico.Evento("ARGUMENTO", ("ignorado", "--semente"), ("motivo", "falta um número inteiro sem sinal"));
+        }
+        return new OpcoesDaAplicacao(pausado, semente);
     }
 }

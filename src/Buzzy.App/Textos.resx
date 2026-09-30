@@ -24,6 +24,12 @@
     <value>&amp;Mostrar Buzzy</value>
     <comment>Item do menu que mostra o personagem escondido.</comment>
   </data>
+  <data name="MenuPausar" xml:space="preserve">
+    <value>&amp;Pausar movimento</value>
+  </data>
+  <data name="MenuRetomar" xml:space="preserve">
+    <value>&amp;Retomar movimento</value>
+  </data>
   <data name="MenuSair" xml:space="preserve">
     <value>&amp;Sair</value>
     <comment>Item do menu que encerra o Buzzy.</comment>

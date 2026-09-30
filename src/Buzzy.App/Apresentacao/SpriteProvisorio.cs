@@ -23,6 +23,9 @@ internal static class SpriteProvisorio
 
     private static readonly Lazy<Tela> Parado = new(() => BonecoPixel.Desenhar(PosesPixel.Todas.First(p => p.Nome == "parado")));
 
+    /// <summary>Quadros já renderizados por pose, espelho, expressão e DPI (só na thread da interface).</summary>
+    private static readonly Dictionary<(QuadroDoSprite Quadro, int Dpi), BitmapSource> Cache = [];
+
     /// <summary>
     /// Renderiza o sprite no DPI do monitor (tamanho físico = <see cref="TamanhoLogico"/> no DPI
     /// dado), com alfa só 0 ou 255. Congelado.
@@ -31,6 +34,23 @@ internal static class SpriteProvisorio
     {
         TamanhoPx tamanho = TamanhoLogico.ParaPixels(dpi);
         return Bitmap(Parado.Value, tamanho.Largura, tamanho.Altura, dpi);
+    }
+
+    /// <summary>
+    /// O quadro pedido (pose provisória da Fase 4) no DPI do monitor, renderizado uma vez e guardado.
+    /// Mesmo tamanho lógico em todas as poses: a janela e a âncora (centro da base) não mudam.
+    /// </summary>
+    internal static BitmapSource Renderizar(QuadroDoSprite quadro, int dpi)
+    {
+        if (Cache.TryGetValue((quadro, dpi), out BitmapSource? pronto)) return pronto;
+        PosePixel pose = PosesPixel.Todas.FirstOrDefault(p => p.Nome == quadro.Pose)
+            ?? throw new ArgumentException($"Pose desconhecida: {quadro.Pose}.", nameof(quadro));
+        Tela tela = BonecoPixel.Desenhar(pose, quadro.Expressao);
+        if (quadro.Espelhado) tela = tela.Espelhada();
+        TamanhoPx tamanho = TamanhoLogico.ParaPixels(dpi);
+        BitmapSource bmp = Bitmap(tela, tamanho.Largura, tamanho.Altura, dpi);
+        Cache[(quadro, dpi)] = bmp;
+        return bmp;
     }
 
     /// <summary>PNG do ícone da bandeja (cabeça desenhada em 16 × 16), ampliado sem suavização.</summary>

@@ -29,7 +29,7 @@ internal sealed record Sumario(int Ok, int NaoAplicavel, IReadOnlyList<string> S
 /// - FALHOU, INCONCLUSIVO (a condição do teste não se estabeleceu, por exemplo o dono do
 ///   ponto mudou antes do clique) e INVÁLIDA (interferência humana): contam como falha.
 /// </summary>
-internal sealed class Verificacao
+internal sealed partial class Verificacao
 {
     private const string Ok = "OK";
     private const string NaoAplicavel = "N/A";
@@ -77,6 +77,9 @@ internal sealed class Verificacao
     private int _dpiPrincipal;
     private bool _buzzyEncerrado;
     private bool _houveInterferencia;
+
+    /// <summary>Prefixo dos rótulos, para distinguir a regressão da Fase 1 dentro da verificação de outra fase.</summary>
+    private string _prefixo = "";
     private string _coberturaEsconderPelaBandeja = "não executado";
     private string _coberturaRestaurarPelaBandeja = "não executado";
 
@@ -217,6 +220,8 @@ internal sealed class Verificacao
 
         var psi = new ProcessStartInfo(_exeBuzzy) { UseShellExecute = false };
         psi.ArgumentList.Add("--diagnostico");
+        // A partir da Fase 4 o personagem anda sozinho: a verificação o quer parado no lugar inicial.
+        psi.ArgumentList.Add("--pausado");
         ExigirNenhumBuzzyAberto(); // repetida imediatamente antes de iniciar
         _buzzy = Process.Start(psi) ?? throw new FalhaDeVerificacao("Buzzy.exe não iniciou.");
         _inicioBuzzy = _buzzy.StartTime;
@@ -1033,8 +1038,8 @@ internal sealed class Verificacao
 
     private void Registrar(string criterio, string situacao, string detalhe)
     {
-        _resultados.Add(new Resultado(criterio, situacao, detalhe));
-        _rel.Linha($"   [{situacao}] {criterio}");
+        _resultados.Add(new Resultado(_prefixo + criterio, situacao, detalhe));
+        _rel.Linha($"   [{situacao}] {_prefixo}{criterio}");
         _rel.Linha($"          {detalhe}");
     }
 

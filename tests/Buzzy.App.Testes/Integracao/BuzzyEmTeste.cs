@@ -112,15 +112,20 @@ internal sealed class BuzzyEmTeste : IDisposable
 
     internal static long TamanhoDoLog() => File.Exists(ArquivoDeLog) ? new FileInfo(ArquivoDeLog).Length : 0;
 
-    /// <summary>Inicia um Buzzy.exe com <c>--diagnostico</c>, sem conferências (a segunda instância usa isto).</summary>
-    internal static Process IniciarProcesso()
+    /// <summary>
+    /// Inicia um Buzzy.exe com <c>--diagnostico</c>, sem conferências (a segunda instância usa isto).
+    /// Com <paramref name="pausado"/>, o movimento autônomo começa pausado: o personagem fica no
+    /// lugar inicial, como os testes de gesto e de janela esperam.
+    /// </summary>
+    internal static Process IniciarProcesso(bool pausado = true)
     {
         var psi = new ProcessStartInfo(Caminhos.ExeDoBuzzy()) { UseShellExecute = false };
         psi.ArgumentList.Add("--diagnostico");
+        if (pausado) psi.ArgumentList.Add("--pausado");
         return Process.Start(psi) ?? throw new InvalidOperationException("Buzzy.exe não iniciou.");
     }
 
-    internal static BuzzyEmTeste Iniciar()
+    internal static BuzzyEmTeste Iniciar(bool pausado = true)
     {
         ExigirTesteSemElevacao();
         string exe = Caminhos.ExeDoBuzzy();
@@ -131,7 +136,7 @@ internal sealed class BuzzyEmTeste : IDisposable
         // gravadas antes de o Process.Start voltar.
         long inicioDoLog = TamanhoDoLog();
         ExigirNenhumBuzzyAberto(); // repetida imediatamente antes de iniciar
-        var b = new BuzzyEmTeste(IniciarProcesso(), inicioDoLog);
+        var b = new BuzzyEmTeste(IniciarProcesso(pausado), inicioDoLog);
         try
         {
             b.Inicio = b.Processo.StartTime;
@@ -226,6 +231,34 @@ internal sealed class BuzzyEmTeste : IDisposable
     {
         NativoTeste.GetWindowRect(Janela, out NativoTeste.RECT r);
         return new RetanguloPx(r.Left, r.Top, r.Right, r.Bottom);
+    }
+
+    /// <summary>
+    /// Posta uma mensagem de mouse à janela do personagem deste Buzzy, com o ponto de tela
+    /// convertido para coordenadas de cliente pela posição ATUAL da janela (sem borda: o cliente é
+    /// a janela inteira). Não é input: nada passa pela fila de input do Windows nem por outro
+    /// aplicativo; o resultado é rotulado como mensagem postada, não como gesto.
+    /// </summary>
+    internal void PostarMouse(int mensagem, nint wParam, PontoPx tela)
+    {
+        RetanguloPx r = RetanguloDaJanela();
+        int x = tela.X - r.Esquerda, y = tela.Y - r.Topo;
+        nint lParam = (nint)(((y & 0xFFFF) << 16) | (x & 0xFFFF));
+        if (!NativoTeste.PostMessage(Janela, mensagem, wParam, lParam))
+            throw new InvalidOperationException($"PostMessage 0x{mensagem:X4} à janela do Buzzy falhou.");
+    }
+
+    /// <summary>Espera a janela do personagem chegar ao retângulo dado.</summary>
+    internal void EsperarRetangulo(RetanguloPx esperado, int limiteMs, string oQue)
+    {
+        var fim = DateTime.UtcNow.AddMilliseconds(limiteMs);
+        RetanguloPx atual;
+        while ((atual = RetanguloDaJanela()) != esperado)
+        {
+            if (Processo.HasExited) throw new InvalidOperationException($"O Buzzy encerrou antes de: {oQue}.");
+            if (DateTime.UtcNow > fim) throw new TimeoutException($"Tempo esgotado esperando {oQue}: janela em {atual}, esperado {esperado}.");
+            Thread.Sleep(20);
+        }
     }
 
     /// <summary>Fecha pelo WM_CLOSE da janela do personagem e devolve o código de saída.</summary>
