@@ -16,7 +16,7 @@
 - **Estado da decisão:** ACCEPTED
 - **STATUS:** PLANNED
 - **Problema:** contexto de projeto poderia ficar disperso entre conversas.
-- **Decisão:** manter documentação especializada, com PROJECT_CONTEXT.md para estado atual, DEVELOPMENT_LOG.md para histórico, ARCHITECTURE.md para arquitetura, DECISIONS.md para escolhas, SECURITY.md para segurança e TODO.md para tarefas. PRODUCT_SPEC.md registra a intenção estável do produto; TODO.md define as fases; PROMPT_MESTRE_BUZZY.md contém regras estáveis; prompt_usuario.md registra a diretiva de execução atual; PLAN_REVIEW.md descreve a revisão do Codex quando solicitada.
+- **Decisão:** manter documentação especializada, com PROJECT_CONTEXT.md para estado atual, DEVELOPMENT_LOG.md para histórico, ARCHITECTURE.md para arquitetura, DECISIONS.md para escolhas, SECURITY.md para segurança e TODO.md para tarefas. PRODUCT_SPEC.md registra a intenção estável do produto; TODO.md define as fases; [PROMPT_MESTRE_BUZZY.md](PROMPT_MESTRE_BUZZY.md) contém regras estáveis; prompt_usuario.md registra a diretiva de execução atual; PLAN_REVIEW.md descreve a revisão do Codex quando solicitada.
 - **Alternativas consideradas:** concentrar tudo em um README, depender do histórico do Git ou misturar instruções operacionais e produto em um único handoff.
 - **Motivo:** cada fonte tem um papel único, o estado atual fica curto e a instrução de cada fase pode mudar sem reescrever a visão do produto.
 - **Trade-offs:** é preciso sincronizar fontes ao final de cada fase e apontar claramente qual documento é autoritativo para cada tipo de informação.

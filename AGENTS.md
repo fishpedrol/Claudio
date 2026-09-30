@@ -4,9 +4,9 @@
 
 Leia docs/PROJECT_CONTEXT.md antes de qualquer trabalho. Leia docs/PRODUCT_SPEC.md antes de planejar ou alterar comportamento do produto.
 
-Para um plano ou revisão de plano, leia context codex/PROMPT_MESTRE_BUZZY.md, TODO.md, ARCHITECTURE.md, DECISIONS.md e PLAN_REVIEW.md. Leia SECURITY.md antes de decisões sobre permissões, dados, processos ou rede. Inspecione os arquivos reais antes de afirmar o estado de implementação.
+Para um plano ou revisão de plano, leia docs/PROMPT_MESTRE_BUZZY.md, TODO.md, ARCHITECTURE.md, DECISIONS.md e PLAN_REVIEW.md. Leia SECURITY.md antes de decisões sobre permissões, dados, processos ou rede. Inspecione os arquivos reais antes de afirmar o estado de implementação.
 
-PRODUCT_SPEC.md define a intenção estável. PROJECT_CONTEXT.md define o estado atual. TODO.md define a fase e as tarefas. context codex/PROMPT_MESTRE_BUZZY.md contém regras estáveis; prompt_usuario.md define a diretiva operativa atual. Nenhum plano de agente substitui decisão explícita do usuário.
+PRODUCT_SPEC.md define a intenção estável. PROJECT_CONTEXT.md define o estado atual. TODO.md define a fase e as tarefas. docs/PROMPT_MESTRE_BUZZY.md contém regras estáveis; prompt_usuario.md define a diretiva operativa atual. Nenhum plano de agente substitui decisão explícita do usuário.
 
 ## Papéis e ciclo de trabalho
 
@@ -28,7 +28,7 @@ Ao concluir cada fase, sincronize nesta ordem:
 4. docs/DECISIONS.md, se houve decisão relevante
 5. docs/SECURITY.md, se o modelo de segurança mudou
 6. docs/TODO.md
-7. context codex/PROMPT_MESTRE_BUZZY.md, apontando para a fase seguinte
+7. docs/PROMPT_MESTRE_BUZZY.md, apontando para a fase seguinte
 8. Confira cada afirmação contra os arquivos reais e os resultados executados
 
 Cada documento começa com o formato das suas próprias entradas; siga-o. Mantenha cada fato em uma fonte canônica e use links em vez de duplicar o conteúdo.

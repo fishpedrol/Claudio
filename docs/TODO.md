@@ -76,7 +76,7 @@ Cada fase tem STATUS: PLANNED. Nenhuma fase é concluída só porque compila ou 
 - portão de APIs proibidas e auditoria de dependências verdes;
 - critérios de aceitação verificados e registrados;
 - documentação sincronizada;
-- gate PASS registrado conforme o prompt mestre.
+- gate PASS registrado conforme [PROMPT_MESTRE_BUZZY.md](PROMPT_MESTRE_BUZZY.md).
 
 ### Fase 1 — Shell do desktop
 

@@ -83,6 +83,5 @@ grava nenhum arquivo.
 ## 7. Para quem desenvolve
 
 - Testes sem abrir janelas: `powershell -NoProfile -File tools\testar.ps1`.
-- Testes que abrem janelas e movem o cursor, e a medição de desempenho: os comandos estão em
-  `BACKUP_CLAUDE.md` (seção 3) até entrarem em `docs/PROJECT_CONTEXT.md`. Avise quem estiver usando o
-  computador antes de rodá-los.
+- Testes que abrem janelas ou movem o cursor, e a medição de desempenho: consulte os comandos e limites em
+  `docs/PROJECT_CONTEXT.md`. Avise quem estiver usando o computador antes de rodá-los.

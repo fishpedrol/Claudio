@@ -12,7 +12,7 @@ Claude, usando o modelo escolhido pelo usuário (Fable ou Opus), prepara e execu
 2. PRODUCT_SPEC.md é a referência estável do produto.
 3. Código, configurações e resultados de teste mostram o que existe de fato.
 4. PROJECT_CONTEXT.md resume estado e fase; ARCHITECTURE.md, DECISIONS.md, SECURITY.md e TODO.md guardam seus detalhes.
-5. prompt_usuario.md orienta a execução atual; context codex/PROMPT_MESTRE_BUZZY.md contém regras estáveis. Nenhum substitui a especificação nem DEC-015.
+5. prompt_usuario.md orienta a execução atual; docs/PROMPT_MESTRE_BUZZY.md contém regras estáveis. Nenhum substitui a especificação nem DEC-015.
 6. O plano de Claude é o objeto revisado, não uma fonte de verdade.
 
 Quando duas fontes discordarem, apontar a divergência e sua consequência. Não tratar intenção PLANNED como comportamento existente, nem declarar VERIFIED sem testes executados.

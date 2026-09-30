@@ -1,37 +1,32 @@
 # Diretiva atual para Claude — Buzzy
 
-Atualizada em 2026-09-29. Esta diretiva substitui instruções anteriores que mandavam aguardar, parar após a Fase 1 ou pedir aprovação entre fases.
+Atualizada em 2026-09-30. Esta diretiva substitui divisões de trabalho anteriores entre Claude e Codex e prompts que mandavam aguardar. O usuário pediu que Claude retome a implementação do que falta.
 
-## Autorização e objetivo
+## Mandato
 
-O usuário autoriza Claude a conduzir o projeto de forma contínua: fechar a Etapa 0B, criar a identidade visual original do Buzzy e implementar, testar, corrigir e documentar as fases do MVP na ordem de docs/TODO.md, da Fase 1 à Fase 11. A autorização da Fase 1 já foi dada; após fechar os gates técnicos da Etapa 0B, comece sem pedir confirmação. Não solicite aprovação rotineira de plano, conceito visual, fase ou avanço. Tome decisões técnicas reversíveis dentro de docs/PRODUCT_SPEC.md, docs/ARCHITECTURE.md, docs/DECISIONS.md e docs/SECURITY.md; registre escolhas relevantes.
+Implemente, teste, corrija e documente o MVP seguindo as fases e dependências de `docs/TODO.md`, sem pedir aprovação rotineira de plano ou avanço. A autorização contínua está em DEC-015 e continua válida. Tome decisões técnicas reversíveis dentro de `docs/PRODUCT_SPEC.md`, `docs/ARCHITECTURE.md`, `docs/DECISIONS.md` e `docs/SECURITY.md`; registre decisões materiais na fonte canônica.
 
-Peça algo ao usuário apenas se uma decisão de produto realmente fora do escopo, uma permissão externa ou uma ação exclusivamente humana for indispensável. Enquanto isso, avance nas tarefas independentes. Não publique nem distribua o aplicativo.
+Peça ajuda apenas diante de uma ação exclusivamente humana indispensável, permissão externa não concedida ou decisão de produto fora da especificação. Continue todo o trabalho independente. Não publique nem distribua o aplicativo.
 
-## Leia e confirme o estado real
+## Retomada imediata — Fase 2
 
-Comece por AGENTS.md, CLAUDE.md, docs/PROJECT_CONTEXT.md, docs/PRODUCT_SPEC.md, docs/TODO.md e docs/SECURITY.md. Consulte ARCHITECTURE.md e DECISIONS.md para as decisões técnicas pertinentes, DEVELOPMENT_LOG.md para evidências, e spikes/README.md e os arquivos de spikes/ para os testes P1–P3. Inspecione o repositório, os arquivos, resultados e processos antes de afirmar o estado. Preserve todo trabalho em andamento: não faça reset, limpeza ou reversão alheia. Código em spikes/ é protótipo, não código de produto.
+`docs/TODO.md` e `docs/PROJECT_CONTEXT.md` ainda dizem que a ligação do núcleo ao app está pendente. A inspeção de 2026-09-30 encontrou uma integração com `Nucleo` em `src/Buzzy.App/Composicao/Aplicacao.cs` e expectativas correspondentes em `tests/Buzzy.App.Testes/Integracao/IntegracaoTestes.cs`. Considere essa integração **presente, mas não verificada** até conferir o checkout atual e executar as verificações.
 
-## Identidade visual
+1. Leia `AGENTS.md`, `CLAUDE.md`, `docs/PROJECT_CONTEXT.md`, `docs/PRODUCT_SPEC.md`, `docs/TODO.md` e `docs/SECURITY.md`. Consulte arquitetura e decisões pertinentes, o histórico de desenvolvimento e `CONTINUIDADE.md`. Confira `git status`, diffs, código e resultados atuais; preserve alterações existentes.
+2. Inspecione a composição e os testes da Fase 2. Execute build e verificações automatizadas do projeto; corrija falhas e repita as verificações afetadas. Não refaça uma integração antes de entender a que já está no checkout.
+3. Avise o usuário antes de verificações que abrem janelas ou movem o cursor. Verifique o critério manual da Fase 2 quando possível. Se não for possível, registre-o como pendente, sem PASS/VERIFIED, e continue o trabalho independente.
+4. Ao fechar o gate da Fase 2, sincronize a documentação na ordem de `AGENTS.md`, atualize o estado do TODO com evidências atuais e prossiga para a Fase 3 sem aguardar confirmação. Continue as fases seguintes na ordem do roadmap.
 
-Crie agora uma direção visual completa e original para Buzzy usando as duas referências em assets/references/ como inspiração, não como arte pronta ou lista literal de requisitos. Não aguarde aprovação do usuário. Defina personagem reconhecível por silhueta e paleta próprias, expressões e poses úteis ao produto; prepare os assets ou fontes editáveis necessários e registre a localização e as regras de uso. Não copie personagem, roupa, acessórios, símbolos, falas, silhueta ou combinação visual reconhecível de outra obra. Siga docs/PRODUCT_SPEC.md e DEC-014/Q-23. Use um placeholder estático simples na Fase 1; integre o conjunto de animações na Fase 6.
+As pendências manuais da Fase 1 — menu real da bandeja, escalas de 150%/200% e mudanças reais de resolução/escala/barra de tarefas — permanecem abertas. Não altere configurações globais para testá-las; registre-as como pendentes e avance nas fases que não dependam delas, retornando na integração final.
 
-## Feche a Etapa 0B com evidência
+## Produto, segurança e evidência
 
-P1 e P2 foram aceitos pelo usuário nos limites registrados; não os repita sem motivo técnico. Conclua P3 autonomamente com o harness isolado que já estiver em andamento. Prefira um receptor controlado pelo próprio spike, sem interagir com outros aplicativos. Verifique entrega dos eventos no receptor, foco, término dos gestos, ClickLock e restauração do cursor/configurações temporárias. Se corrigir algo, repita o cenário afetado.
+- `docs/PRODUCT_SPEC.md` define o produto; `docs/TODO.md`, as fases e gates; `docs/PROJECT_CONTEXT.md`, o estado atual; `docs/DECISIONS.md`, decisões; `docs/ARCHITECTURE.md`, desenho; e `docs/SECURITY.md`, limites. Essas fontes e os arquivos reais prevalecem sobre backups antigos.
+- Siga a identidade aprovada em DEC-018/DEC-019 e `docs/IDENTIDADE_VISUAL.md`, incluindo a pixel art e o chapéu de palha. Não use a direção vetorial antiga nem a orientação anterior que contradiz essas decisões.
+- Diferencie testes automatizados, input sintético, observação informal, verificação manual e [HW]. Registre cada funcionalidade, teste ou decisão como VERIFIED, PLANNED ou UNCERTAIN. Build sozinho não fecha fase.
+- Preserve o trabalho existente. Não leia conteúdo de outros aplicativos, não encerre processos do usuário, não altere configurações globais do Windows para simular hardware, e não introduza chat, texto conversacional, voz, IA integrada, rede ou capacidades proibidas.
+- Ao concluir cada fase, siga a ordem documental de `AGENTS.md` e confira cada afirmação contra os arquivos e resultados executados.
 
-Não abra, leia, capture ou inspecione conteúdo do Bloco de Notas; não encerre processos ou documentos do usuário, não altere configurações globais do Windows e não use o computador como se uma pessoa estivesse disponível. Não peça ao usuário para fazer gestos de teste. SendInput é input sintético: registre-o como tal e não o apresente como interação humana. A informação dos dez movimentos com o mouse foi corrigida: quem operava era a namorada do usuário; foi exploração informal, não teste formal nem evidência humana aprovada de P3. A execução automática nova deve demonstrar o comportamento técnico sem reivindicar esse crédito.
+## Handoff entre agentes
 
-Não enfraqueça critérios de foco ou roteamento para aprovar P3. Se uma limitação técnica real impedir o gate, registre evidência, reabra a decisão técnica correspondente e continue o trabalho independente que não dependa dela; não marque a Fase 0 como concluída.
-
-## Implemente e avance
-
-Depois de satisfeitos os gates técnicos da Fase 0, inicie a Fase 1 sem nova autorização e siga o roadmap completo, respeitando em cada fase inclusões, exclusões e dependências. Escreva o código real do produto, rode build, testes automatizados e verificações manuais que o ambiente permitir; corrija falhas e repita os testes afetados. Não pare na Fase 1 nem espere autorização para cada fase. Não introduza chat, texto, voz, IA integrada, rede ou capacidades proibidas.
-
-Se uma verificação depender de hardware indisponível, registre-a como PENDENTE/UNCERTAIN, sem declarar PASS ou VERIFIED. Continue implementação e validações independentes; retorne aos itens pendentes na integração final. Não simule hardware alterando configurações globais ou encerrando aplicativos do usuário. Diferencie teste automatizado, input sintético, observação informal, verificação manual e [HW].
-
-Ao fechar cada fase, sincronize os documentos na ordem de AGENTS.md e confira toda afirmação contra o código e os resultados executados. Uma fase só fica VERIFIED/concluída com seus critérios cumpridos; compilar não basta. Preserve históricos úteis e remova instruções duplicadas ou superadas em vez de manter dois estados operacionais.
-
-## Entrega
-
-Trabalhe até concluir o MVP ou encontrar um bloqueio que só o usuário possa resolver. Não envie pedidos de aprovação intermediários. Mantenha a documentação e os resultados como registro completo; ao final, resuma fases concluídas, verificações executadas e limitações reais, sem alegar sucesso sem evidência.
+Use `CONTINUIDADE.md` como o único backup e registro compartilhado entre Claude e Codex. Confira o checkout antes de confiar no snapshot; após cada marco, teste, falha ou decisão material, atualize ali o estado resumido, o próximo passo e a evidência, deixando detalhes estáveis nas fontes canônicas. Não faça commit automaticamente.
