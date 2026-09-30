@@ -12,11 +12,11 @@
 
 ## Fase atual
 
-**Fase atual: Fase 0 — fechamento da Etapa 0B. STATUS: PLANNED.** WPF/C#/.NET 10 foi escolhida em DEC-006. P1 e P2 foram aceitos nos limites documentados; P3 ainda precisa de evidência técnica suficiente. O usuário autorizou Claude a criar a identidade visual original e executar, testar e documentar as fases 1–11 sem aprovação rotineira (DEC-015). A Fase 1 começa assim que a Etapa 0B fechar; não se pede nova autorização. Detalhes do produto e das evidências estão nas fontes canônicas ligadas abaixo.
+**Fase atual: Fase 2 — núcleo do personagem. STATUS: PLANNED, em implementação.** A Etapa 0B fechou tecnicamente em 2026-09-29 com P3 aprovado no ambiente medido por evidência sintética. A identidade visual original foi criada. A Fase 1 está implementada e verificada por automação e input sintético, mas permanece PLANNED enquanto os critérios manuais 3 (bandeja real), 8 (escalas 150% e 200%) e 9 (mudanças reais de resolução/escala/barra) não forem verificados. O usuário autorizou a execução das fases 1–11 sem aprovação rotineira (DEC-015); prossiga com trabalho independente.
 
-Os dez movimentos de mouse registrados anteriormente foram feitos pela namorada do usuário como exploração informal, não teste formal nem evidência humana aprovada. O harness isolado produziu evidência sintética; a tentativa adicional B4b foi abortada com segurança e a correção informada aguarda novo resultado.
+Não conte os dez movimentos de mouse de 26/09 como evidência humana: foram exploração informal da namorada do usuário. Todo input de SendInput citado nesta página é sintético.
 
-Arquivos iniciais da Fase 1 estão em src/ e tests/; ainda não significam fase concluída ou VERIFIED. O conteúdo de spikes/ continua descartável. Preserve alterações existentes e inspecione estado e resultados reais.
+O conteúdo de `spikes/` continua descartável. Preserve alterações existentes e confira arquivos e resultados antes de atualizar status.
 
 ### Fechamento da Fase 0
 
@@ -24,11 +24,11 @@ Arquivos iniciais da Fase 1 estão em src/ e tests/; ainda não significam fase 
 - [x] WPF/C#/.NET 10 selecionado e documentado em DEC-006.
 - [x] Decisões do usuário registradas em DECISIONS.md; a autorização contínua está em DEC-015.
 - [x] P1 e P2 executados e aceitos apenas nos limites descritos nesta página.
-- [ ] Validar P3 com receptor isolado, registrar resultado e limitações. Os dez movimentos anteriores foram exploração informal da namorada do usuário, não teste formal.
-- [ ] Fechar a Fase 0 somente quando os gates técnicos forem satisfeitos e a documentação refletir as evidências. A Fase 1 já está autorizada para começar então.
+- [x] Validar P3 com receptor isolado, registrar resultado e limitações (2026-09-29): 3/3 rodadas, 28/28 cenários OK por rodada, incluindo B4b. Evidência SINTÉTICA; relatório em `spikes/resultados/p3-receptor.log`.
+- [x] Fechar tecnicamente a Fase 0 e a Etapa 0B (2026-09-29), limitada ao ambiente medido; DPI misto continua sem hardware. A Fase 1 já estava autorizada por DEC-015.
 ## Etapa 0B — Protótipos de viabilidade
 
-STATUS: EM ANDAMENTO desde 2026-09-26. Fazer antes da Fase 1 com a stack escolhida, WPF/C#/.NET 10. O código é descartável, fica em `spikes/` fora do produto e não segue para a Fase 1. Cada protótipo registra método, hardware, métricas e resultado no DEVELOPMENT_LOG.md.
+STATUS: VERIFIED em 2026-09-29 para os gates P1–P3 e o ambiente medido. P3 usou input SINTÉTICO, sem Bloco de Notas ou outro app como receptor. O código é descartável e fica em `spikes/`; as limitações de hardware permanecem descritas abaixo. P5–P8 e P10 continuam nas fases que dependem deles.
 
 **Como rodar o que já existe:** `spikes/README.md`. Os scripts ficam em `spikes/ferramentas/`.
 
@@ -37,7 +37,7 @@ STATUS: EM ANDAMENTO desde 2026-09-26. Fazer antes da Fase 1 com a stack escolhi
 | ID | Resultado registrado | Próxima ação |
 |---|---|---|
 | P1 | **Usuário aceitou PASS em 2026-09-27, limitado ao ambiente medido.** Três evidências concordam: (1) sonda de teste de acerto `WindowFromPoint` — alfa 0 atravessou para o Bloco de Notas, alfa 1, 128 e 255 ficaram no Buzzy; (2) clique **sintético** por `SendInput` no centro das quatro faixas, 12 de 12 eventos aceitos, com o mesmo resultado e nenhum roubo de foco; (3) um clique **humano** na faixa alfa 1, sem roubo de foco. `WS_EX_LAYERED` confirmado. | Limitação: os cliques nas faixas alfa 0, 128 e 255 foram sintéticos, a pedido do usuário. Evidência vale para Windows 11 e DPI 96 medidos; escala mista continua sem hardware. |
-| P3 | **Evidência parcial; input sintético.** Três rodadas registram os cenários centrais como OK: clique (B7), arraste (B2/B3), ClickLock (B6), monitor (B5), Alt+Tab rápido (B4a) e entrega/foco no receptor. O relatório agregado marcou 0/3 por B4b adicional ter sido abortado pela salvaguarda antes de clicar em janela alheia. |
+| P3 | **PASS técnico no ambiente medido (2026-09-29, input sintético).** 3/3 rodadas completas; 28/28 cenários OK em cada uma, incluindo B4b, clique após Alt+Tab e entrega dos nove marcadores ao receptor com foco. M5: médias de 0,270/0,265/0,238 ms e p95 de 0,705/0,637/0,533 ms. Cursor restaurado sem deriva; ClickLock original restaurado; processos do teste encerrados. Windows 11 build 26200, .NET 10.0.12, dois monitores 1920×1080 a 96 DPI, secundário em x negativo. Relatórios: `spikes/resultados/p3-receptor.log` e `spikes/resultados/p3.log`. Limite: nenhuma escala mista; input sintético não é evidência humana. |
 | P2 | **Medição concluída em 2026-09-26; usuário aceitou PASS como medição de viabilidade em 2026-09-27.** Repouso por 60 min: CPU média de 0,000 % de um núcleo (máx 0,14 %), 0,47 s de CPU na hora inteira, 0,15 troca de contexto por segundo em média (p95 0), memória privada estável em ~61,6 MB, GPU 0 %, 4 passagens de desenho no total; nenhuma atividade periódica evitável. Animação: 10 qps pedidos → 9,1 entregues, 0,48 % de um núcleo; 60 qps por `DispatcherTimer` → **39,1 entregues**, 1,8 %; 60 qps pelo compositor → **40,3 entregues**, 2,6 %, com o compositor disparando ~85 vezes por segundo. A resolução do timer global nunca mudou por causa do Buzzy. | As metas Q-08 foram aceitas, mas ainda não verificadas no aplicativo. A animação não atingiu 60 qps e a memória privada cresceu (~72 → 119 MB em 10 min); investigar antes da Fase 6. Isso não invalida a medição nem o resultado de repouso. |
 
 | ID | Pergunta | Teste mínimo | Resultado esperado | Hardware |
@@ -53,7 +53,7 @@ STATUS: EM ANDAMENTO desde 2026-09-26. Fazer antes da Fase 1 com a stack escolhi
 | P9 | Encerrado: comparar o esforço de interface nativa | Não executado. Perdeu a finalidade quando WPF foi escolhido como stack. | Sem resultado; não bloqueia o projeto. | — |
 | P10 | Build, tamanho e portão de segurança | Build de release; medir executável e ZIP. Rodar o ZIP sem assinatura em máquina virtual limpa do Windows, com o controle de aplicativos ligado. Rodar o script que inspeciona as funções importadas pelo binário. | Tamanho registrado, comportamento de aviso/bloqueio sem assinatura conhecido e portão de APIs proibidas passando. Não publicar o build. | Máquina virtual |
 
-**Ordem e papel dos protótipos.** Executar P1 primeiro, depois P3 e por último P2. P1 ou P3 que falhe reabre DEC-006 antes de produto; P2 informa as metas de Q-08 e pode exigir ajuste de repouso:
+**Ordem e papel dos protótipos.** P1, P3 e P2 foram executados na ordem prevista. P1 ou P3 que falhe reabre DEC-006 antes de produto; P2 informa as metas de Q-08 e pode exigir ajuste de repouso:
 
 - **P1** verifica que a janela WPF cumpre o requisito central de clique por pixel entre processos.
 - **P3** verifica input e foco no gesto de maior risco para a experiência.
@@ -65,8 +65,8 @@ P5 a P8 e P10 podem acontecer no início das fases que dependem deles. P4 foi ap
 
 ### Trabalho visual paralelo — identidade original
 
-STATUS: PLANNED; autorizado pelo usuário para execução em paralelo ao fechamento da Etapa 0B. Claude usa as duas referências em assets/references/ para criar uma direção própria, com silhueta, paleta, expressões e poses coerentes com PRODUCT_SPEC.md. Registre as fontes editáveis e os assets produzidos. Não há aprovação rotineira como gate. A Fase 1 usa apenas um placeholder estático; a integração dos clipes e expressões acontece na Fase 6.
-- [ ] Criar e registrar a identidade visual original e suas fontes editáveis; aplicar os critérios de distinção de PRODUCT_SPEC.md. Usar placeholder na Fase 1 e integrar animações na Fase 6.
+STATUS: VERIFIED como trabalho visual da Fase 1 em 2026-09-29; integração de clipes e expressões permanece na Fase 6.
+- [x] Refazer a identidade como pixel art fiel às pranchas, com o chapéu de palha do Luffy, a pedido do usuário (2026-09-29, DEC-018 e DEC-019): critérios em `docs/IDENTIDADE_VISUAL.md`, gerador em `src/Buzzy.Visual/Pixel/`, folha em `assets/identidade/pixel/buzzy-poses.png` (21 poses, 14 expressões e ícone da bandeja 16 × 16; nenhuma pose encosta na borda). A direção vetorial anterior (`assets/identidade/arquivo-vetorial/`) foi substituída e arquivada. O app já mostra o quadro "parado" e o ícone da bandeja da pixel art; as animações entram na Fase 6.
 
 
 Cada fase tem STATUS: PLANNED. Nenhuma fase é concluída só porque compila ou porque as tarefas foram marcadas. Em todas as fases, a condição de conclusão inclui:
@@ -79,6 +79,8 @@ Cada fase tem STATUS: PLANNED. Nenhuma fase é concluída só porque compila ou 
 - gate PASS registrado conforme o prompt mestre.
 
 ### Fase 1 — Shell do desktop
+
+STATUS: PLANNED. Implementação verificada por build, testes automatizados e harnesses de tela com input sintético; ainda não concluída por critérios manuais pendentes (DEC-015).
 
 - **Objetivo:** janela do personagem transparente, posicionada corretamente no desktop virtual, com ciclo de vida completo.
 - **Inclui:** projeto e build da stack aprovada; manifesto Per-Monitor V2 e `asInvoker`; janela do tamanho do sprite com transparência por pixel; sprite provisório estático e original; janela que não ativa; sempre no topo, bandeja e ausência de botão na barra de tarefas conforme Q-03; instância única, em que abrir o app de novo mostra o Buzzy existente; módulo do mundo do desktop com consultas de monitor e área útil; releitura da topologia e acomodação da posição quando ela muda; saída pelo menu; portão de APIs proibidas no build; script de medição de desempenho; instruções de build e teste em PROJECT_CONTEXT.md.
@@ -96,10 +98,14 @@ Cada fase tem STATUS: PLANNED. Nenhuma fase é concluída só porque compila ou 
   9. Trocar resolução, escala ou posição da barra de tarefas com o app aberto mantém o sprite dentro da área útil. [MANUAL]
   10. Sair pelo menu encerra o processo e todos os processos filhos. [MANUAL]
   11. Parado por 10 min, o consumo de CPU, memória e acordadas fica registrado como linha de base. [MANUAL, instrumentado]
+- **Evidências de 2026-09-29:** `resultados/verificacao-fase1.log` registrou 25 OK, 4 SIMULADO e 0 falhas; todos os cliques/teclas injetados foram SINTÉTICOS. Critérios 1, 2, 4, 5, 6, 7 e 10 passaram no harness de tela; o menu do personagem passou. Os comportamentos do menu da bandeja foram SIMULADOS porque o ícone estava na área oculta e não foi clicado de verdade. Critério 6 usou a máquina com dois monitores, ambos a 100%.
+- Critério 8 só foi observado a 100%; 150% e 200% permanecem PENDENTES. No critério 9, mensagens sintéticas de mudança passaram no teste de integração, mas mudanças reais de resolução, escala ou barra permanecem PENDENTES. A medição do critério 11 durou 600 s; CPU média de um núcleo 0,000%, memória privada 56,67 → 56,51 MB, zero rede e zero processos filhos observados. Detalhes em `resultados/desempenho-20260929-215550.txt`. Nenhum destes resultados é gesto humano.
 - **Testes automatizados:** mundo do desktop com topologias de exemplo (lado a lado, empilhado, em L, coordenadas negativas, principal fora da esquerda, retrato, escalas mistas, vão entre monitores); teste de fumaça que inicia o app, encontra a janela, confere os estilos e encerra; portão de APIs proibidas. [AUTO]
 - **Verificação com hardware:** critério 6 com dois monitores. [HW]
 
 ### Fase 2 — Núcleo do personagem
+
+STATUS: PLANNED, em implementação. O núcleo puro está implementado e seus testes passaram 147/147 em 2026-09-29; a ligação com `Aplicacao.cs` e a verificação do app continuam pendentes.
 
 - **Objetivo:** núcleo determinístico, testável sem janela, com máquina de estados, eventos, relógio lógico e expressão separada.
 - **Inclui:** tipos de estado, evento, retrato e efeito; tabela de transições de ARCHITECTURE.md, seção 2.6; fila com prioridade; agenda autônoma com semente; nível de energia como parâmetro do núcleo (padrão Média; a escolha pelo usuário chega na Fase 8); autonomia pausada e gesto curto como dimensões (ARCHITECTURE.md 2.6); expressão como dimensão independente; relógio que para quando nada muda; gravação e reprodução de sequências de eventos para testes; ligação do núcleo à janela da Fase 1.
@@ -111,6 +117,7 @@ Cada fase tem STATUS: PLANNED. Nenhuma fase é concluída só porque compila ou 
   3. Sem movimento nem animação, nenhum `TICK` fica agendado. [AUTO]
   4. O app da Fase 1 continua funcionando com o núcleo ligado. [MANUAL]
 - **Testes automatizados:** testes de unidade, testes de propriedade com sequências aleatórias e reproduções gravadas comparadas com um resultado de referência. [AUTO]
+- **Subtarefas:** [x] núcleo puro, fila, agenda e gravação/reprodução implementados; referências 02–05 revistas; `Buzzy.Core.Testes` 147/147 em 2026-09-29. [ ] ligar o núcleo a `Aplicacao.cs`, mapear eventos/efeitos e manter os logs usados pelos testes existentes. [ ] executar a integração da tela e verificar o critério 4. [ ] sincronizar a documentação da fase.
 
 ### Fase 3 — Input e arraste
 

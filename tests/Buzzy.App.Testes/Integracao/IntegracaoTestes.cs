@@ -34,6 +34,11 @@ internal sealed class IntegracaoTestes
         Afirmar.Falso((ex & NativoTeste.WS_EX_TRANSPARENT) != 0, "sem WS_EX_TRANSPARENT: modo fantasma fora do MVP (Q-21)");
         Afirmar.Verdadeiro(NativoTeste.IsWindowVisible(b.Janela), "janela visível");
 
+        EventoDoLog carregamento = b.Esperar(e => e.Chave == "NUCLEO" && e["evento"] == "Loaded" && e["para"] == "Settling", 5000, "núcleo carregado");
+        Afirmar.Igual("Booting", carregamento["de"], "o núcleo parte de Booting");
+        Afirmar.Igual("início", carregamento["motivo"], "a carga mantém o motivo de inicialização no log");
+        b.Esperar(e => e.Chave == "NUCLEO" && e["evento"] == "Loaded" && e["de"] == "Settling" && e["para"] == "Idle", 5000, "posição inicial acomodada pelo núcleo");
+
         Topologia topologia = Afirmar.NaoNulo(LeitorDeTopologia.Ler(out string? erro), erro);
         MonitorDoDesktop principal = topologia.Principal;
         RetanguloPx janela = b.RetanguloDaJanela();

@@ -15,7 +15,7 @@ Inspecione código, resultados e configurações reais antes de afirmar implemen
 ## Regras de execução
 
 - Siga as fases de TODO.md na ordem e respeite dependências e escopo.
-- Construa a identidade original a partir das referências fornecidas, sem copiar personagens ou elementos reconhecíveis. Não aguarde aprovação de rotina.
+- A identidade segue as pranchas de referência e lembra o Luffy de propósito: chapéu de palha com faixa vermelha e personalidade do Luffy (DEC-019). Não crie regra de distância visual do Luffy. Não aguarde aprovação de rotina.
 - Execute build, testes e verificações pertinentes; corrija falhas dentro do escopo e repita o teste afetado.
 - Se hardware estiver indisponível, registre o critério como pendente e continue o trabalho independente. Não declare PASS, VERIFIED ou fase concluída sem a evidência exigida.
 - Não leia conteúdo de outros aplicativos, não encerre processos do usuário, não altere configurações globais para simular hardware e não publique nem distribua o aplicativo.

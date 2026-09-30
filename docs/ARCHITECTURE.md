@@ -14,7 +14,7 @@ Código da Fase 1 em `src/`, organizado pelas três camadas de DEC-007 (detalhes
 | `src/Buzzy.App/Plataforma` | adaptador de plataforma | Único arquivo com importações do Windows (`Win32.cs`); leitura da topologia; janela de serviço oculta que recebe as mensagens de topologia, bandeja e `TaskbarCreated`; bandeja v4; menu nativo; instância única; log de diagnóstico opcional. |
 | `src/Buzzy.App/Apresentacao` | apresentação | Janela WPF do personagem (sem borda, `AllowsTransparency`, não ativa, janela de ferramenta, sempre no topo, do tamanho do sprite; responde `MA_NOACTIVATE` e `WM_GETDPISCALEDSIZE`) e o sprite provisório gerado em código. |
 | `src/Buzzy.App/Composicao` | raiz de composição | `Aplicacao` liga janela, serviço, bandeja, menu e topologia. O único timer é de disparo único, para agrupar mudanças de topologia; não há timer periódico. |
-| `src/Buzzy.Visual` | apresentação, a partir da Fase 6 | Renderizador da identidade vetorial (DEC-017); ainda não é usado pelo app. |
+| `src/Buzzy.Visual` | apresentação, a partir da Fase 6 | Gerador da identidade em pixel art (`Pixel/`, DEC-018) e o renderizador vetorial da direção anterior, arquivada (DEC-017); ainda não é usado pelo app. |
 
 Fluxo implementado: o Windows avisa a janela de serviço; a raiz agrupa as mensagens e pede a leitura ao adaptador; o núcleo calcula a nova posição; a raiz move a janela em pixels físicos. Máquina de estados, arbitragem de input, movimento e persistência ainda não existem (Fases 2 a 5).
 
@@ -293,7 +293,7 @@ STATUS: PLANNED.
 - O núcleo expõe um retrato do estado: estado de comportamento, direção, fase do movimento, expressão e sinais pontuais, como "pousou" ou "foi clicado".
 - Um **manifesto de assets** em arquivo de dados liga cada estado a um clipe de animação e cada expressão a uma camada ou variante. O manifesto também define a âncora da imagem, o tamanho lógico e a taxa de quadros de cada clipe.
 - **Trocar asset** significa trocar o manifesto e as imagens. O núcleo, o movimento, a arbitragem, o mundo do desktop e a segurança não mudam. Um teste automático roda a mesma suíte do núcleo com dois manifestos diferentes.
-- O asset provisório é original e simples, como formas geométricas ou um esboço próprio. Ele não imita nenhum mascote existente.
+- Até a Fase 6, o app mostra um quadro estático da pixel art (o "parado", com o chapéu de palha; DEC-018 e DEC-019).
 - A apresentação só redesenha quando o quadro muda ou quando a posição exige. Um clipe de 10 quadros por segundo gera 10 redesenhos por segundo, não 60.
 - A máscara de clique sai do canal alfa do quadro atual.
 
@@ -308,7 +308,7 @@ STATUS: PLANNED.
 - tendência de expressão em cada estado;
 - pesos relativos para espiar, explorar bordas, brincar, reagir a cliques e descansar.
 
-O usuário informa que o conceito visual e o temperamento do Buzzy se inspiram em Luffy. A tradução dessa inspiração — o que tomar, o que não usar e o critério de distinção — fica em [PRODUCT_SPEC.md](PRODUCT_SPEC.md), seção Visão; aqui ela só orienta pesos e tempos de comportamento (impulsivo, otimista, curioso). A intensidade usa três níveis persistidos em configurações: `BAIXA`, `MEDIA` (padrão) e `ALTA` (Low/Mid/High na ideia do usuário). Baixa produz pausas maiores e menos ações; Média, um ritmo brincalhão equilibrado; Alta aumenta a frequência e a duração das brincadeiras e reações não verbais. O nível pode mudar pesos, intervalos e duração de ações, mas não muda a máquina física nem as regras de segurança. Pausa e comando direto do usuário sempre prevalecem.
+O usuário informa que o conceito visual e o temperamento do Buzzy se inspiram em Luffy. A semelhança com o Luffy é intencional (DEC-019): o que ela significa para o produto fica em [PRODUCT_SPEC.md](PRODUCT_SPEC.md), seção Visão; aqui ela só orienta pesos e tempos de comportamento (impulsivo, otimista, curioso). A intensidade usa três níveis persistidos em configurações: `BAIXA`, `MEDIA` (padrão) e `ALTA` (Low/Mid/High na ideia do usuário). Baixa produz pausas maiores e menos ações; Média, um ritmo brincalhão equilibrado; Alta aumenta a frequência e a duração das brincadeiras e reações não verbais. O nível pode mudar pesos, intervalos e duração de ações, mas não muda a máquina física nem as regras de segurança. Pausa e comando direto do usuário sempre prevalecem.
 
 Com a mesma semente, nível de energia e sequência de eventos, o núcleo determinístico produz as mesmas escolhas de comportamento. O MVP tem uma personalidade original; não prevê perfis ou conteúdo de diálogo. O seletor aparece no painel aberto por dois cliques e nas configurações, usando a mesma preferência persistida na Fase 8.
 
@@ -422,3 +422,4 @@ As escolhas do usuário e as pendências ainda abertas estão numeradas (Q-01 em
 | 2026-09-28 | O usuário esclareceu que quer um mascote de verdade, sem chat, texto ou respostas. A personalidade fica inteiramente em movimento, expressões e gestos. Dois cliques abrem somente o seletor de energia, implementado com as configurações na Fase 8; P4 de foco/IME foi aposentado. | DEC-003, DEC-009, DEC-014, Q-07, Q-23 |
 | 2026-09-28 | Revisão documental de coerência (Claude): prioridade alinhada ao PRODUCT_SPEC; dimensões "gesto curto" e "autonomia pausada"; `DOUBLE_CLICK` a partir de `PRESSED`; modo de tela cheia não interrompe `PRESSED`/`DRAGGING`, e arraste ou `CMD_SHOW` manual descartam o retorno temporário; `CMD_SHOW`/`CMD_HIDE` em `HIDDEN(POR_TELA_CHEIA)`; `HANGING` no movimento; risco de frequência do evento de geometria levado a P7; invariantes 14 e 15. Tudo PLANNED. | DEC-004, DEC-013, DEC-014 |
 | 2026-09-29 | Fase 1 implementada nas três camadas de DEC-007 (seção 1); menu de contexto nativo com dono temporário no lugar do menu WPF; renderizador vetorial da identidade em `src/Buzzy.Visual` para a Fase 6. Verificação dos critérios em TODO.md. | DEC-016, DEC-017 |
+| 2026-09-29 | A pedido do usuário, a identidade passou a ser pixel art fiel às pranchas: quadro de 64 × 64 pixels mostrado em 128 DIP (ampliação inteira 2×/3×/4× em 100/150/200%), gerado por `src/Buzzy.Visual/Pixel/`. A direção vetorial foi arquivada. | DEC-018 |

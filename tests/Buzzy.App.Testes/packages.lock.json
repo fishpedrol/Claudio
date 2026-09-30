@@ -5,13 +5,17 @@
       "Buzzy": {
         "type": "Project",
         "dependencies": {
-          "Buzzy.Core": "[1.0.0, )"
+          "Buzzy.Core": "[1.0.0, )",
+          "Buzzy.Visual": "[1.0.0, )"
         }
       },
       "buzzy.core": {
         "type": "Project"
       },
       "buzzy.testes.executor": {
+        "type": "Project"
+      },
+      "buzzy.visual": {
         "type": "Project"
       }
     }

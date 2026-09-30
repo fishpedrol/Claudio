@@ -4,8 +4,9 @@ Resumo de decisões vigentes; os detalhes, alternativas e histórico ficam em [D
 
 ## Produto
 
-- Mascote original para desktop Windows 11, de uso pessoal; personalidade curiosa e brincalhona por movimento, expressões e gestos não verbais. Sem chat, texto, voz, IA integrada, tarefas gerais, rede ou coleta remota.
-- Conceito visual inspirado amplamente nas referências fornecidas, mantendo personagem e identidade próprios. Claude está autorizado a criar a direção visual original sem aprovação rotineira. Consulte PRODUCT_SPEC.md para limites contra cópia.
+- **2026-09-29:** o Buzzy é um macaquinho com o jeito do Luffy — **chapéu de palha com faixa vermelha e personalidade do Luffy**, semelhança intencional; é a ideia central do projeto (DEC-019). A identidade é pixel art fiel às pranchas (DEC-018).
+- Mascote para desktop Windows 11, de uso pessoal; personalidade curiosa e brincalhona por movimento, expressões e gestos não verbais. Sem chat, texto, voz, IA integrada, tarefas gerais, rede ou coleta remota.
+- Conceito visual das pranchas de referência, com o chapéu de palha (DEC-019). Claude está autorizado a criar e ajustar a identidade sem aprovação rotineira. Consulte PRODUCT_SPEC.md para limites contra cópia.
 - Mouse e touchpad no MVP. Clique gera reação não verbal; duplo clique abre na Fase 8 um painel compacto só com o seletor de energia; botão direito abre o menu. Arraste manual tem prioridade sobre comportamento autônomo.
 - O personagem circula por superfícies aprovadas do desktop, escala bordas, pode ficar pendurado brevemente e atravessa caminhos válidos entre monitores. Janelas de outros aplicativos não são superfícies.
 - Energia Baixa/Média/Alta, Média padrão, altera frequência e duração das ações; não muda física, segurança nem prioridade do usuário.

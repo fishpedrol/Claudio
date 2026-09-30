@@ -9,10 +9,12 @@ using Buzzy.Visual;
 namespace Buzzy.Identidade;
 
 /// <summary>
-/// Gera as prévias da identidade visual em assets/identidade/previa/ e confere as fontes:
-/// toda pose usa só partes existentes e cabe no quadro de 128 × 128 DIP.
+/// Gera as prévias da identidade visual e confere as fontes.
 /// Uso: dotnet run --project tools/Buzzy.Identidade -c Release
-/// Código de saída: 0 sem problemas; 1 com pose fora do quadro ou parte ausente.
+///   (padrão)     pixel art (DEC-018): assets/identidade/pixel/ — folha nativa e prévias ampliadas;
+///                confere que nenhuma pose encosta na borda do quadro de 64 × 64.
+///   --vetorial   direção vetorial arquivada (DEC-017, substituída): assets/identidade/arquivo-vetorial/.
+/// Código de saída: 0 sem problemas; 1 com pose na borda/fora do quadro ou parte ausente.
 /// </summary>
 internal static class Programa
 {
@@ -22,11 +24,17 @@ internal static class Programa
     private static readonly Color TintaClara = Color.FromRgb(0xE8, 0xE4, 0xF4);
 
     [STAThread]
-    internal static int Main()
+    internal static int Main(string[] args)
     {
         Console.OutputEncoding = Encoding.UTF8;
         string raiz = LocalizarRaiz();
-        string pasta = Path.Combine(raiz, "assets", "identidade");
+        if (!args.Contains("--vetorial"))
+        {
+            int naBorda = PreviaPixel.Gerar(raiz, Buzzy.Visual.Pixel.PosesPixel.Todas);
+            Console.WriteLine(naBorda == 0 ? "Pixel art: nenhuma pose encostada na borda do quadro." : $"Pixel art: {naBorda} pose(s) na borda do quadro.");
+            return naBorda == 0 ? 0 : 1;
+        }
+        string pasta = Path.Combine(raiz, "assets", "identidade", "arquivo-vetorial");
         string previa = Path.Combine(pasta, "previa");
         Directory.CreateDirectory(previa);
 

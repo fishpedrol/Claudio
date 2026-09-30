@@ -6,13 +6,13 @@ using System.Windows.Threading;
 using Buzzy.App.Apresentacao;
 using Buzzy.App.Plataforma;
 using Buzzy.Core;
+using Buzzy.Core.Personagem;
 
 namespace Buzzy.App.Composicao;
 
 /// <summary>
-/// Raiz de composição da Fase 1 (DEC-007): liga o núcleo puro (topologia e posicionamento)
-/// ao adaptador de plataforma (janelas, bandeja, menu, mensagens do Windows). Não contém
-/// regra de posicionamento: ela está em <see cref="Posicionador"/>.
+/// Raiz de composição das Fases 1 e 2 (DEC-007): liga o núcleo puro do personagem e do
+/// posicionamento ao adaptador de plataforma (janelas, bandeja, menu e mensagens do Windows).
 ///
 /// Ocioso por eventos (DEC-011): nada roda em timer periódico. Os únicos timers são de uma
 /// vez só: o agrupamento das mensagens de topologia (300 ms depois de uma mensagem, com até
@@ -36,14 +36,21 @@ internal sealed class Aplicacao
     private readonly InstanciaUnica _instancia;
     private readonly DispatcherTimer _agrupador;
     private readonly DispatcherTimer _repetirBandeja;
+    private readonly DispatcherTimer _relogio;
     private readonly List<string> _motivosPendentes = [];
+    private readonly Dictionary<Evento, string> _motivosDoNucleo = new(ReferenceEqualityComparer.Instance);
 
     private JanelaDeServico? _servico;
     private JanelaPersonagem? _personagem;
     private Bandeja? _bandeja;
+    private Nucleo? _nucleo;
     private Topologia _topologia = null!;
-    private PosicaoDoPersonagem _posicao = null!;
     private Posicionamento _posicionamento = null!;
+    private DispatcherTimer? _decisaoAutonoma;
+    private EventHandler? _aoDispararDecisao;
+    private TimeSpan _tempoAcumulado;
+    private long _ultimaMarcacaoRelogio;
+    private long _passosDoRelogio;
     private int _dpiDoSprite;
     private int _dpiDoIcone;
     private int _releiturasFalhas;
@@ -51,6 +58,7 @@ internal sealed class Aplicacao
     private bool _visivel;
     private bool _primeiroQuadroRegistrado;
     private bool _encerrando;
+    private bool _processandoNucleo;
 
     internal Aplicacao(Application app, InstanciaUnica instancia)
     {
@@ -64,6 +72,11 @@ internal sealed class Aplicacao
             _repetirBandeja.Stop();
             AdicionarIconeNaBandeja();
         };
+        _relogio = new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromSeconds(1d / 60),
+        };
+        _relogio.Tick += AoTiqueDoRelogio;
     }
 
     internal void Iniciar()
@@ -71,7 +84,7 @@ internal sealed class Aplicacao
         // Limitação aceita do System.Windows.Application: o WPF encerra na pergunta de fim de
         // sessão (WM_QUERYENDSESSION) se ninguém cancelar; um desligamento cancelado depois por
         // outro aplicativo deixa o Buzzy fechado (DECISIONS.md).
-        _app.SessionEnding += (_, _) => Encerrar("fim de sessão");
+        _app.SessionEnding += (_, _) => Enviar(new SessionEnding(), "fim de sessão");
         _app.DispatcherUnhandledException += (_, e) =>
         {
             Diagnostico.Evento("ERRO", ("tipo", e.Exception.GetType().Name), ("mensagem", e.Exception.Message));
@@ -87,9 +100,6 @@ internal sealed class Aplicacao
         _topologia = topologia;
         Diagnostico.Evento("TOPOLOGIA", ("motivo", "início"), ("impressao", topologia.ImpressaoDigital));
 
-        _posicionamento = Posicionador.Inicial(topologia, SpriteProvisorio.TamanhoLogico);
-        _posicao = Posicionador.Descrever(_posicionamento);
-
         _servico = new JanelaDeServico();
         _servico.BandejaAcionada += AoAcionarBandeja;
         _servico.BarraDeTarefasRecriada += AoRecriarBarra;
@@ -97,26 +107,30 @@ internal sealed class Aplicacao
         Diagnostico.Evento("SERVICO", ("hwnd", _servico.Hwnd));
 
         _personagem = new JanelaPersonagem();
-        _personagem.MenuSolicitado += p => Adiar(() => AbrirMenu(p, "personagem", peloTeclado: false));
+        _personagem.MenuSolicitado += p => Adiar(() => Enviar(new ContextMenu(p), "personagem"));
         _personagem.DpiMudou += dpi => AoPossivelMudancaDeTopologia($"WM_DPICHANGED {dpi}");
-        _personagem.Minimizada += () => Esconder("minimizado pelo Windows");
+        _personagem.Minimizada += () => Adiar(() => Enviar(new CmdHide(), "minimizado pelo Windows"));
         _personagem.Closing += (_, e) =>
         {
             if (_encerrando) return;
             e.Cancel = true;
-            Adiar(() => Encerrar("fechamento da janela"));
+            Adiar(() => Enviar(new CmdExit(), "fechamento da janela"));
         };
         _personagem.ContentRendered += AoPrimeiroQuadro;
 
-        // Cria a janela sem mostrar, posiciona em pixels físicos e só então mostra: o Buzzy
-        // não aparece primeiro num canto qualquer.
+        // Cria a janela sem mostrá-la. Loaded escolhe o primeiro posicionamento e os efeitos
+        // do núcleo a colocam em pixels físicos antes de torná-la visível.
         new WindowInteropHelper(_personagem).EnsureHandle();
-        AplicarNaJanela(_posicionamento);
-        _personagem.Show();
-        _visivel = true;
-        AplicarNaJanela(_posicionamento);
         Diagnostico.Evento("JANELA", ("hwnd", _personagem.Hwnd));
-        Diagnostico.Evento("VISIVEL", ("visivel", "sim"), ("motivo", "início"));
+
+        ulong semente = unchecked((ulong)Environment.TickCount64);
+        _nucleo = new Nucleo(new ConfiguracaoDoNucleo
+        {
+            Tamanho = SpriteProvisorio.TamanhoLogico,
+            Acoes = AcoesAutonomas.Descansar | AcoesAutonomas.TrocarExpressao,
+        }, semente);
+        Diagnostico.Evento("NUCLEO", ("semente", semente));
+        Enviar(new Loaded(topologia, PosicaoSalva: null, Preferencias.Padrao), "início");
 
         _dpiDoIcone = topologia.Principal.Dpi;
         _bandeja = new Bandeja(_servico.Hwnd, CriarIcone(_dpiDoIcone));
@@ -125,7 +139,7 @@ internal sealed class Aplicacao
         _instancia.EscutarPedidos(() => Adiar(() =>
         {
             Diagnostico.Evento("INSTANCIA", ("papel", "primeira"), ("pedido", "mostrar"));
-            Mostrar("segunda instância");
+            MostrarPorComando("segunda instância");
         }));
     }
 
@@ -145,9 +159,9 @@ internal sealed class Aplicacao
         PontoPx ponto = ancora ?? PontoDoIcone();
         Diagnostico.Evento("BANDEJA", ("acao", acao), ("ancora", ponto));
         if (acao == AcaoNaBandeja.Selecionar)
-            Adiar(() => Mostrar("bandeja"));
+            Adiar(() => MostrarPorComando("bandeja"));
         else
-            Adiar(() => AbrirMenu(ponto, "bandeja", peloTeclado: acao == AcaoNaBandeja.MenuPeloTeclado));
+            Adiar(() => ExibirMenuDoDesktop(ponto, "bandeja", peloTeclado: acao == AcaoNaBandeja.MenuPeloTeclado));
     }
 
     private void AoRecriarBarra()
@@ -203,11 +217,7 @@ internal sealed class Aplicacao
         _motivosPendentes.Clear();
         bool mudou = !nova.MesmaConfiguracao(_topologia);
         _topologia = nova;
-
-        // Escondido, a mudança só atualiza a topologia em memória (ARCHITECTURE.md 2.6):
-        // a posição é revalidada ao reaparecer, e um monitor que some e volta enquanto o Buzzy
-        // está escondido não faz a posição lembrada mudar de monitor.
-        if (_visivel) Reacomodar();
+        Enviar(new TopologyChanged(nova), motivos);
 
         if (nova.Principal.Dpi != _dpiDoIcone && _bandeja is not null)
         {
@@ -231,14 +241,6 @@ internal sealed class Aplicacao
         }
         Diagnostico.Evento("ERRO", ("etapa", "topologia inicial"), ("mensagem", erro));
         return null;
-    }
-
-    private void Reacomodar()
-    {
-        (Posicionamento resultado, PosicaoDoPersonagem posicao) = Posicionador.Reacomodar(_topologia, _posicao, SpriteProvisorio.TamanhoLogico);
-        _posicionamento = resultado;
-        _posicao = posicao;
-        AplicarNaJanela(resultado);
     }
 
     private void AplicarNaJanela(Posicionamento p)
@@ -281,35 +283,28 @@ internal sealed class Aplicacao
             ("pontoTransparente", transparente));
     }
 
-    private void Mostrar(string motivo)
+    private void MostrarPorComando(string motivo)
     {
         if (_encerrando || _personagem is null) return;
-        if (!_visivel)
+        bool jaEstavaVisivel = _visivel;
+
+        // O núcleo usa a topologia que conhece. Atualize-a antes de CMD_SHOW para que uma
+        // mudança ocorrida enquanto estava escondido seja validada antes de a janela reaparecer.
+        Topologia? atual = LeitorDeTopologia.Ler(out _);
+        if (atual is not null)
         {
-            // Escondido, a topologia só foi guardada em memória: revalida antes de reaparecer.
-            Topologia? atual = LeitorDeTopologia.Ler(out _);
-            if (atual is not null) _topologia = atual;
-            (Posicionamento resultado, PosicaoDoPersonagem posicao) = Posicionador.Reacomodar(_topologia, _posicao, SpriteProvisorio.TamanhoLogico);
-            _posicionamento = resultado;
-            _posicao = posicao;
-            AplicarNaJanela(resultado);
-            _personagem.Show();
-            _visivel = true;
-            AplicarNaJanela(resultado);
+            _topologia = atual;
+            Enviar(new TopologyChanged(atual), $"revalidar antes de mostrar: {motivo}");
         }
+
+        Enviar(new CmdShow(), motivo);
+        if (_encerrando || !_visivel) return;
+
         _personagem.ReafirmarTopo();
-        Diagnostico.Evento("VISIVEL", ("visivel", "sim"), ("motivo", motivo));
+        if (jaEstavaVisivel) RegistrarVisibilidade(true, motivo);
     }
 
-    private void Esconder(string motivo)
-    {
-        if (_encerrando || _personagem is null || !_visivel) return;
-        _personagem.Hide();
-        _visivel = false;
-        Diagnostico.Evento("VISIVEL", ("visivel", "nao"), ("motivo", motivo));
-    }
-
-    private void AbrirMenu(PontoPx ponto, string origem, bool peloTeclado)
+    private void ExibirMenuDoDesktop(PontoPx ponto, string origem, bool peloTeclado)
     {
         if (_encerrando) return;
         // A decisão usa o estado do momento em que o menu abriu, que é o texto que o
@@ -322,13 +317,13 @@ internal sealed class Aplicacao
         switch (comando)
         {
             case ComandoDoMenu.AlternarVisibilidade when visivelAoAbrir:
-                Esconder("menu");
+                Enviar(new CmdHide(), "menu");
                 break;
             case ComandoDoMenu.AlternarVisibilidade:
-                Mostrar("menu");
+                MostrarPorComando("menu");
                 break;
             case ComandoDoMenu.Sair:
-                Encerrar("menu");
+                Enviar(new CmdExit(), "menu");
                 break;
             case ComandoDoMenu.Nenhum when peloTeclado:
                 // Quem abriu o menu da bandeja pelo teclado e o cancelou volta para a área de
@@ -339,7 +334,205 @@ internal sealed class Aplicacao
         }
     }
 
-    private void Encerrar(string motivo)
+    private void Enviar(Evento evento, string motivo)
+    {
+        if (_encerrando) return;
+        if (_nucleo is null) throw new InvalidOperationException("O núcleo ainda não foi criado.");
+
+        if (!_nucleo.Enfileirar(evento))
+        {
+            Diagnostico.Evento("NUCLEO", ("evento", evento.GetType().Name), ("descartado", "autônomo sob controle do usuário"));
+            return;
+        }
+
+        _motivosDoNucleo[evento] = motivo;
+        ProcessarFilaDoNucleo();
+    }
+
+    private void ProcessarFilaDoNucleo()
+    {
+        if (_processandoNucleo || _nucleo is null) return;
+        _processandoNucleo = true;
+        try
+        {
+            while (_nucleo.Pendentes > 0 && !_encerrando)
+            {
+                Evento[] eventosDoLote = [.. _motivosDoNucleo.Keys];
+                var efeitos = new List<(Evento Evento, Efeito Efeito, string Motivo)>();
+                long descartadosAntes = _nucleo.Descartados;
+                try
+                {
+                    _nucleo.Processar((eventoAplicado, resultado) =>
+                    {
+                        string motivoEvento = _motivosDoNucleo.GetValueOrDefault(eventoAplicado, "sem motivo");
+                        foreach (Transicao transicao in resultado.Transicoes)
+                        {
+                            Diagnostico.Evento("NUCLEO",
+                                ("evento", eventoAplicado.GetType().Name),
+                                ("motivo", motivoEvento),
+                                ("de", transicao.De),
+                                ("para", transicao.Para),
+                                ("regra", transicao.Regra));
+                        }
+                        foreach (Efeito efeito in resultado.Efeitos)
+                            efeitos.Add((eventoAplicado, efeito, motivoEvento));
+                    });
+                }
+                finally
+                {
+                    foreach (Evento eventoDoLote in eventosDoLote)
+                        _motivosDoNucleo.Remove(eventoDoLote);
+                }
+
+                long descartados = _nucleo.Descartados - descartadosAntes;
+                if (descartados > 0)
+                    Diagnostico.Evento("NUCLEO", ("autonomosDescartados", descartados));
+
+                foreach ((Evento evento, Efeito efeito, string motivoEvento) in efeitos)
+                {
+                    if (_encerrando) break;
+                    ExecutarEfeito(evento, efeito, motivoEvento);
+                }
+            }
+        }
+        finally
+        {
+            _processandoNucleo = false;
+        }
+    }
+
+    private void ExecutarEfeito(Evento evento, Efeito efeito, string motivo)
+    {
+        switch (efeito)
+        {
+            case MoverJanela mover:
+                _posicionamento = mover.Destino;
+                AplicarNaJanela(mover.Destino);
+                break;
+
+            case MostrarJanela:
+                if (_personagem is null || _visivel) break;
+                _personagem.Show();
+                _visivel = true;
+                // O WPF pode reaplicar a posição inicial ao mostrar a janela. Confirma o
+                // retângulo físico depois de Show(), como fazia a composição da Fase 1.
+                AplicarNaJanela(_posicionamento);
+                RegistrarVisibilidade(true, motivo);
+                break;
+
+            case EsconderJanela:
+                if (_personagem is null || !_visivel) break;
+                _personagem.Hide();
+                _visivel = false;
+                RegistrarVisibilidade(false, motivo);
+                break;
+
+            case LigarRelogio:
+                IniciarRelogio();
+                break;
+
+            case DesligarRelogio:
+                _relogio.Stop();
+                _tempoAcumulado = TimeSpan.Zero;
+                break;
+
+            case AgendarDecisao agendar:
+                AgendarTemporizadorDeDecisao(agendar);
+                break;
+
+            case CancelarDecisao:
+                CancelarDecisaoAutonoma();
+                break;
+
+            case LiberarCaptura:
+                // A captura e os gestos reais de mouse entram na Fase 3; a Fase 2 não mantém captura.
+                break;
+
+            case AbrirMenu pedidoMenu:
+                ExibirMenuDoDesktop(pedidoMenu.Ponto, "personagem", peloTeclado: false);
+                break;
+
+            case Encerrar:
+                EncerrarAplicacao(motivo);
+                break;
+
+            case GravarPosicao:
+            case GravarPreferencias:
+            case AbrirPainelDeEnergia:
+            case FecharPainelDeEnergia:
+            case AbrirConfiguracoes:
+                // Estes recursos são ativados nas fases de persistência e configurações.
+                Diagnostico.Evento("NUCLEO", ("efeitoPendente", efeito.GetType().Name), ("evento", evento.GetType().Name));
+                break;
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(efeito), efeito, "Efeito do núcleo sem adaptador.");
+        }
+    }
+
+    private void RegistrarVisibilidade(bool visivel, string motivo)
+        => Diagnostico.Evento("VISIVEL", ("visivel", visivel ? "sim" : "nao"), ("motivo", motivo));
+
+    private void IniciarRelogio()
+    {
+        if (_relogio.IsEnabled) return;
+        _tempoAcumulado = TimeSpan.Zero;
+        _ultimaMarcacaoRelogio = Stopwatch.GetTimestamp();
+        _relogio.Start();
+    }
+
+    private void AoTiqueDoRelogio(object? remetente, EventArgs e)
+    {
+        if (_nucleo is null || !_relogio.IsEnabled) return;
+        long agora = Stopwatch.GetTimestamp();
+        _tempoAcumulado += Stopwatch.GetElapsedTime(_ultimaMarcacaoRelogio, agora);
+        _ultimaMarcacaoRelogio = agora;
+
+        TimeSpan passo = TimeSpan.FromSeconds(1d / _nucleo.Configuracao.PassosPorSegundo);
+        while (_tempoAcumulado >= passo && _relogio.IsEnabled)
+        {
+            _tempoAcumulado -= passo;
+            Enviar(new Tick(), $"relógio passo {++_passosDoRelogio}");
+        }
+    }
+
+    private void AgendarTemporizadorDeDecisao(AgendarDecisao agendamento)
+    {
+        CancelarDecisaoAutonoma();
+        var temporizador = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = agendamento.Atraso > TimeSpan.Zero ? agendamento.Atraso : TimeSpan.FromMilliseconds(1),
+        };
+        EventHandler aoDisparar = null!;
+        aoDisparar = (_, _) =>
+        {
+            temporizador.Stop();
+            temporizador.Tick -= aoDisparar;
+            if (ReferenceEquals(_decisaoAutonoma, temporizador))
+            {
+                _decisaoAutonoma = null;
+                _aoDispararDecisao = null;
+            }
+            Enviar(new AutonomyTimer(agendamento.Geracao), $"agenda autônoma geração {agendamento.Geracao}");
+        };
+        _decisaoAutonoma = temporizador;
+        _aoDispararDecisao = aoDisparar;
+        temporizador.Tick += aoDisparar;
+        temporizador.Start();
+    }
+
+    private void CancelarDecisaoAutonoma()
+    {
+        DispatcherTimer? temporizador = _decisaoAutonoma;
+        EventHandler? aoDisparar = _aoDispararDecisao;
+        _decisaoAutonoma = null;
+        _aoDispararDecisao = null;
+        if (temporizador is null) return;
+        temporizador.Stop();
+        if (aoDisparar is not null) temporizador.Tick -= aoDisparar;
+    }
+
+    private void EncerrarAplicacao(string motivo)
     {
         if (_encerrando) return;
         _encerrando = true;
@@ -350,6 +543,8 @@ internal sealed class Aplicacao
         Win32.EndMenu();
         _agrupador.Stop();
         _repetirBandeja.Stop();
+        _relogio.Stop();
+        CancelarDecisaoAutonoma();
         _bandeja?.Dispose();
         _servico?.Dispose();
         _personagem?.Close();

@@ -1,6 +1,6 @@
 # SECURITY.md — Modelo de segurança do Buzzy
 
-> Regras de segurança do produto. Há código inicial da Fase 1 em `src/`, ainda não verificado; a pesquisa e as fontes técnicas estão em DEC-006 de [DECISIONS.md](DECISIONS.md).
+> Regras de segurança do produto. A Fase 1 está implementada e verificada nos limites descritos na seção 10; a Fase 2 está em andamento. O modelo completo de segurança continua PLANNED.
 >
 > Última atualização: 2026-09-29
 
@@ -68,7 +68,7 @@ STATUS: PLANNED. Cada item vira regra de verificação automática na Fase 1 (se
 
 ## 4. Stack selecionada e riscos de distribuição
 
-STATUS: PLANNED. DEC-006 selecionou WPF, C# e .NET 10; P1/P2 foram aceitos nos limites documentados e P3 ainda é gate técnico. A seleção não valida o aplicativo.
+STATUS: PLANNED. DEC-006 selecionou WPF, C# e .NET 10; P1/P2 foram aceitos nos limites documentados e P3 passou como gate técnico no ambiente medido, com input sintético. A seleção não valida por si só o aplicativo.
 
 - WPF executa em um processo do usuário e não exige administrador, motor web ou rede própria. O runtime .NET continua sendo dependência externa: manter versão suportada, fixar o SDK e auditar as dependências do aplicativo.
 - O portão de segurança deve inspecionar binário e código quanto às capacidades proibidas da seção 3.2. Um desktop comum roda com os direitos do usuário; MSIX comum não é sandbox e não substitui esse portão.
@@ -143,4 +143,6 @@ STATUS: PLANNED. Cada prática vira item de teste a partir da Fase 1.
 ## 10. Verificações realizadas
 
 - 2026-09-26: pesquisa de segurança em fontes oficiais da Microsoft; fontes e limites estão em DEC-006.
-- A segurança do aplicativo não foi verificada: há código inicial da Fase 1 em `src/`, mas nenhum teste de segurança foi executado.
+- 2026-09-29: `powershell -NoProfile -File tools/testar.ps1` terminou com código 0; build Release sem avisos/erros, 73 testes do portão aprovados, portão binário/fonte aprovado (quatro permissões estritamente no apphost) e auditoria de pacotes sem falhas. O relatório do portão descreve cada permissão.
+- 2026-09-29: em `resultados/desempenho-20260929-215550.txt`, a medição de dez minutos observou zero processos filhos em 629 verificações e zero conexões TCP/UDP em 58 verificações; a resolução do timer global não mudou durante a medição. Isso cobre somente a execução medida e não substitui a sessão de uma hora nem os demais itens da Fase 9.
+- O resultado de dez minutos e o portão aprovado não verificam todas as práticas da seção 8; a Fase 9 permanece pendente.

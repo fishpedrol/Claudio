@@ -33,7 +33,7 @@
 - **Alternativas consideradas:** copiar diretamente um personagem existente ou criar uma janela convencional sem presença no desktop.
 - **Motivo:** preservar a nostalgia da interação enquanto se cria um produto próprio, moderno e auditável.
 - **Trade-offs:** a experiência precisa parecer integrada ao desktop sem recorrer a comportamentos intrusivos ou identidade copiada.
-- **Consequências:** o asset provisório e a arte final precisam ser visualmente distintos de mascotes conhecidos. O conceito de primata, somado à referência declarada, exige cuidado extra com silhueta e cor. Essa categoria de software também tem histórico de adware, então qualquer comportamento que pareça coleta de dados prejudica a confiança e a reputação no SmartScreen (DEC-005, SECURITY.md).
+- **Consequências:** o Buzzy não copia outros mascotes de desktop. *Atualização de 2026-09-29 (DEC-019):* a semelhança com o Luffy — chapéu de palha e personalidade — é intencional, por decisão do usuário; a regra anterior de distância visual do Luffy foi retirada. Essa categoria de software também tem histórico de adware, então qualquer comportamento que pareça coleta de dados prejudica a confiança e a reputação no SmartScreen (DEC-005, SECURITY.md).
 
 ## DEC-003 — MVP local sem IA integrada
 
@@ -240,7 +240,7 @@ O usuário aceitou estas metas em 2026-09-27. A Fase 1 deve apenas estabelecer a
 ## DEC-014 — Inspiração visual e personalidade espuleta ajustável
 
 - **Data:** 2026-09-28
-- **Estado da decisão:** ACCEPTED pelo usuário quanto à inspiração e ao controle; detalhes operacionais definidos pelo Codex sob delegação explícita
+- **Estado da decisão:** ACCEPTED pelo usuário quanto à inspiração e ao controle de energia; a parte "sem copiar elementos reconhecíveis" foi SUPERSEDED por DEC-019 (o usuário quer semelhança com o Luffy)
 - **STATUS:** PLANNED (conteúdo, opções e comportamento ainda não implementados)
 - **Problema:** o conceito do Buzzy parte de inspiração em Luffy, mas precisa continuar um mascote próprio; o usuário também quer regular o quanto ele fica espuleta enquanto programa ou joga.
 - **Decisão:** preservar Luffy, de *One Piece*, como inspiração visual e de personalidade em sentido amplo, traduzindo a ideia para um primata original sem copiar elementos reconhecíveis do personagem ou da obra. O que tomar, o que não usar e o critério de distinção ficam em PRODUCT_SPEC.md, seção Visão (acrescentado em 2026-09-28 porque só havia a lista do que evitar). O temperamento pode ser livre, otimista, curioso, impulsivo, aventureiro e brincalhão, expresso por movimento, expressões e gestos, sem conversa ou texto. O controle terá três posições em português — **Baixa**, **Média** (padrão) e **Alta** — equivalentes a Low/Mid/High. Baixa significa mais pausas e menos ações; Média mantém um ritmo brincalhão equilibrado; Alta aumenta a frequência e a duração das ações e reações não verbais. Dois cliques abrem um painel compacto somente com o controle de energia; as configurações apresentam a mesma preferência. Movimento permanece determinístico e seguro em qualquer nível; arraste, ocultar/pausar e modo de tela cheia sempre prevalecem.
@@ -287,14 +287,38 @@ O usuário aceitou estas metas em 2026-09-27. A Fase 1 deve apenas estabelecer a
 ## DEC-017 — Identidade visual original em fontes vetoriais
 
 - **Data:** 2026-09-29
-- **Estado da decisão:** ACCEPTED por Claude sob DEC-015, sem aprovação rotineira do conceito visual.
-- **STATUS:** PLANNED; direção e fontes criadas e conferidas pela ferramenta de prévias; a integração animada é da Fase 6.
+- **Estado da decisão:** SUPERSEDED por DEC-018 (o usuário não gostou da direção e pediu pixel art fiel às pranchas). Arquivos guardados em `assets/identidade/arquivo-vetorial/`.
+- **STATUS:** PLANNED na época; substituída antes de qualquer integração.
 - **Problema:** criar a aparência própria do Buzzy a partir das referências e da inspiração de DEC-014, respeitando o clique por alfa de P1 (só alfa 0 deixa o clique passar), a nitidez de 100% a 200% e a troca de arte sem mexer no núcleo (ARCHITECTURE.md 2.10).
 - **Decisão:** o Buzzy é um sagui-acrobata violeta-índigo, com rosto pêssego, olhos e ponta da cauda menta, topete de três tufos e cauda em espiral, descrito em [IDENTIDADE_VISUAL.md](IDENTIDADE_VISUAL.md). A arte é um **boneco de recorte vetorial**: biblioteca de partes num subconjunto de SVG (`assets/identidade/buzzy-partes.svg`) e poses e expressões como árvores de transformações em JSON (`assets/identidade/buzzy-poses.json`), renderizadas pela biblioteca `src/Buzzy.Visual` no DPI de destino com borda dura (alfa 0 ou 255). `tools/Buzzy.Identidade` gera as prévias e confere que toda pose cabe no quadro de 128 × 128 DIP e só usa partes existentes.
 - **Alternativas consideradas:** (a) sprites em PNG desenhados por escala, com três conjuntos para manter; (b) pixel art, que combina com a borda dura mas fica pequena ou borrada em 150% e 200%; (c) arte 3D pré-renderizada, como numa das pranchas, difícil de editar e com sombra suave incompatível com a regra de alfa.
 - **Motivo:** uma fonte única atende todas as escalas; expressões são camadas independentes do corpo (invariante 6 de ARCHITECTURE.md 2.6); poses novas são dados; as fontes são texto editável e versionável.
 - **Trade-offs:** o renderizador faz parte do app, e o custo de rasterizar precisa ser medido na Fase 6, junto com a investigação de animação e memória de P2; o subconjunto de SVG aceito é restrito.
 - **Consequências:** a Fase 6 decide, com medição, entre rasterizar cada quadro sob demanda ou manter um cache por DPI. O critério 3 da Fase 6 continua o mesmo, aplicado aos quadros rasterizados a partir das fontes em cada escala suportada, porque não há PNG de produção versionado. As prévias em `assets/identidade/previa/` são geradas, não editadas à mão.
+
+## DEC-018 — Identidade em pixel art fiel às pranchas de referência
+
+- **Data:** 2026-09-29
+- **Estado da decisão:** ACCEPTED — pedido do usuário ("não gostei do design do Buzzy, queria que fosse mais fiel às imagens de referência"; "usar essas imagens de referência para você gerar um boneco meio pixel art"). Detalhes técnicos definidos por Claude sob DEC-015.
+- **STATUS:** PLANNED; 21 poses, 14 expressões e o ícone da bandeja gerados e conferidos pela ferramenta de prévias; a integração animada é da Fase 6.
+- **Problema:** a direção vetorial de DEC-017 se afastava das pranchas (cor, rosto, proporções) e o usuário quer um boneco em pixel art parecido com elas, sem perder o clique por alfa de P1 nem a nitidez nas escalas do Windows.
+- **Decisão:** pixel art em quadro de **64 × 64 pixels**, mostrado em **128 × 128 DIP** (1 pixel de arte = 2 DIP), com paleta, proporções, rosto, orelhas, olhos, cauda e poses tirados das pranchas (descrição em [IDENTIDADE_VISUAL.md](IDENTIDADE_VISUAL.md)). A arte é gerada por código em `src/Buzzy.Visual/Pixel/`: esqueleto posável rasterizado sem meio-tom, contorno de 1 pixel, sombra de 1 pixel e carimbos desenhados à mão para o rosto; a folha nativa fica em `assets/identidade/pixel/buzzy-poses.png`. O chapéu de palha com faixa vermelha entra (DEC-019); o tufo de pelo aparece por baixo dele quando o chapéu salta.
+- **Alternativas consideradas:** (a) ajustar a direção vetorial às pranchas, que o usuário não pediu e não resolve o estilo; (b) reduzir as imagens das pranchas direto para 64 pixels, que traria o chapéu, borrões e poses que não existem nelas (ciclo de caminhada, escalada); (c) pixel art desenhada só à mão, quadro a quadro, mais lenta de manter consistente entre 19 poses.
+- **Motivo:** o quadro de 64 pixels em 128 DIP dá ampliação inteira em 100%, 150% e 200% (2×, 3× e 4×), sempre nítida; a pixel art já é alfa 0 ou 255 por natureza (regra de P1); o gerador mantém as poses consistentes e permite retocar à mão depois.
+- **Trade-offs:** escalas intermediárias (125%, 175%) exigem vizinho mais próximo com pixels desiguais ou arredondar para o passo inteiro mais próximo (decidir nas Fases 6 e 8); detalhe fino limitado à grade de 64 pixels.
+- **Consequências:** IDENTIDADE_VISUAL.md foi reescrito; TODO.md (trabalho visual), ARCHITECTURE.md e PROJECT_CONTEXT.md apontam para a pixel art; a Fase 6 usa a folha nativa, com o critério 3 conferido direto nos pixels; o código vetorial de `src/Buzzy.Visual` fica sem uso e pode ser removido na Fase 6.
+
+## DEC-019 — Semelhança intencional com o Luffy: chapéu de palha e personalidade
+
+- **Data:** 2026-09-29
+- **Estado da decisão:** ACCEPTED pelo usuário ("quero que seja tipo o Luffy, coloque o chapéu de palha sim"; "eu quero que a personalidade dele seja tipo a do Luffy [...] a ideia central do projeto é essa").
+- **STATUS:** PLANNED; o chapéu já está na pixel art e no sprite parado do app; a personalidade é implementada nas Fases 6 e 7.
+- **Problema:** PRODUCT_SPEC.md, DEC-002, DEC-014, Q-17 e o prompt mestre tinham virado a inspiração em regra de distância ("não usar o chapéu", "ninguém deve reconhecer o Luffy"), o contrário do que o usuário quer.
+- **Decisão:** o Buzzy é um macaquinho com o jeito do Luffy: **chapéu de palha com faixa vermelha**, como nas pranchas, e **personalidade do Luffy** (livre, impulsivo, otimista, aventureiro, de sorriso e risada fáceis, energia inesgotável), expressa sem fala. Outros elementos do personagem não são proibidos e entram se o usuário pedir. Continuam valendo: nome Buzzy, sem fala, chat, texto ou voz (DEC-003), sem IA, uso pessoal sem distribuição (Q-10).
+- **Alternativas consideradas:** manter a regra de distância (rejeitada pelo usuário) ou copiar o Luffy inteiro com roupa e cicatriz (não pedido).
+- **Motivo:** é a ideia central do projeto, dita pelo usuário.
+- **Trade-offs:** *One Piece* é obra e marca de terceiros; para uso pessoal (Q-10) não há impedimento prático, mas qualquer distribuição pública exige rever o chapéu e a semelhança antes.
+- **Consequências:** PRODUCT_SPEC.md (Visão) reescrito; DEC-002, DEC-014, DEC-018, Q-17 e Q-23 atualizados; IDENTIDADE_VISUAL.md e o prompt mestre do Codex alinhados; a pixel art ganhou o chapéu, que reage às emoções.
 
 ## Decisões de produto registradas pelo usuário
 
@@ -316,7 +340,7 @@ Em 2026-09-26 e 2026-09-27 o usuário respondeu às escolhas abaixo em `docs/DEC
 | Q-14 | Mouse e touchpad no MVP; toque e caneta ficam para depois. | Fases 3 e 4. | PLANNED |
 | Q-20 | Painel de energia e configurações navegáveis por teclado e utilizáveis por leitor de tela; janela do personagem não é alvo de leitor de tela. | Fase 8. | PLANNED |
 | Q-21 | Não incluir modo fantasma (click-through total) no MVP. | Fase 8; evita deixar o personagem inacessível. | PLANNED |
-| Q-23 | O conceito visual e o temperamento podem se inspirar amplamente em Luffy, preservando um mascote original e curioso. Personalidade não verbal, sem conversa ou chat. Controle de energia com três posições — Baixa/Média/Alta (Low/Mid/High), Média padrão; Baixa é mais tranquila, Média equilibrada e Alta mais ativa. O seletor aparece ao dar dois cliques e nas configurações, ligado à mesma preferência. | Comportamento não verbal nas Fases 2, 4, 6 e 7; painel e persistência na Fase 8. | PLANNED; inspiração e controle pedidos pelo usuário em 2026-09-28 |
+| Q-23 | O conceito visual e o temperamento se inspiram no Luffy, com semelhança intencional (DEC-019, 2026-09-29): chapéu de palha e personalidade dele, num macaquinho chamado Buzzy. Personalidade não verbal, sem conversa ou chat. Controle de energia com três posições — Baixa/Média/Alta (Low/Mid/High), Média padrão; Baixa é mais tranquila, Média equilibrada e Alta mais ativa. O seletor aparece ao dar dois cliques e nas configurações, ligado à mesma preferência. | Comportamento não verbal nas Fases 2, 4, 6 e 7; painel e persistência na Fase 8. | PLANNED; inspiração e controle pedidos pelo usuário em 2026-09-28 |
 
 ### Decisões que continuam pendentes
 
@@ -351,7 +375,7 @@ Em 2026-09-26 o usuário esclareceu que as pranchas em `assets/references/` são
 | ID | Escolha | Situação observada | Recomendação | Bloqueia |
 |---|---|---|---|---|
 | Q-16 | Nome do personagem | Uma prancha usa o título "PIXEL"; o produto está definido como Buzzy. | Referência visual não altera o nome. Manter Buzzy; só mudar com decisão explícita do usuário. | Nenhuma; esclarecida |
-| Q-17 | Acessórios e semelhança visual | As referências são inspiração e alguns elementos poderiam lembrar personagem conhecido. | Claude cria uma identidade distinta e escolhe uma direção original agora, respeitando PRODUCT_SPEC.md; não há aprovação rotineira como gate. | Nenhuma; esclarecida |
+| Q-17 | Acessórios e semelhança visual | As pranchas mostram o chapéu de palha com faixa vermelha do Luffy. | Resolvida pelo usuário em 2026-09-29 (DEC-019): o chapéu entra e a semelhança com o Luffy é desejada; não aplicar regra de distância visual, respeitando PRODUCT_SPEC.md; não há aprovação rotineira como gate. | Nenhuma; esclarecida |
 | Q-18 | Poses e superfícies | As pranchas mostram poses em superfícies que não estão identificadas. | São referências, não ampliação do escopo. Vale a decisão de superfícies Q-05; não adicionar janelas de outros aplicativos sem decisão explícita. | Nenhuma; esclarecida |
 | Q-19 | Estilo e borda do sprite | As pranchas exploram estilos visuais diferentes; o funcionamento do clique transparente continua sujeito ao protótipo P1. | Claude pode propor uma direção visual nova. O requisito técnico de alfa/clique de P1 continua independente da referência estética. | Nenhuma; esclarecida |
 

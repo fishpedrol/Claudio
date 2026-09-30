@@ -10,27 +10,28 @@ Buzzy é um mascote digital interativo para desktop Windows: um companheiro mode
 
 **Intenção central do usuário (2026-09-28):** Buzzy é um mascote interativo de companhia para ficar no desktop enquanto o usuário programa ou joga. Deve ser engraçado, curioso, expressivo e ativo no desktop; não é um assistente de tarefas nem um chatbot. Sua personalidade aparece por movimento, expressões, gestos e reações não verbais. Não haverá chat, campo de texto, conversa digitada ou respostas em texto. Não incluir IA no aplicativo, agora ou no plano futuro, a menos que o usuário reabra essa decisão explicitamente. Buzzy não executa tarefas gerais no computador.
 
-Buzzy terá identidade e personagem originais. Não copiar nome, personagem, visual, voz, conteúdo ou marca de qualquer mascote existente.
+**Buzzy lembra o Luffy de propósito (decisão do usuário, 2026-09-29, DEC-019).** A ideia central do projeto é um macaquinho com o jeito do Luffy, de *One Piece*: a personalidade dele e o chapéu de palha com a faixa vermelha, como nas pranchas de referência. O nome continua Buzzy. Não se copia outro mascote de desktop.
 
-O personagem conceitual é um pequeno primata arbóreo antropomórfico, amigável, curioso, brincalhão, ágil e expressivo: cabeça relativamente grande, olhos expressivos, focinho curto, orelhas arredondadas, braços longos, mãos adequadas à escalada, pernas compactas e cauda longa e expressiva. Claude está autorizado a criar a identidade visual original nesta etapa; o software começa com um placeholder estático substituível e integra as animações na Fase 6.
+O personagem conceitual é um pequeno primata arbóreo antropomórfico, amigável, curioso, brincalhão, ágil e expressivo: cabeça relativamente grande, olhos expressivos, focinho curto, orelhas arredondadas, braços longos, mãos adequadas à escalada, pernas compactas e cauda longa e expressiva. A identidade visual está em pixel art, fiel às pranchas (DEC-018 e DEC-019); o software mostra o quadro parado dela e integra as animações na Fase 6.
 
-O usuário diz que o conceito visual do Buzzy também foi inspirado em Luffy, de *One Piece*, e quer uma personalidade livre, impulsiva, otimista, aventureira e espuleta. Use essa inspiração como direção ampla para criar um primata original, sem copiar o personagem ou seus elementos reconhecíveis — como roupa, acessórios, símbolos, falas, silhueta ou identidade visual. A identidade visual do Buzzy deve continuar própria.
+O usuário quer que o Buzzy **tenha a personalidade do Luffy**: livre, impulsivo, otimista, aventureiro, espuleta, de sorriso largo e sempre pronto para a próxima brincadeira. A semelhança é desejada. Como o produto não tem fala nem texto (DEC-003), a personalidade aparece em poses, gestos, expressões e no ritmo das ações.
 
 **Tradução da inspiração (direção de design, STATUS: PLANNED):**
 
-- **Tomar como espírito:** sorriso largo e fácil, postura solta e confiante, impulsividade (vai antes de pensar), otimismo, curiosidade aventureira, apetite por brincadeira e movimento exagerado e elástico como princípio de animação (antecipar, comprimir e esticar, pousar com impacto). Isso deve aparecer em poses, tempo das ações e expressões.
-- **Não usar:** chapéu de palha ou faixa vermelha no chapéu (visto em uma das pranchas, Q-17), cicatriz sob o olho, colete vermelho aberto, bermuda azul, sandálias, símbolos ou bandeiras da obra, membros que esticam como poder do personagem, bordões ou falas, e a combinação de silhueta com paleta vermelho/azul/amarelo-palha que remeta ao personagem.
-- **Critério de distinção:** Claude deve conferir que Buzzy é reconhecível só pela silhueta e paleta próprias, sem depender de acessório; uma pessoa que conheça *One Piece* não deve identificá-lo como versão de Luffy. Não há gate de aprovação rotineira do usuário para criar ou integrar a identidade autorizada.
+- **Personalidade do Luffy:** sorriso largo e fácil, risada solta, postura confiante, impulsividade (vai antes de pensar), otimismo, curiosidade aventureira, energia inesgotável, cochilos despreocupados e apetite por brincadeira. Aparece em poses, tempo das ações e expressões; o movimento é exagerado e elástico (antecipar, comprimir e esticar, pousar com impacto).
+- **Visual:** macaquinho das pranchas com o **chapéu de palha e a faixa vermelha**, que também reage às emoções (salta no susto e na risada, desce no sono). Outros elementos do Luffy (por exemplo, a cicatriz sob o olho ou gags de braço elástico) podem entrar se o usuário pedir; não são proibidos.
+- **Limites que continuam:** sem fala, bordão escrito, chat, texto ou voz (DEC-003); o nome é Buzzy; o aplicativo é de uso pessoal e não é distribuído (Q-10). Antes de qualquer distribuição pública, revisar o uso de elementos de *One Piece*, que são marca e obra de terceiros.
+- Não há gate de aprovação rotineira do usuário para criar ou integrar a identidade (DEC-015).
 
 ### Referências visuais fornecidas pelo usuário
 
-As duas pranchas em `assets/references/buzzy-character-concept.png` e `assets/references/buzzy-character-concept2.png` são referências para Claude criar uma identidade original e coesa para Buzzy. Não são arte final nem lista literal de requisitos. Claude está autorizado a escolher e produzir a direção visual sem aguardar aprovação; deve seguir os limites de originalidade desta especificação.
+As duas pranchas em `assets/references/buzzy-character-concept.png` e `assets/references/buzzy-character-concept2.png` são a base da identidade do Buzzy: a pixel art segue o macaquinho delas, com o chapéu de palha (DEC-018 e DEC-019). Não são arte final. Claude está autorizado a produzir a identidade sem aguardar aprovação.
 
 ![Primeira prancha conceitual de referência](../assets/references/buzzy-character-concept.png)
 
 ![Segunda prancha conceitual de referência](../assets/references/buzzy-character-concept2.png)
 
-Elementos que aparecem nas pranchas — incluindo o nome "Pixel", chapéu, poses sobre superfícies, estilo de renderização, cores e acessórios — não ficam aprovados automaticamente. O nome do produto permanece Buzzy conforme esta especificação; qualquer mudança depende de decisão explícita do usuário. As poses não ampliam o escopo atual de superfícies do MVP. A proposta nova deve manter identidade visual distinta de personagens existentes, conforme DEC-002.
+Das pranchas, o chapéu de palha, as cores, as proporções, o rosto e as poses estão aprovados (DEC-019). O nome "Pixel" não: o produto continua Buzzy, e qualquer mudança de nome depende de decisão explícita do usuário. As poses não ampliam o escopo atual de superfícies do MVP.
 
 O cursor de mouse mostrado em uma prancha é apenas ilustrativo e não pertence ao personagem nem ao produto. As poses e animações devem corresponder às superfícies e ações previstas no MVP.
 

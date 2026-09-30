@@ -27,6 +27,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Buzzy.Core\Buzzy.Core.csproj" />
+    <!-- Pixel art do Buzzy (DEC-018 e DEC-019): o sprite parado e o ícone da bandeja. -->
+    <ProjectReference Include="..\Buzzy.Visual\Buzzy.Visual.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -51,7 +53,7 @@
     <PropertyGroup>
       <_BuzzyPortao>$(MSBuildThisFileDirectory)..\..\tools\Buzzy.PortaoApis\bin\$(Configuration)\net10.0\Buzzy.PortaoApis.dll</_BuzzyPortao>
     </PropertyGroup>
-    <Exec Command="dotnet &quot;$(_BuzzyPortao)&quot; --binarios &quot;$(OutDir).&quot; --fonte &quot;$(MSBuildThisFileDirectory).&quot; --fonte &quot;$(MSBuildThisFileDirectory)..\Buzzy.Core&quot; --manifesto &quot;$(MSBuildThisFileDirectory)app.manifest&quot;"
+    <Exec Command="dotnet &quot;$(_BuzzyPortao)&quot; --binarios &quot;$(OutDir).&quot; --fonte &quot;$(MSBuildThisFileDirectory).&quot; --fonte &quot;$(MSBuildThisFileDirectory)..\Buzzy.Core&quot; --fonte &quot;$(MSBuildThisFileDirectory)..\Buzzy.Visual&quot; --manifesto &quot;$(MSBuildThisFileDirectory)app.manifest&quot;"
           StdOutEncoding="utf-8"
           StdErrEncoding="utf-8" />
   </Target>
