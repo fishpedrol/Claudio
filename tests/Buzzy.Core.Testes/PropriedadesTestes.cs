@@ -226,7 +226,7 @@ internal static class PropriedadesTestes
     /// se for largo demais, com os pés no chão se for alto demais) e o pixel dos pés, logo
     /// acima da âncora, dentro da área útil.
     /// </summary>
-    private static void VerificarPosicionamento(Posicionamento p, TamanhoDip tamanho, Func<string> onde)
+    internal static void VerificarPosicionamento(Posicionamento p, TamanhoDip tamanho, Func<string> onde)
     {
         RetanguloPx area = p.Monitor.AreaUtil;
         RetanguloPx r = p.Retangulo;

@@ -47,12 +47,17 @@ public sealed record FecharPainelDeEnergia : Efeito;
 public sealed record AbrirConfiguracoes : Efeito;
 
 /// <summary>
-/// Grava a posição escolhida pelo usuário (persistência da Fase 5), com a tela do monitor da época
-/// (<see cref="PosicaoDoPersonagem.TelaDoMonitor"/>), que a partida seguinte usa na restauração.
+/// Grava a posição escolhida pelo usuário no settings.json (Fase 5), com a tela do monitor da época
+/// (<see cref="PosicaoDoPersonagem.TelaDoMonitor"/>), que a partida seguinte usa na restauração. Só sai de
+/// evento do usuário ou do sistema, nunca do relógio nem da agenda (invariante 18). Se a raiz grava com
+/// atraso ou na hora, diz <see cref="Persistencia.PoliticaDeGravacao"/>.
 /// </summary>
 public sealed record GravarPosicao(PosicaoDoPersonagem Posicao) : Efeito;
 
-/// <summary>Grava as preferências (persistência da Fase 8).</summary>
+/// <summary>
+/// Grava as preferências no settings.json (Fase 5; quem as muda é o painel da Fase 8), pela mesma política
+/// de <see cref="GravarPosicao"/>.
+/// </summary>
 public sealed record GravarPreferencias(Preferencias Preferencias) : Efeito;
 
 /// <summary>Encerra o aplicativo.</summary>

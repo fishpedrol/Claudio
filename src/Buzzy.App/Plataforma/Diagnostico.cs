@@ -29,15 +29,25 @@ internal static class Diagnostico
 
     internal static string? Arquivo => _arquivo;
 
-    /// <summary>Pasta de dados do Buzzy, pela consulta de pasta conhecida do Windows.</summary>
-    internal static string PastaDeDados()
-        => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.DoNotVerify), "Buzzy");
+    /// <summary>
+    /// Pasta de dados do Buzzy, pela consulta de pasta conhecida do Windows (<see cref="Plataforma.PastaDeDados.DoBuzzy()"/>);
+    /// vazia se o Windows não informar a pasta local do usuário. O log fica sempre na raiz dessa pasta, também com
+    /// um perfil de teste.
+    /// </summary>
+    internal static string PastaDeDados() => Plataforma.PastaDeDados.DoBuzzy() ?? "";
 
     internal static void Ligar()
     {
+        string pasta = PastaDeDados();
+        if (pasta.Length == 0)
+        {
+            // Sem a pasta local do usuário, sem log: nunca num caminho relativo à pasta atual.
+            _arquivo = null;
+            return;
+        }
+
         try
         {
-            string pasta = PastaDeDados();
             Directory.CreateDirectory(pasta);
             _arquivo = Path.Combine(pasta, "diagnostico.log");
         }

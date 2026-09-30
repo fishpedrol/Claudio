@@ -142,8 +142,9 @@ public sealed record CmdExit : Evento
 // Sistema.
 
 /// <summary>
-/// Configurações e topologia carregadas (primeira linha da tabela de transições). A posição salva,
-/// quando há, é restaurada pela cascata da partida (<see cref="Posicionador.Restaurar"/>); nula, o
+/// Configurações e topologia carregadas (primeira linha da tabela de transições). A posição salva e as
+/// preferências vêm do settings.json (Fase 5, <see cref="Persistencia.EsquemaDeConfiguracoes"/>). A
+/// posição, quando há, é restaurada pela cascata da partida (<see cref="Posicionador.Restaurar"/>); nula, o
 /// personagem começa na posição inicial.
 /// </summary>
 public sealed record Loaded(Topologia Topologia, PosicaoDoPersonagem? PosicaoSalva, Preferencias Preferencias) : Evento

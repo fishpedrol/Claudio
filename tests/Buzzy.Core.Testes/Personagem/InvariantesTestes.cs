@@ -1,4 +1,5 @@
 using System.Text;
+using Buzzy.Core.Persistencia;
 using Buzzy.Core.Personagem;
 using Buzzy.Testes;
 
@@ -7,9 +8,10 @@ namespace Buzzy.Core.Testes.Personagem;
 /// <summary>
 /// Testes de propriedade da máquina de estados (critérios 2 e 3 da Fase 2): milhares de
 /// sequências aleatórias de eventos, sobre topologias aleatórias e configurações variadas,
-/// conferindo a cada evento aplicado os invariantes de ARCHITECTURE.md 2.6, a regra do relógio,
-/// as linhas de FULLSCREEN_TARGETS_CHANGED e as regras do núcleo R1, R6, R8, R9, R11 e R12
-/// (Maquina.cs). Parte das sequências entrega os eventos em lotes de 1 a 4 por
+/// conferindo a cada evento aplicado os invariantes de ARCHITECTURE.md 2.6 (inclusive o 18, da Fase 5:
+/// toda posição gravada é gravável, só sai de evento do usuário ou do sistema e volta do settings.json),
+/// a regra do relógio, as linhas de FULLSCREEN_TARGETS_CHANGED e as regras do núcleo R1, R6, R8, R9, R11
+/// e R12 (Maquina.cs). Parte das sequências entrega os eventos em lotes de 1 a 4 por
 /// <see cref="Nucleo.Processar"/>, como a raiz faz com rajadas; parte começa com pedidos
 /// anteriores à carga; parte usa perfis de decisão e gestos curtos, para o piso do intervalo de
 /// acomodação e o fim do gesto pelo relógio acontecerem. A semente é fixa; toda falha informa a
@@ -51,6 +53,7 @@ internal static class InvariantesTestes
         "desligar o modo com retorno no meio do gesto", "fim do clique com retorno e o modo desligado no gesto",
         "CMD_SHOW escondido pela tela cheia, com retorno", "CMD_SHOW escondido por outro motivo no meio de um episódio",
         "TICK ou sinal de movimento com o usuário no controle", "AUTONOMY_TIMER descartado com o usuário no controle",
+        "GRAVAR_POSICAO conferida (invariante 18)", "carga com a travessia desligada", "SETTINGS_CHANGED com a travessia desligada",
     ];
 
     /// <summary>Mínimo de atrasos distintos acima do piso: um atraso fixo (no mínimo do perfil, por exemplo) passaria na conferência de faixa.</summary>
@@ -412,6 +415,33 @@ internal static class InvariantesTestes
             Verificar(!depois.PainelAberto, () => $"painel: {onde()}: aberto em {depois.Estado}");
 
         ConferirGravacaoAoEsconderOuSair(antes, evento, r, onde, contagens);
+        ConferirGravacaoDaPosicao(evento, r, onde, contagens);
+    }
+
+    /// <summary>
+    /// Invariante 18 (Fase 5): todo GravarPosicao traz uma posição gravável (chave não vazia, frações finitas
+    /// e a tela do monitor da época, que toda posição descrita ou validada pela máquina tem) e só sai de
+    /// evento do usuário ou do sistema, nunca do relógio, do movimento, da agenda autônoma nem da troca de
+    /// expressão: não há gravação periódica (DEC-011). E a posição sobrevive ao settings.json: escrita e lida
+    /// pelo esquema, volta normalizada, sem aviso e ainda com posição.
+    /// </summary>
+    private static void ConferirGravacaoDaPosicao(Evento evento, Resultado r, Func<string> onde, Contagens contagens)
+    {
+        foreach (GravarPosicao g in r.Efeitos.OfType<GravarPosicao>())
+        {
+            contagens.Contar("GRAVAR_POSICAO conferida (invariante 18)");
+            PosicaoDoPersonagem p = g.Posicao;
+            Verificar(evento.Origem >= Origem.Sistema,
+                () => $"invariante 18: {onde()}: GravarPosicao saiu de {evento.GetType().Name}, de origem {evento.Origem}");
+            Verificar(!string.IsNullOrEmpty(p.ChaveMonitor) && double.IsFinite(p.FracaoX) && double.IsFinite(p.FracaoY) && p.TelaDoMonitor is { Vazio: false },
+                () => $"invariante 18: {onde()}: posição não gravável {Gravacao.DescreverPosicaoCompleta(p)}");
+
+            var salvas = new ConfiguracoesSalvas(p, r.Estado.Preferencias);
+            LeituraDasConfiguracoes lida = EsquemaDeConfiguracoes.Ler(EsquemaDeConfiguracoes.Escrever(salvas));
+            Verificar(lida.Situacao == SituacaoDaLeitura.Valida && lida.Avisos.Count == 0 && lida.Configuracoes.Posicao is not null
+                    && lida.Configuracoes == EsquemaDeConfiguracoes.Normalizar(salvas),
+                () => $"invariante 18: {onde()}: {Gravacao.DescreverPosicaoCompleta(p)} não voltou do settings.json ({lida.Situacao}, {Descrever(lida.Configuracoes.Posicao)}, avisos: {string.Join(" | ", lida.Avisos)})");
+        }
     }
 
     /// <summary>
@@ -573,6 +603,7 @@ internal static class InvariantesTestes
         }
 
         if (antes.Estado == Estado.Hidden) contagens.Contar("carga depois de pedidos de esconder");
+        if (!carga.Preferencias.AtravessarMonitores) contagens.Contar("carga com a travessia desligada");
         if (carga.PosicaoSalva is { } salvaDesconhecida && carga.Topologia.PorChave(salvaDesconhecida.ChaveMonitor) is null) contagens.Contar("carga com posição salva em monitor inexistente");
         if (!Enum.IsDefined(carga.Preferencias.Energia)) contagens.Contar("carga fora do enum");
         Verificar(depois.Carregado && ReferenceEquals(depois.Topologia, carga.Topologia) && depois.Preferencias == Saneadas(carga.Preferencias),
@@ -632,6 +663,7 @@ internal static class InvariantesTestes
     {
         EstadoDoNucleo depois = r.Estado;
         if (!Enum.IsDefined(configuracao.Preferencias.Energia)) contagens.Contar("SETTINGS_CHANGED fora do enum");
+        if (!configuracao.Preferencias.AtravessarMonitores) contagens.Contar("SETTINGS_CHANGED com a travessia desligada");
         Verificar(depois.Preferencias == Saneadas(configuracao.Preferencias),
             () => $"R1: {onde()}: preferências {depois.Preferencias}, esperado {Saneadas(configuracao.Preferencias)}");
 
@@ -728,6 +760,10 @@ internal static class InvariantesTestes
         bool emLotes = rnd.Next(3) == 0;
         bool antesDaCarga = rnd.Next(4) == 0;
         Topologia topologia = gerador.NovaTopologia();
+        // A travessia das preferências (Preferencias.AtravessarMonitores) sai de um gerador próprio, com
+        // semente derivada da semente da sequência: variar o campo não consome sorteios do gerador principal,
+        // e os outros sorteios (e as contagens dos casos) não mudam.
+        var travessia = new Random(unchecked(semente * 31 + 7));
 
         // Um núcleo-sombra acompanha a sequência, lote a lote como a execução conferida, para os
         // eventos fazerem sentido (PRESS no personagem, AUTONOMY_TIMER da geração agendada).
@@ -745,15 +781,15 @@ internal static class InvariantesTestes
         if (antesDaCarga)
         {
             for (int i = rnd.Next(1, 7); i > 0; i--)
-                Entregar([SortearAntesDaCarga(rnd, gerador, sombra.Estado, ref topologia)]);
+                Entregar([SortearAntesDaCarga(rnd, travessia, gerador, sombra.Estado, ref topologia)]);
         }
-        Entregar([NovaCarga(rnd, gerador, topologia)]);
+        Entregar([NovaCarga(rnd, travessia, gerador, topologia)]);
 
         while (total < EventosPorSequencia)
         {
             int tamanho = emLotes ? rnd.Next(1, 5) : 1;
             var lote = new List<Evento>(tamanho);
-            for (int j = 0; j < tamanho; j++) lote.Add(Sortear(rnd, gerador, sombra.Estado, ref topologia));
+            for (int j = 0; j < tamanho; j++) lote.Add(Sortear(rnd, travessia, gerador, sombra.Estado, ref topologia));
             Entregar(lote);
         }
         return new Sequencia(cfg, (ulong)semente, lotes, emLotes, antesDaCarga, perfilCurto);
@@ -763,7 +799,7 @@ internal static class InvariantesTestes
     /// Pedidos que podem chegar antes da carga (R6): esconder, mostrar, sessão, suspensão,
     /// topologia, tela cheia, configurações, e às vezes qualquer outro evento.
     /// </summary>
-    private static Evento SortearAntesDaCarga(Random rnd, GeradorDeTopologias gerador, EstadoDoNucleo s, ref Topologia topologia) => rnd.Next(12) switch
+    private static Evento SortearAntesDaCarga(Random rnd, Random travessia, GeradorDeTopologias gerador, EstadoDoNucleo s, ref Topologia topologia) => rnd.Next(12) switch
     {
         0 => new CmdHide(),
         1 => new CmdShow(),
@@ -773,10 +809,10 @@ internal static class InvariantesTestes
         5 => new Resumed(),
         6 => NovaTopologia(rnd, gerador, ref topologia),
         7 => TelaCheia(rnd, topologia),
-        8 => new SettingsChanged(new Preferencias(Nivel(rnd), rnd.Next(3) != 0)),
+        8 => new SettingsChanged(new Preferencias(Nivel(rnd), rnd.Next(3) != 0, Atravessar(travessia))),
         9 => new CmdResetPosition(),
         10 => rnd.Next(2) == 0 ? new CmdPauseAutonomy() : new CmdResumeAutonomy(),
-        _ => Sortear(rnd, gerador, s, ref topologia),
+        _ => Sortear(rnd, travessia, gerador, s, ref topologia),
     };
 
     /// <summary>
@@ -786,7 +822,7 @@ internal static class InvariantesTestes
     /// sai da âncora já sorteada, sem sorteio novo, para não mudar os outros sorteios do gerador: com a
     /// chave desconhecida, leva a restauração pelo retângulo ou, sem ela, ao principal.
     /// </summary>
-    private static Loaded NovaCarga(Random rnd, GeradorDeTopologias gerador, Topologia topologia)
+    private static Loaded NovaCarga(Random rnd, Random travessia, GeradorDeTopologias gerador, Topologia topologia)
     {
         PosicaoDoPersonagem? salva = null;
         if (rnd.Next(2) == 0)
@@ -797,10 +833,10 @@ internal static class InvariantesTestes
             PontoPx ancora = gerador.Ponto(topologia);
             salva = new PosicaoDoPersonagem(chave, fx, fy, ancora) { TelaDoMonitor = topologia.MonitorQueContem(Posicionador.PixelDosPes(ancora))?.Tela };
         }
-        return new Loaded(topologia, salva, new Preferencias(Nivel(rnd), rnd.Next(4) != 0));
+        return new Loaded(topologia, salva, new Preferencias(Nivel(rnd), rnd.Next(4) != 0, Atravessar(travessia)));
     }
 
-    private static Evento Sortear(Random rnd, GeradorDeTopologias gerador, EstadoDoNucleo s, ref Topologia topologia)
+    private static Evento Sortear(Random rnd, Random travessia, GeradorDeTopologias gerador, EstadoDoNucleo s, ref Topologia topologia)
     {
         PontoPx ancora = s.Lugar?.Ancora ?? new PontoPx(0, 0);
         Topologia atual = topologia;
@@ -840,11 +876,11 @@ internal static class InvariantesTestes
             < 65 => new Resumed(),
             < 66 => rnd.Next(20) == 0 ? new SessionEnding() : new Tick(),
             < 70 => TelaCheia(rnd, atual),
-            < 71 => new SettingsChanged(new Preferencias(Nivel(rnd), rnd.Next(3) != 0)),
+            < 71 => new SettingsChanged(new Preferencias(Nivel(rnd), rnd.Next(3) != 0, Atravessar(travessia))),
             < 78 => new MovementSignal(SinalCoerente(rnd, s.Estado)),
             < 90 => new AutonomyTimer(rnd.Next(10) == 0 ? s.Geracao - 1 : s.Geracao),
             // R-e: carga repetida no meio da sequência, com outra topologia; deve ser ignorada.
-            < 91 => NovaCarga(rnd, gerador, rnd.Next(2) == 0 ? atual : gerador.NovaTopologia()),
+            < 91 => NovaCarga(rnd, travessia, gerador, rnd.Next(2) == 0 ? atual : gerador.NovaTopologia()),
             _ => new ExpressionChange((Expressao)rnd.Next(Enum.GetValues<Expressao>().Length)),
         };
     }
@@ -875,6 +911,9 @@ internal static class InvariantesTestes
         if (rnd.Next(5) == 0) chaves.Add(rnd.Next(2) == 0 ? ChaveDesconhecida : GeradorDeTopologias.Chave(rnd.Next(1, 10)));
         return new FullscreenTargetsChanged(new MonitoresOcupados(chaves));
     }
+
+    /// <summary>Travessia entre monitores nas preferências: desligada uma vez em quatro, pelo gerador próprio dela.</summary>
+    private static bool Atravessar(Random travessia) => travessia.Next(4) != 0;
 
     /// <summary>Nível de energia; uma vez em dez, fora do enum (3 a 99), como um arquivo adulterado (SECURITY.md 7).</summary>
     private static NivelDeEnergia Nivel(Random rnd) => rnd.Next(10) == 0 ? (NivelDeEnergia)rnd.Next(3, 100) : (NivelDeEnergia)rnd.Next(3);

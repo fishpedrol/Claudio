@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Buzzy.Core.Persistencia;
@@ -50,6 +51,165 @@ internal static class EsquemaDeConfiguracoesTestes
         Afirmar.Igual(1.0, p.FracaoY, "fração y");
         Afirmar.Igual(new PontoPx(-1440, 1032), p.AncoraAbsoluta, "âncora");
         Afirmar.Igual(new Preferencias(NivelDeEnergia.Media, true, true), lida.Configuracoes.Preferencias, "preferências");
+    }
+
+    // Os bytes não dependem da cultura atual: pt-BR (vírgula decimal), uma cultura com o sinal de menos
+    // tipográfico (U+2212, como sv-SE com ICU) e tr-TR escrevem o mesmo arquivo que a invariante; e a
+    // leitura, nessas culturas, devolve os mesmos valores.
+    [Teste]
+    public static void Escrever_IndependeDaCultura()
+    {
+        var c = new ConfiguracoesSalvas(PosicaoS2() with { FracaoY = 0.123456789012345 }, new Preferencias(NivelDeEnergia.Alta, true, false));
+        byte[] invariante = Cultura.Com(CultureInfo.InvariantCulture, () => EsquemaDeConfiguracoes.Escrever(c));
+        string texto = Encoding.UTF8.GetString(invariante);
+        Afirmar.Contem("\"x\": -1440,", texto, "âncora negativa com hífen");
+        Afirmar.Contem("\"fracaoX\": 0.25,", texto, "fração com ponto");
+        Afirmar.Contem("\"fracaoY\": 0.123456789012345,", texto, "fração no formato mais curto que a reproduz");
+
+        foreach (CultureInfo cultura in new[] { new CultureInfo("pt-BR"), Cultura.ComMenosTipografico(), new CultureInfo("tr-TR") })
+        {
+            Afirmar.Sequencia(invariante, Cultura.Com(cultura, () => EsquemaDeConfiguracoes.Escrever(c)), $"escrita em {cultura.Name}");
+            Afirmar.Igual(c, Cultura.Com(cultura, () => EsquemaDeConfiguracoes.Ler(invariante).Configuracoes), $"leitura em {cultura.Name}");
+            // Em tr-TR, "I" minúsculo é "ı": os nomes da energia continuam reconhecidos sem diferenciar maiúsculas.
+            Afirmar.Igual(NivelDeEnergia.Baixa, Cultura.Com(cultura, () => Ler(ComEnergia("BAIXA")).Configuracoes.Preferencias.Energia), $"BAIXA em {cultura.Name}");
+        }
+    }
+
+    // Escrever normaliza antes e nunca lança por causa do conteúdo: frações NaN, infinitas ou -0, chave
+    // vazia, nula, longa demais, com controle ou com surrogate solto, coordenadas extremas, tela invertida,
+    // energia fora do enum e preferências nulas saem num arquivo válido, sem aviso, igual ao das
+    // configurações normalizadas (valores esperados escritos à mão).
+    [Teste]
+    public static void Escrever_NuncaLanca()
+    {
+        PosicaoDoPersonagem boa = PosicaoS2();
+        ConfiguracoesSalvas Com(PosicaoDoPersonagem? p) => new(p, Preferencias.Padrao);
+        (string Caso, ConfiguracoesSalvas Configuracoes, ConfiguracoesSalvas Normalizadas)[] casos =
+        [
+            ("fração NaN", Com(boa with { FracaoX = double.NaN }), Com(boa with { FracaoX = 0.5 })),
+            ("frações infinitas", Com(boa with { FracaoX = double.PositiveInfinity, FracaoY = double.NegativeInfinity }), Com(boa with { FracaoX = 1, FracaoY = 0 })),
+            ("frações fora de [0, 1]", Com(boa with { FracaoX = 7, FracaoY = -1 }), Com(boa with { FracaoX = 1, FracaoY = 0 })),
+            ("fração -0", Com(boa with { FracaoX = -0.0 }), Com(boa with { FracaoX = 0 })),
+            ("chave vazia", Com(boa with { ChaveMonitor = "" }), Com(null)),
+            ("chave nula", Com(boa with { ChaveMonitor = null! }), Com(null)),
+            ("chave de 1025 caracteres", Com(boa with { ChaveMonitor = new string('a', 1025) }), Com(null)),
+            ("chave com \\u0001", Com(boa with { ChaveMonitor = "a\u0001" }), Com(null)),
+            ("chave com surrogate alto solto", Com(boa with { ChaveMonitor = "a\uD800b" }), Com(null)),
+            ("chave com surrogate baixo solto", Com(boa with { ChaveMonitor = "\uDC00" }), Com(null)),
+            ("chave com surrogate alto no fim", Com(boa with { ChaveMonitor = "a\uD83D" }), Com(null)),
+            ("chave de 1024 caracteres com aspas e barras", Com(boa with { ChaveMonitor = string.Concat(Enumerable.Repeat("\"\\", 512)) }), Com(boa with { ChaveMonitor = string.Concat(Enumerable.Repeat("\"\\", 512)) })),
+            ("coordenadas extremas", Com(boa with { AncoraAbsoluta = new PontoPx(int.MinValue, int.MaxValue), TelaDoMonitor = new RetanguloPx(int.MinValue, -5, int.MaxValue, 5) }),
+                Com(boa with { AncoraAbsoluta = new PontoPx(-32768, 32767), TelaDoMonitor = new RetanguloPx(-32768, -5, 32767, 5) })),
+            ("tela invertida", Com(boa with { TelaDoMonitor = new RetanguloPx(10, 0, 0, 10) }), Com(boa with { TelaDoMonitor = null })),
+            ("tela vazia depois de presa", Com(boa with { TelaDoMonitor = new RetanguloPx(40000, 0, 50000, 10) }), Com(boa with { TelaDoMonitor = null })),
+            ("energia 7", new(boa, new Preferencias((NivelDeEnergia)7, false, false)), new(boa, new Preferencias(NivelDeEnergia.Media, false, false))),
+            ("energia -1", new(null, new Preferencias((NivelDeEnergia)(-1), true, false)), new(null, new Preferencias(NivelDeEnergia.Media, true, false))),
+            ("preferências nulas", new(boa, null!), new(boa, Preferencias.Padrao)),
+        ];
+        foreach ((string caso, ConfiguracoesSalvas configuracoes, ConfiguracoesSalvas normalizadas) in casos)
+        {
+            Afirmar.Igual(normalizadas, EsquemaDeConfiguracoes.Normalizar(configuracoes), $"{caso}: normalizadas");
+            byte[] bytes = EsquemaDeConfiguracoes.Escrever(configuracoes);
+            LeituraDasConfiguracoes lida = EsquemaDeConfiguracoes.Ler(bytes);
+            Afirmar.Igual(SituacaoDaLeitura.Valida, lida.Situacao, $"{caso}: situação");
+            Afirmar.Sequencia([], lida.Avisos, $"{caso}: sem aviso");
+            Afirmar.Igual(normalizadas, lida.Configuracoes, $"{caso}: lida");
+            Afirmar.Sequencia(EsquemaDeConfiguracoes.Escrever(normalizadas), bytes, $"{caso}: Escrever(Normalizar(c)) = Escrever(c)");
+        }
+    }
+
+    // Ida e volta com 5.000 configurações aleatórias, muitas inválidas (semente fixa, como os testes de
+    // propriedade): o arquivo cabe no limite, é UTF-8 sem BOM terminado em \n, é lido como válido e sem
+    // aviso, e devolve exatamente as configurações normalizadas; escrever é idempotente, e a normalização
+    // só produz valores graváveis.
+    [Teste]
+    public static void IdaEVolta_5000Aleatorias_VoltamNormalizadas()
+    {
+        const int Semente = 20260930;
+        var mestre = new Random(Semente);
+        int comPosicao = 0, posicaoDescartada = 0, comTela = 0;
+        for (int caso = 0; caso < 5000; caso++)
+        {
+            int sementeDoCaso = mestre.Next();
+            ConfiguracoesSalvas c = ConfiguracoesAleatorias(new Random(sementeDoCaso));
+            string Onde() => $"semente {Semente}, caso {caso} (semente do caso {sementeDoCaso}): {Descrever(c)}";
+
+            ConfiguracoesSalvas n = EsquemaDeConfiguracoes.Normalizar(c);
+            byte[] bytes = EsquemaDeConfiguracoes.Escrever(c);
+            Verificar(bytes.Length <= EsquemaDeConfiguracoes.TamanhoMaximoEmBytes, () => $"{Onde()}: {bytes.Length} bytes");
+            Verificar(bytes[^1] == '\n' && !bytes.Contains((byte)'\r') && System.Text.Unicode.Utf8.IsValid(bytes) && bytes[0] == '{', () => $"{Onde()}: formato do arquivo");
+
+            LeituraDasConfiguracoes lida = EsquemaDeConfiguracoes.Ler(bytes);
+            Verificar(lida.Situacao == SituacaoDaLeitura.Valida && lida.Versao == 1 && lida.MotivoIlegivel is null && lida.Avisos.Count == 0,
+                () => $"{Onde()}: lida como {lida.Situacao} ({lida.MotivoIlegivel}), avisos: {string.Join(" | ", lida.Avisos)}");
+            Verificar(lida.Configuracoes == n, () => $"{Onde()}: lida {Descrever(lida.Configuracoes)}, normalizada {Descrever(n)}");
+            Verificar(EsquemaDeConfiguracoes.Escrever(n).AsSpan().SequenceEqual(bytes), () => $"{Onde()}: Escrever(Normalizar(c)) difere de Escrever(c)");
+            Verificar(EsquemaDeConfiguracoes.Normalizar(n) == n, () => $"{Onde()}: normalizar de novo mudou");
+
+            // Só valores graváveis.
+            Verificar(Enum.IsDefined(n.Preferencias.Energia), () => $"{Onde()}: energia {n.Preferencias.Energia}");
+            if (c.Posicao is not null) comPosicao++;
+            if (n.Posicao is not { } p)
+            {
+                if (c.Posicao is not null) posicaoDescartada++;
+                continue;
+            }
+            if (p.TelaDoMonitor is not null) comTela++;
+            Verificar(p.ChaveMonitor.Length is >= 1 and <= EsquemaDeConfiguracoes.ComprimentoMaximoDaChave && !p.ChaveMonitor.Any(char.IsControl) && Utf16Valido(p.ChaveMonitor),
+                () => $"{Onde()}: chave");
+            Verificar(p.FracaoX is >= 0 and <= 1 && p.FracaoY is >= 0 and <= 1 && !double.IsNegative(p.FracaoX) && !double.IsNegative(p.FracaoY), () => $"{Onde()}: frações");
+            Verificar(NaFaixa(p.AncoraAbsoluta.X) && NaFaixa(p.AncoraAbsoluta.Y), () => $"{Onde()}: âncora");
+            Verificar(p.TelaDoMonitor is not { } t || (!t.Vazio && NaFaixa(t.Esquerda) && NaFaixa(t.Topo) && NaFaixa(t.Direita) && NaFaixa(t.Base)), () => $"{Onde()}: tela");
+        }
+        Console.WriteLine($"         {comPosicao} com posição ({posicaoDescartada} descartadas pela chave), {comTela} com a tela do monitor gravada");
+        Afirmar.Verdadeiro(posicaoDescartada > 100 && comPosicao - posicaoDescartada > 1000 && comTela > 500, "o gerador exercita posições válidas, descartadas e com tela");
+    }
+
+    // S1 a S7 pelo arquivo: em cada monitor das sete topologias, a posição descrita como a execução a grava
+    // passa por Escrever e Ler, volta igual (com a tela do monitor) e é restaurada pela chave no mesmo lugar,
+    // com o mesmo tamanho aparente (128 DIP no DPI do monitor); pela carga da máquina, com a configuração do
+    // aplicativo, também. Posição no ar (0,5; 0,5) inclusive: longe do teto e das laterais, ela só cai depois.
+    [Teste]
+    public static void S1aS7_GravarLerRestaurar_MesmoLugarEmCadaMonitor()
+    {
+        (string Id, Topologia Topologia)[] topologias =
+        [
+            ("S1", LadoALado), ("S2", SecundarioAEsquerda), ("S3", EmpilhadoSecundarioAcima), ("S4", DegrauDesalinhado),
+            ("S5", EscalasMistas), ("S6", TopologiasDeExemplo.Retrato), ("S7", PrincipalADireita),
+        ];
+        (double Fx, double Fy)[] fracoes = [(0, 1), (0.25, 1), (0.5, 1), (0.85, 1), (1, 1), (0.5, 0.5)];
+        ConfiguracaoDoNucleo doAplicativo = ConfiguracaoDoNucleo.DoAplicativo(Sprite);
+        int conferidos = 0;
+        foreach ((string id, Topologia t) in topologias)
+        {
+            foreach (MonitorDoDesktop m in t.Monitores)
+            {
+                foreach ((double fx, double fy) in fracoes)
+                {
+                    string caso = $"{id}, {m.Chave}, frações ({fx}; {fy})";
+                    Posicionamento antes = Posicionador.NoMonitor(m, fx, fy, Sprite);
+                    PosicaoDoPersonagem gravada = Posicionador.Descrever(antes);
+
+                    LeituraDasConfiguracoes lida = EsquemaDeConfiguracoes.Ler(EsquemaDeConfiguracoes.Escrever(new ConfiguracoesSalvas(gravada, Preferencias.Padrao)));
+                    Afirmar.Igual(SituacaoDaLeitura.Valida, lida.Situacao, $"{caso}: arquivo válido");
+                    PosicaoDoPersonagem salva = Afirmar.NaoNulo(lida.Configuracoes.Posicao, $"{caso}: posição no arquivo");
+                    Afirmar.Igual(gravada, salva, $"{caso}: o arquivo devolve a posição gravada, com a tela do monitor");
+
+                    (Posicionamento depois, _, OrigemDaRestauracao origem) = Posicionador.Restaurar(t, salva, Sprite);
+                    Afirmar.Igual(OrigemDaRestauracao.PelaChave, origem, $"{caso}: pela chave");
+                    Afirmar.Igual(antes, depois, $"{caso}: mesmo lugar");
+                    Afirmar.Igual(Sprite.ParaPixels(m.Dpi), depois.Tamanho, $"{caso}: tamanho aparente de 128 DIP");
+
+                    Cenario c = new Cenario(doAplicativo).Aplicar(new Loaded(t, salva, Preferencias.Padrao));
+                    Afirmar.Igual("BOOTING: configurações e topologia carregadas; posição salva restaurada pela chave", c.Transicoes[0].Regra, $"{caso}: regra da carga");
+                    Afirmar.Igual(antes.Ancora, c.Ancora, $"{caso}: a carga põe no mesmo lugar");
+                    Afirmar.Igual(m.Chave, c.Retrato.ChaveMonitor, $"{caso}: no mesmo monitor");
+                    Afirmar.Igual(Sprite.ParaPixels(m.Dpi), c.Retrato.Tamanho, $"{caso}: com o mesmo tamanho aparente");
+                    conferidos++;
+                }
+            }
+        }
+        Afirmar.Igual(16 * 6, conferidos, "16 monitores nas sete topologias (três em S4 e em S5), 6 frações em cada");
     }
 
     // ---------------------------------------------------------------- ilegível
@@ -144,8 +304,8 @@ internal static class EsquemaDeConfiguracoesTestes
     {
         LeituraDasConfiguracoes lida = Ler("""
             {"schemaVersion": 1, "extra": {"a": [1, 2, {"b": null}]},
-             "posicao": {"chaveMonitor": "mon:1", "fracaoX": 0.5, "fracaoY": 1, "novo": true, "ChaveMonitor": "outra"},
-             "preferencias": {"energia": "alta", "Energia": "baixa", "corDoChapeu": "vermelho"}}
+             "posicao": {"ChaveMonitor": "outra", "chaveMonitor": "mon:1", "fracaoX": 0.5, "fracaoY": 1, "novo": true},
+             "preferencias": {"Energia": "baixa", "energia": "alta", "corDoChapeu": "vermelho"}}
             """);
 
         Afirmar.Igual(SituacaoDaLeitura.Valida, lida.Situacao, "situação");
@@ -157,6 +317,11 @@ internal static class EsquemaDeConfiguracoesTestes
             foreach (string doArquivo in new[] { "extra", "novo", "ChaveMonitor", "outra", "Energia", "corDoChapeu", "vermelho", "mon:1" })
                 Afirmar.Falso(aviso.Contains(doArquivo, StringComparison.Ordinal), $"o aviso \"{aviso}\" cita \"{doArquivo}\", do arquivo");
         }
+
+        // Um nome do esquema com outra caixa não é o campo, nem sozinho.
+        AfirmarIlegivel(Ler("""{"SchemaVersion": 1}"""), "schemaVersion", "SchemaVersion");
+        Afirmar.Igual(ConfiguracoesSalvas.Padrao, Ler("""{"schemaVersion": 1, "Preferencias": {"energia": "alta"}, "Posicao": {"chaveMonitor": "a", "fracaoX": 0, "fracaoY": 1}}""").Configuracoes,
+            "Preferencias e Posicao com maiúscula: ignoradas");
     }
 
     // Campo repetido: vale a primeira ocorrência, com um aviso que cita o nome do esquema.
@@ -372,9 +537,189 @@ internal static class EsquemaDeConfiguracoesTestes
         Afirmar.Igual(1, EsquemaDeConfiguracoes.VersaoAtual, "versão atual");
     }
 
+    // ---------------------------------------------------------------- política de gravação
+
+    // Gravação na hora só depois de um evento após o qual o processo pode não ter outra chance (suspensão,
+    // fim de sessão, sair) e no bloqueio de sessão (C7); todos os outros, com atraso. A lista de exemplos
+    // cobre cada tipo concreto de evento do núcleo: um evento novo sem decisão aqui falha.
+    [Teste]
+    public static void Politica_Imediata_SoSuspensaoFimDeSessaoSairEBloqueio()
+    {
+        Evento[] exemplos =
+        [
+            new Press(default), new Click(), new DoubleClick(), new DragStart(), new DragMove(default), new DragEnd(default), new DragCancel(),
+            new ContextMenu(default), new EnergyPanelOpen(), new EnergySelected(NivelDeEnergia.Alta), new EnergyPanelClose(),
+            new CmdHide(), new CmdShow(), new CmdPauseAutonomy(), new CmdResumeAutonomy(), new CmdOpenSettings(), new CmdResetPosition(), new CmdExit(),
+            new Loaded(UmMonitor, null, Preferencias.Padrao), new TopologyChanged(UmMonitor), new SessionLocked(), new SessionUnlocked(),
+            new Suspending(), new Resumed(), new SessionEnding(), new FullscreenTargetsChanged(MonitoresOcupados.Nenhum),
+            new SettingsChanged(Preferencias.Padrao), new Tick(), new MovementSignal(default), new AutonomyTimer(1), new ExpressionChange(default),
+        ];
+        string[] todos = [.. typeof(Evento).Assembly.GetTypes().Where(t => !t.IsAbstract && t.IsSubclassOf(typeof(Evento))).Select(t => t.Name).Order(StringComparer.Ordinal)];
+        Afirmar.Sequencia(todos, exemplos.Select(e => e.GetType().Name).Order(StringComparer.Ordinal), "um exemplo de cada tipo de evento");
+
+        string[] imediatos = [.. exemplos.Where(PoliticaDeGravacao.Imediata).Select(e => e.GetType().Name).Order(StringComparer.Ordinal)];
+        Afirmar.Sequencia(["CmdExit", "SessionEnding", "SessionLocked", "Suspending"], imediatos, "imediatos");
+    }
+
+    // Tempos da agenda de gravação (desenho de persistência, D11): o atraso de 2 s fica abaixo do intervalo
+    // de acomodação do aplicativo (3 s), para a gravação cair com o personagem parado; depois de uma falha,
+    // novas tentativas únicas em 2, 10 e 60 s; no caminho imediato, 3 tentativas com 50 ms entre elas.
+    [Teste]
+    public static void Politica_TemposDoDesenho()
+    {
+        Afirmar.Igual(TimeSpan.FromSeconds(2), PoliticaDeGravacao.Atraso, "atraso");
+        Afirmar.Verdadeiro(PoliticaDeGravacao.Atraso < ConfiguracaoDoNucleo.DoAplicativo(Sprite).IntervaloDeAcomodacao, "atraso menor que o intervalo de acomodação do aplicativo");
+        Afirmar.Sequencia([TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(60)], PoliticaDeGravacao.EsperasDeNovaTentativa, "novas tentativas");
+        Afirmar.Igual(3, PoliticaDeGravacao.TentativasImediatas, "tentativas no caminho imediato");
+        Afirmar.Igual(TimeSpan.FromMilliseconds(50), PoliticaDeGravacao.PausaEntreTentativasImediatas, "pausa entre elas");
+    }
+
+    // S12 (C7): bloquear a sessão ou suspender com o personagem à vista grava a posição, e a raiz grava na
+    // hora. Bloqueado e depois suspenso, a suspensão não grava de novo (o personagem já está escondido pela
+    // sessão): por isso o bloqueio também é imediato. Escondido pelo usuário, suspender não grava; esconder
+    // pela bandeja grava com atraso.
+    [Teste]
+    public static void S12_BloquearESuspender_EmitemGravarPosicaoImediata()
+    {
+        Cenario bloqueado = Cenario.Parado().Aplicar(new SessionLocked()).EstaEscondido(MotivoDoOcultamento.PorSessao);
+        Afirmar.Igual(Cenario.AncoraInicial, bloqueado.Efeito<GravarPosicao>().Posicao.AncoraAbsoluta, "bloquear grava onde ele estava");
+        Afirmar.Verdadeiro(PoliticaDeGravacao.Imediata(new SessionLocked()), "e grava na hora");
+        bloqueado.Aplicar(new Suspending()).EstaEscondido(MotivoDoOcultamento.PorSessao).SemEfeito<GravarPosicao>();
+
+        Cenario suspenso = Cenario.Parado().Aplicar(new Suspending()).EstaEscondido(MotivoDoOcultamento.PorSuspensao);
+        Afirmar.Igual(Cenario.AncoraInicial, suspenso.Efeito<GravarPosicao>().Posicao.AncoraAbsoluta, "suspender grava onde ele estava");
+        Afirmar.Verdadeiro(PoliticaDeGravacao.Imediata(new Suspending()), "e grava na hora");
+
+        Cenario.Parado().Aplicar(new CmdHide(), new Suspending()).EstaEscondido(MotivoDoOcultamento.PorUsuario).SemEfeito<GravarPosicao>();
+
+        Cenario pelaBandeja = Cenario.Parado().Aplicar(new CmdHide());
+        Afirmar.Verdadeiro(pelaBandeja.Tem<GravarPosicao>() && !PoliticaDeGravacao.Imediata(new CmdHide()), "esconder pela bandeja grava com atraso");
+        foreach (Evento saida in new Evento[] { new CmdExit(), new SessionEnding() })
+        {
+            Cenario c = Cenario.Parado().Aplicar(saida).Esta(Estado.Exiting);
+            Afirmar.Verdadeiro(c.Tem<GravarPosicao>() && PoliticaDeGravacao.Imediata(saida), $"{saida.GetType().Name} grava na hora");
+        }
+    }
+
     // ---------------------------------------------------------------- auxiliares
 
     private static LeituraDasConfiguracoes Ler(string json) => EsquemaDeConfiguracoes.Ler(Utf8(json));
+
+    /// <summary>
+    /// Configurações aleatórias, muitas inválidas: posição ausente, chave vazia, nula, longa, com controle,
+    /// surrogate solto, aspas, barras e caracteres fora do ASCII; frações NaN, infinitas, -0, subnormais,
+    /// enormes ou com bits quaisquer; coordenadas em qualquer ponto de int; tela vazia, invertida ou fora da
+    /// faixa; energia fora do enum; às vezes preferências nulas.
+    /// </summary>
+    private static ConfiguracoesSalvas ConfiguracoesAleatorias(Random rnd)
+    {
+        PosicaoDoPersonagem? posicao = rnd.Next(10) == 0 ? null
+            : new PosicaoDoPersonagem(ChaveAleatoria(rnd), FracaoAleatoria(rnd), FracaoAleatoria(rnd), new PontoPx(CoordenadaAleatoria(rnd), CoordenadaAleatoria(rnd)))
+            {
+                TelaDoMonitor = rnd.Next(4) == 0 ? null : TelaAleatoria(rnd),
+            };
+        Preferencias preferencias = rnd.Next(50) == 0 ? null! : new Preferencias((NivelDeEnergia)rnd.Next(-2, 6), rnd.Next(2) == 0, rnd.Next(2) == 0);
+        return new ConfiguracoesSalvas(posicao, preferencias);
+    }
+
+    private static string ChaveAleatoria(Random rnd) => rnd.Next(12) switch
+    {
+        0 => "",
+        1 => null!,
+        2 => new string('k', rnd.Next(1020, 1030)),
+        3 or 4 => $@"\\.\DISPLAY{rnd.Next(1, 10)}",
+        5 => "mon:" + rnd.NextInt64().ToString("x16", CultureInfo.InvariantCulture),
+        6 or 7 or 8 => TextoAleatorio(rnd, rnd.Next(1, 40), soGravaveis: true),
+        _ => TextoAleatorio(rnd, rnd.Next(1, 40), soGravaveis: false),
+    };
+
+    /// <summary>
+    /// Texto com os caracteres que o JSON ou o codificador escapam, fora do ASCII e pares surrogate; sem
+    /// <paramref name="soGravaveis"/>, também controles e surrogates soltos, que invalidam a chave.
+    /// </summary>
+    private static string TextoAleatorio(Random rnd, int caracteres, bool soGravaveis)
+    {
+        var sb = new StringBuilder(caracteres);
+        while (sb.Length < caracteres)
+        {
+            switch (rnd.Next(10))
+            {
+                case 0 when !soGravaveis: sb.Append((char)rnd.Next(0, 0x20)); break;             // controle C0
+                case 1: sb.Append("\"\\/'<>&+`"[rnd.Next(9)]); break;                            // escapados pelo JSON ou pelo codificador
+                case 2: sb.Append((char)rnd.Next(soGravaveis ? 0xA0 : 0x7F, 0xD800)); break;    // fora do ASCII (sem gravável: DEL e controle C1)
+                case 3 when !soGravaveis: sb.Append((char)rnd.Next(0xD800, 0xE000)); break;      // surrogate solto (alto ou baixo)
+                case 4: sb.Append(char.ConvertFromUtf32(rnd.Next(0x10000, 0x110000))); break;   // par surrogate
+                case 5: sb.Append((char)rnd.Next(0xE000, 0x10000)); break;                       // uso privado, U+FFFE, U+FFFF
+                default: sb.Append((char)rnd.Next(0x20, 0x7F)); break;                           // ASCII visível
+            }
+        }
+        return sb.ToString();
+    }
+
+    private static double FracaoAleatoria(Random rnd) => rnd.Next(14) switch
+    {
+        0 => double.NaN,
+        1 => rnd.Next(2) == 0 ? double.PositiveInfinity : double.NegativeInfinity,
+        2 => -0.0,
+        3 => double.Epsilon * rnd.Next(1, 1000),
+        4 => (rnd.Next(2) == 0 ? 1 : -1) * double.MaxValue / rnd.Next(1, 1000),
+        5 => BitConverter.Int64BitsToDouble(rnd.NextInt64(long.MinValue, long.MaxValue)),
+        6 => rnd.NextDouble() * 4 - 2,
+        7 => 0,
+        8 => 1,
+        9 => Math.BitDecrement(1.0),
+        _ => rnd.NextDouble(),
+    };
+
+    private static int CoordenadaAleatoria(Random rnd) => rnd.Next(4) switch
+    {
+        0 => rnd.Next(int.MinValue, int.MaxValue),
+        1 => rnd.Next(-32770, -32765),
+        2 => rnd.Next(32765, 32770),
+        _ => rnd.Next(-20000, 20000),
+    };
+
+    private static RetanguloPx TelaAleatoria(Random rnd)
+    {
+        if (rnd.Next(3) != 0)
+        {
+            int esquerda = rnd.Next(-10000, 10000), topo = rnd.Next(-10000, 10000);
+            return new RetanguloPx(esquerda, topo, esquerda + rnd.Next(1, 8000), topo + rnd.Next(1, 5000));
+        }
+        return new RetanguloPx(CoordenadaAleatoria(rnd), CoordenadaAleatoria(rnd), CoordenadaAleatoria(rnd), CoordenadaAleatoria(rnd));
+    }
+
+    private static bool NaFaixa(int coordenada) => coordenada is >= EsquemaDeConfiguracoes.CoordenadaMinima and <= EsquemaDeConfiguracoes.CoordenadaMaxima;
+
+    /// <summary>Se o texto é UTF-16 válido (sem surrogate solto): o codificador estrito de UTF-8 aceita.</summary>
+    private static bool Utf16Valido(string texto)
+    {
+        try
+        {
+            _ = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true).GetByteCount(texto);
+            return true;
+        }
+        catch (EncoderFallbackException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Descrição para mensagens de falha, com a chave escapada (pode ter controle ou surrogate solto).</summary>
+    private static string Descrever(ConfiguracoesSalvas c)
+    {
+        string posicao = c.Posicao is not { } p ? "sem posição"
+            : string.Create(CultureInfo.InvariantCulture, $"chave \"{(p.ChaveMonitor is null ? "(nula)" : EscaparParaMensagem(p.ChaveMonitor))}\" ({p.ChaveMonitor?.Length}) frações ({p.FracaoX:R}; {p.FracaoY:R}) âncora {p.AncoraAbsoluta} tela {p.TelaDoMonitor?.ToString() ?? "desconhecida"}");
+        return $"{posicao}; preferências {c.Preferencias?.ToString() ?? "(nulas)"}";
+    }
+
+    private static string EscaparParaMensagem(string texto)
+        => string.Concat(texto.Select(ch => ch is >= ' ' and < '\u007F' ? ch.ToString() : $"\\u{(int)ch:X4}"));
+
+    private static void Verificar(bool condicao, Func<string> mensagem)
+    {
+        if (!condicao) Afirmar.Falhar(mensagem());
+    }
 
     /// <summary>Documento só com a energia, dada como texto (escapado para JSON).</summary>
     private static string ComEnergia(string texto) => $$$"""{"schemaVersion": 1, "preferencias": {"energia": "{{{JsonEncodedText.Encode(texto)}}}"}}""";

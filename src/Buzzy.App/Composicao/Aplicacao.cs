@@ -20,7 +20,17 @@ namespace Buzzy.App.Composicao;
 /// <c>--semente N</c>: semente fixa da agenda autônoma, para reproduzir uma sequência de
 /// comportamento (diagnóstico e testes). Sem ela, a semente vem do relógio do sistema.
 /// </param>
-internal sealed record OpcoesDaAplicacao(bool MovimentoPausado, ulong? Semente)
+/// <param name="PerfilDeTeste">
+/// <c>--perfil-de-teste NOME</c>, já validado (<see cref="PastaDeDados.NomeDePerfilValido"/>): os dados
+/// do Buzzy ficam em <c>%LOCALAPPDATA%\Buzzy\testes\NOME</c> (<see cref="PastaDeDados.DoPerfilDeTeste"/>),
+/// para os testes e as ferramentas que o abrem nunca lerem nem gravarem as configurações reais do
+/// usuário. Nulo sem a opção. O log de diagnóstico continua na raiz da pasta do Buzzy.
+/// </param>
+/// <param name="PersistenciaDesligada">
+/// <c>--perfil-de-teste</c> veio sem nome ou com um nome inválido: nesta execução nada é lido nem
+/// gravado como configuração (falha fechada), em vez de cair na pasta real do usuário.
+/// </param>
+internal sealed record OpcoesDaAplicacao(bool MovimentoPausado, ulong? Semente, string? PerfilDeTeste = null, bool PersistenciaDesligada = false)
 {
     internal static readonly OpcoesDaAplicacao Padrao = new(false, null);
 }

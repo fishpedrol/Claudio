@@ -101,16 +101,20 @@ public static class EsquemaDeConfiguracoes
         }
     }
 
-    /// <summary>Bytes do settings.json.</summary>
+    /// <summary>
+    /// Bytes do settings.json com as configurações normalizadas (<see cref="Normalizar"/>). Nunca lança por
+    /// causa do conteúdo e nunca passa de <see cref="TamanhoMaximoEmBytes"/>: o pior caso, uma chave de
+    /// 1024 caracteres todos escapados como <c>\uXXXX</c>, fica perto de 6 KiB.
+    /// </summary>
     public static byte[] Escrever(ConfiguracoesSalvas configuracoes)
     {
-        ArgumentNullException.ThrowIfNull(configuracoes);
+        ConfiguracoesSalvas normalizadas = Normalizar(configuracoes);
         var saida = new ArrayBufferWriter<byte>(512);
         using (var json = new Utf8JsonWriter(saida, OpcoesDeEscrita))
         {
             json.WriteStartObject();
             json.WriteNumber("schemaVersion", VersaoAtual);
-            if (configuracoes.Posicao is { } p)
+            if (normalizadas.Posicao is { } p)
             {
                 json.WriteStartObject("posicao");
                 json.WriteString("chaveMonitor", p.ChaveMonitor);
@@ -132,13 +136,26 @@ public static class EsquemaDeConfiguracoes
                 json.WriteEndObject();
             }
             json.WriteStartObject("preferencias");
-            json.WriteString("energia", NomeDaEnergia(configuracoes.Preferencias.Energia));
-            json.WriteBoolean("modoTelaCheia", configuracoes.Preferencias.ModoTelaCheia);
-            json.WriteBoolean("atravessarMonitores", configuracoes.Preferencias.AtravessarMonitores);
+            json.WriteString("energia", NomeDaEnergia(normalizadas.Preferencias.Energia));
+            json.WriteBoolean("modoTelaCheia", normalizadas.Preferencias.ModoTelaCheia);
+            json.WriteBoolean("atravessarMonitores", normalizadas.Preferencias.AtravessarMonitores);
             json.WriteEndObject();
             json.WriteEndObject();
         }
         return [.. saida.WrittenSpan, (byte)'\n'];
+    }
+
+    /// <summary>
+    /// As configurações como o arquivo as guarda: posição sem chave válida (vazia, longa demais, com
+    /// caractere de controle ou surrogate solto) vira nenhuma; frações saneadas (NaN vira 0,5, o resto é
+    /// preso em [0, 1]); coordenadas presas na faixa; tela que fica vazia vira desconhecida; energia fora dos
+    /// três níveis vira Média; preferências nulas, as padrão. É o que <see cref="Ler"/> devolve do que
+    /// <see cref="Escrever"/> escreveu.
+    /// </summary>
+    public static ConfiguracoesSalvas Normalizar(ConfiguracoesSalvas configuracoes)
+    {
+        ArgumentNullException.ThrowIfNull(configuracoes);
+        return new ConfiguracoesSalvas(NormalizarPosicao(configuracoes.Posicao), NormalizarPreferencias(configuracoes.Preferencias));
     }
 
     /// <summary>Nome do nível no arquivo: <c>"baixa"</c>, <c>"media"</c> ou <c>"alta"</c>; fora dos três, <c>"media"</c>.</summary>
@@ -333,6 +350,23 @@ public static class EsquemaDeConfiguracoes
     }
 
     // ---------------------------------------------------------------- regras de valor
+
+    private static PosicaoDoPersonagem? NormalizarPosicao(PosicaoDoPersonagem? posicao)
+    {
+        if (posicao is null || !ChaveValida(posicao.ChaveMonitor)) return null;
+        var ancora = new PontoPx(Coordenada(posicao.AncoraAbsoluta.X), Coordenada(posicao.AncoraAbsoluta.Y));
+        RetanguloPx? tela = posicao.TelaDoMonitor is { } t
+            && new RetanguloPx(Coordenada(t.Esquerda), Coordenada(t.Topo), Coordenada(t.Direita), Coordenada(t.Base)) is { Vazio: false } presa
+            ? presa
+            : null;
+        return new PosicaoDoPersonagem(posicao.ChaveMonitor, Fracao(posicao.FracaoX), Fracao(posicao.FracaoY), ancora) { TelaDoMonitor = tela };
+    }
+
+    private static Preferencias NormalizarPreferencias(Preferencias? preferencias)
+    {
+        if (preferencias is null) return Preferencias.Padrao;
+        return Enum.IsDefined(preferencias.Energia) ? preferencias : preferencias with { Energia = Preferencias.Padrao.Energia };
+    }
 
     /// <summary>
     /// Chave gravável: de 1 a <see cref="ComprimentoMaximoDaChave"/> caracteres, sem caractere de controle e
