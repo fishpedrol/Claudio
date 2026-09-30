@@ -36,7 +36,8 @@ internal static class InvariantesTestes
     [
         "evento aplicado num lote de 2 a 4", "evento antes da carga", "carga depois de pedidos de esconder", "carga repetida",
         "carga que mantém um pedido de esconder", "carga que mostra o personagem", "carga com posição salva conferida",
-        "carga com posição salva em monitor inexistente", "carga fora do enum", "SETTINGS_CHANGED fora do enum",
+        "carga com posição salva em monitor inexistente", "carga restaurada pelo retângulo do monitor", "carga restaurada no monitor principal",
+        "carga fora do enum", "SETTINGS_CHANGED fora do enum",
         "ENERGY_SELECTED fora do enum com o painel aberto", "expressão trocada sem transição",
         "DRAG_CANCEL do arraste com retorno", "CMD_SHOW com retorno", "fim da tela cheia sem retorno, visível",
         "agendamento no piso de um sorteio menor", "painel abriu ou fechou sem troca de estado", "DRAG_START com o painel aberto",
@@ -253,8 +254,18 @@ internal static class InvariantesTestes
             if (antes.Motivo == MotivoDoOcultamento.PorTelaCheia && antes.RetornoDaTelaCheia is not null) Contar("CMD_SHOW escondido pela tela cheia, com retorno");
             if (antes.Motivo != MotivoDoOcultamento.PorTelaCheia && antes.RetornoDaTelaCheia is not null) Contar("CMD_SHOW escondido por outro motivo no meio de um episódio");
             Posicionamento esperado = anterior is null ? Posicionador.Inicial(topologiaAoMostrar, cfg.Tamanho) : Posicionador.Reacomodar(topologiaAoMostrar, anterior, cfg.Tamanho).Resultado;
-            Verificar(depois.Estado.Visivel() && depois.Lugar is { } mostrado && mostrado.Monitor.Chave == esperado.Monitor.Chave && mostrado.Ancora.X == esperado.Ancora.X,
-                () => $"CMD_SHOW: {onde()}: de HIDDEN({antes.Motivo}) devia aparecer em {esperado.Monitor.Chave} {esperado.Ancora}; obtido {depois.Estado} em {depois.Lugar?.Monitor.Chave} {depois.Lugar?.Ancora}");
+            if (antes.Esconderijo != LadoDoEsconderijo.Nenhum)
+            {
+                // Escondido na borda (DEC-025): reaparece no esconderijo, na mesma borda do mesmo monitor.
+                Contar("CMD_SHOW de quem estava escondido na borda");
+                Verificar(depois.Estado == Estado.Peeking && depois.Esconderijo == antes.Esconderijo && depois.Lugar is { } escondido && escondido.Monitor.Chave == esperado.Monitor.Chave,
+                    () => $"CMD_SHOW: {onde()}: escondido na borda {antes.Esconderijo} devia voltar ao esconderijo em {esperado.Monitor.Chave}; obtido {depois.Estado} ({depois.Esconderijo}) em {depois.Lugar?.Monitor.Chave}");
+            }
+            else
+            {
+                Verificar(depois.Estado.Visivel() && depois.Lugar is { } mostrado && mostrado.Monitor.Chave == esperado.Monitor.Chave && mostrado.Ancora.X == esperado.Ancora.X,
+                    () => $"CMD_SHOW: {onde()}: de HIDDEN({antes.Motivo}) devia aparecer em {esperado.Monitor.Chave} {esperado.Ancora}; obtido {depois.Estado} em {depois.Lugar?.Monitor.Chave} {depois.Lugar?.Ancora}");
+            }
         }
 
         // R9: um clique, clique duplo ou cancelamento em PRESSED só descarta o retorno se a tela cheia
@@ -542,10 +553,11 @@ internal static class InvariantesTestes
     /// Linha BOOTING | configurações e topologia carregadas (R6): a primeira carga vale, com a topologia
     /// e as preferências dela (energia saneada, R1); um pedido de esconder anterior continua valendo,
     /// sem mostrar nem agendar; sem ele, o personagem aparece (ou a tela cheia em cache o esconde). A
-    /// posição relativa salva é aplicada à área útil do monitor escolhido, que é o da chave quando ela
-    /// existe (ARCHITECTURE.md 2.8, item 1); para uma chave que não existe, a escolha do monitor é da
-    /// Fase 5 ("restauração com alternativas") e aqui só se confere que a posição salva não foi
-    /// ignorada. Sem posição salva, começa no principal. As cargas seguintes são ignoradas.
+    /// posição salva é restaurada pela cascata da partida (ARCHITECTURE.md 2.8, Posicionador.Restaurar):
+    /// o monitor da chave; sem ele, o primeiro com a tela salva; sem nenhum dos dois, o principal. A
+    /// posição relativa salva é aplicada à área útil desse monitor, e a posição do núcleo passa a ser
+    /// dele, com a tela dele e frações válidas. Sem posição salva, começa no principal. As cargas
+    /// seguintes são ignoradas.
     /// </summary>
     private static void ConferirCarga(ConfiguracaoDoNucleo cfg, EstadoDoNucleo antes, Loaded carga, Resultado r, Func<string> onde, Contagens contagens)
     {
@@ -586,10 +598,20 @@ internal static class InvariantesTestes
         if (carga.PosicaoSalva is { } salva)
         {
             contagens.Contar("carga com posição salva conferida");
-            if (carga.Topologia.PorChave(salva.ChaveMonitor) is not null)
-                Verificar(lugar.Monitor.Chave == salva.ChaveMonitor, () => $"R6: {onde()}: posição salva em {salva.ChaveMonitor}, que existe, restaurada em {lugar.Monitor.Chave}");
-            int x = Posicionador.NoMonitor(lugar.Monitor, salva.FracaoX, salva.FracaoY, cfg.Tamanho).Ancora.X;
+            MonitorDoDesktop? daChave = carga.Topologia.PorChave(salva.ChaveMonitor);
+            MonitorDoDesktop? daTela = daChave is null ? carga.Topologia.Monitores.FirstOrDefault(m => m.Tela == salva.TelaDoMonitor) : null;
+            if (daTela is not null) contagens.Contar("carga restaurada pelo retângulo do monitor");
+            else if (daChave is null) contagens.Contar("carga restaurada no monitor principal");
+            MonitorDoDesktop esperado = daChave ?? daTela ?? carga.Topologia.Principal;
+            Verificar(lugar.Monitor.Chave == esperado.Chave,
+                () => $"R6: {onde()}: posição salva em {salva.ChaveMonitor} (tela {salva.TelaDoMonitor?.ToString() ?? "desconhecida"}) restaurada em {lugar.Monitor.Chave}, esperado {esperado.Chave}");
+            int x = Posicionador.NoMonitor(esperado, salva.FracaoX, salva.FracaoY, cfg.Tamanho).Ancora.X;
             Verificar(lugar.Ancora.X == x, () => $"R6: {onde()}: âncora {lugar.Ancora} em {lugar.Monitor.Chave} não é a fração salva {salva.FracaoX} (x {x})");
+            // A posição do núcleo passa a ser do monitor escolhido: a chave e a tela dele, e frações
+            // válidas mesmo quando as salvas eram NaN, infinitas ou fora de [0, 1].
+            Verificar(depois.Posicao is { } p && p.ChaveMonitor == esperado.Chave && p.TelaDoMonitor == esperado.Tela
+                    && p.FracaoX is >= 0 and <= 1 && p.FracaoY is >= 0 and <= 1,
+                () => $"R6: {onde()}: posição do núcleo {Descrever(depois.Posicao)} (tela {depois.Posicao?.TelaDoMonitor}) depois de restaurar em {esperado.Chave} (tela {esperado.Tela})");
         }
         else
         {
@@ -693,6 +715,9 @@ internal static class InvariantesTestes
             PainelDeEnergiaDisponivel = rnd.Next(2) == 0,
             ConfiguracoesDisponiveis = rnd.Next(2) == 0,
             Acoes = (AcoesAutonomas)rnd.Next((int)AcoesAutonomas.Todas + 1),
+            // Esconderijo pelo clique duplo (DEC-025) em um terço das sequências, escolhido pela
+            // semente da sequência para não mudar os outros sorteios do gerador.
+            EsconderijoNoCliqueDuplo = (uint)semente % 3 == 0,
         };
         // R-h: perfil com decisões, descansos e gestos curtos e piso variável, para o piso do
         // intervalo de acomodação importar (com o perfil padrão, todo sorteio já passa de 3 s) e o
@@ -756,7 +781,10 @@ internal static class InvariantesTestes
 
     /// <summary>
     /// Carga com preferências às vezes inválidas e, metade das vezes, uma posição salva: num monitor
-    /// da topologia ou numa chave que ela não tem, com frações às vezes fora de [0, 1] ou NaN.
+    /// da topologia ou numa chave que ela não tem, com frações às vezes fora de [0, 1] ou NaN. A tela
+    /// salva é a do monitor em que a âncora salva está, se ela está em algum; senão, desconhecida. Ela
+    /// sai da âncora já sorteada, sem sorteio novo, para não mudar os outros sorteios do gerador: com a
+    /// chave desconhecida, leva a restauração pelo retângulo ou, sem ela, ao principal.
     /// </summary>
     private static Loaded NovaCarga(Random rnd, GeradorDeTopologias gerador, Topologia topologia)
     {
@@ -765,7 +793,9 @@ internal static class InvariantesTestes
         {
             string chave = rnd.Next(4) == 0 ? ChaveDesconhecida : topologia.Monitores[rnd.Next(topologia.Monitores.Count)].Chave;
             double Fracao() => rnd.Next(5) == 0 ? gerador.Fracao() : rnd.NextDouble();
-            salva = new PosicaoDoPersonagem(chave, Fracao(), Fracao(), gerador.Ponto(topologia));
+            double fx = Fracao(), fy = Fracao();
+            PontoPx ancora = gerador.Ponto(topologia);
+            salva = new PosicaoDoPersonagem(chave, fx, fy, ancora) { TelaDoMonitor = topologia.MonitorQueContem(Posicionador.PixelDosPes(ancora))?.Tela };
         }
         return new Loaded(topologia, salva, new Preferencias(Nivel(rnd), rnd.Next(4) != 0));
     }

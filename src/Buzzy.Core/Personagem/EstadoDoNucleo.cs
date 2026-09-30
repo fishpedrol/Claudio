@@ -83,6 +83,20 @@ public sealed record EstadoDoNucleo
     /// </summary>
     public bool TelaCheiaMudouNoGesto { get; init; }
 
+    /// <summary>
+    /// Colocado pelo usuário numa lateral ou no cipó da borda de cima (DEC-024): lá fica até o
+    /// usuário tirá-lo. A agenda só o faz passear pela mesma superfície; nunca salta, se solta nem
+    /// desce ao chão por conta própria. Um clique não o tira; um arraste para outro lugar, sim.
+    /// </summary>
+    public bool PresoPeloUsuario { get; init; }
+
+    /// <summary>
+    /// Em que borda o personagem está escondido (DEC-025), ou <see cref="LadoDoEsconderijo.Nenhum"/>.
+    /// Sobrevive a PRESSED e REACTING (o primeiro clique do clique duplo), a HIDDEN e às
+    /// revalidações: toda acomodação de quem está escondido o devolve ao esconderijo.
+    /// </summary>
+    public LadoDoEsconderijo Esconderijo { get; init; }
+
     /// <summary>Relógio lógico: passos fixos já aplicados.</summary>
     public long Passos { get; init; }
 

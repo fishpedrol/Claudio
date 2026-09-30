@@ -159,14 +159,7 @@ internal sealed class Aplicacao
         Diagnostico.Evento("JANELA", ("hwnd", _personagem.Hwnd));
 
         ulong semente = _opcoes.Semente ?? unchecked((ulong)Environment.TickCount64);
-        // Fase 4 (DEC-022): física do movimento, queda animada e todas as ações autônomas.
-        _nucleo = new Nucleo(new ConfiguracaoDoNucleo
-        {
-            Tamanho = SpriteProvisorio.TamanhoLogico,
-            Acoes = AcoesAutonomas.Todas,
-            QuedaFisica = true,
-            Movimento = true,
-        }, semente);
+        _nucleo = new Nucleo(ConfiguracaoDoNucleo.DoAplicativo(SpriteProvisorio.TamanhoLogico), semente);
         Diagnostico.Evento("NUCLEO", ("semente", semente), ("pausado", _opcoes.MovimentoPausado ? "sim" : "nao"));
         Enviar(new Loaded(topologia, PosicaoSalva: null, Preferencias.Padrao), "início");
         if (_opcoes.MovimentoPausado) Enviar(new CmdPauseAutonomy(), "linha de comando --pausado");
@@ -575,7 +568,7 @@ internal sealed class Aplicacao
             _passoDeEntradaNoEstado = _nucleo.Estado.Passos;
         }
         int dpi = _posicionamento.Monitor.Dpi;
-        var dinamica = new Dinamica(movimento.VY * 96.0 / dpi, movimento.Quiques, movimento.Foguete);
+        var dinamica = new Dinamica(movimento.VY * 96.0 / dpi, movimento.Quiques, movimento.Foguete, movimento.Agarrado, _nucleo.Estado.Esconderijo);
         QuadroDoSprite quadro = PoseDoPersonagem.Escolher(retrato, _nucleo.Estado.Passos - _passoDeEntradaNoEstado, dinamica);
         if (quadro == _quadroAtual && dpi == _dpiDoSprite && _personagem.Sprite is not null) return;
         int quadrosAntes = SpriteProvisorio.QuadrosEmCache;

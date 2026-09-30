@@ -7,47 +7,26 @@
 
 O usuário pediu que Claude volte a implementar o que falta. A diretiva está em [prompt_usuario.md](prompt_usuario.md); a autorização contínua de Claude está em DEC-015. A divisão anterior que deixava a Fase 2 com Codex foi substituída.
 
-**Estado em 2026-09-30 12:30 (Claude), nada commitado:**
+**Estado em 2026-09-30 17:30 (Claude). O usuário fez os commits `828c1f7` e `803a54b`; o resto está no checkout, sem commit:**
 
-- **Fase 2:** VERIFIED no `docs/TODO.md`. O critério 4 foi verificado com input SINTÉTICO.
-- **Fase 3:** implementada e verificada por automação e input SINTÉTICO; continua PLANNED por três pendências: UAC [MANUAL], DPI misto [HW] e ClickLock [MANUAL].
-- **Fase 4:** implementada e verificada numa **cópia isolada** fora do repositório:
-  - caminho: `C:\Users\Cliente\AppData\Local\Temp\claude\C--Users-Cliente-Documents-claudio\3b0e750b-9776-418f-aa13-3a4fa1644cac\scratchpad\f4`;
-  - motivo da cópia: um workflow de testes estava compilando a árvore principal;
-  - **a Fase 4 ainda não está no repositório.**
-
-Arquivos da Fase 4 em `f4` que precisam entrar na árvore principal:
-
-- núcleo:
-  - `src/Buzzy.Core/Personagem/Movimento.cs` (novo);
-  - `Configuracao.cs` (`Movimento`, `Fisica`, faixas de distância, pulo, parede e pendurado por energia);
-  - `EstadoDoNucleo.cs` (campo `Movimento`);
-  - `Maquina.cs` (física: `PassoAndando`, `PassoEscalando`, `PassoPendurado`, `PassoNoAr`, `Planejar*`, `SaltarDaParede`, `SairDoTeto`);
-- app: `Aplicacao.cs`, com a configuração `Acoes = Todas`, `QuedaFisica = true`, `Movimento = true`;
-- testes:
-  - `tests/Buzzy.Core.Testes/Movimento/*` (novos);
-  - `tests/Buzzy.App.Testes/Integracao/MovimentoIntegracaoTestes.cs` (novo);
-  - parâmetro `semente` em `BuzzyEmTeste.cs`;
-- harness: `tests/Buzzy.Verificacao/VerificacaoFase4.cs` (novo), `Programa.cs` (`--fase 4`) e `Injetor.cs` (`esperarCliqueDuplo`).
-
-Mescle arquivo por arquivo com diff, porque a árvore principal recebeu mudanças depois da cópia. Não copie a pasta inteira por cima.
-
-**Atenção:** `tests/Buzzy.App.Testes/Integracao/GestosTestes.cs` na árvore principal já espera a queda da Fase 4. Até a mescla, o teste de integração de arraste falha na árvore principal.
+- **Fase 2:** VERIFIED.
+- **Fases 3 e 4:** implementadas na árvore principal e verificadas por automação e input SINTÉTICO; continuam PLANNED por pendências [MANUAL]/[HW]:
+  - Fase 3: UAC, DPI misto e ClickLock;
+  - Fase 4: gravação de tela a 120 qps.
+- **Fase 4 inclui os pedidos do usuário:**
+  - toon force (DEC-023);
+  - cipó e "preso onde você solta" (DEC-024);
+  - esconderijo pelo clique duplo (DEC-025).
+- As cópias `scratchpad\f4` e `scratchpad\cipo` estão obsoletas; a árvore principal é a fonte.
 
 ### Próximas ações em ordem
 
-1. Esperar o workflow `fase2-cobertura-testes` (run `wf_3fd26000-099`), que escreve testes em `tests/Buzzy.Core.Testes/Personagem`. Revisar o que ele escreveu, inclusive qualquer relato `// DEFEITO:`.
-2. Mesclar a Fase 4 de `f4`, rodar `tools/testar.ps1`, `-Integracao` (avise o usuário antes) e `Buzzy.Verificacao --injetar-input-na-tela --fase 1|3|4` (abre janelas e move o cursor; avise antes).
-3. Sincronizar os documentos das Fases 3 e 4:
-   - TODO;
-   - PROJECT_CONTEXT;
-   - DEVELOPMENT_LOG;
-   - ARCHITECTURE 1, 2.5, 2.9 e 2.13.4;
-   - DEC-022, com o rascunho em `scratchpad\fase4\DEC-022.md` e os valores finais de `f4`;
-   - SECURITY (APIs `SetCapture`, `ReleaseCapture`, `GetDoubleClickTime` e `GetWindowRect` na própria janela);
-   - COMO_INICIAR;
-   - README.
-4. Seguir para a Fase 5 sem pedir aprovação (DEC-015).
+1. **Fase 5**, seguindo a ordem P1–P16 de `scratchpad\fase5\critico-integracao.md`, com as resoluções C1–C18 e os desenhos em `scratchpad\fase5\projetista-*.md`:
+   - numeração das DECs da Fase 5: DEC-027 (persistência), DEC-028 (chave e topologia), DEC-029 (sessão, energia e minimização) e DEC-030 (travessia e escala);
+   - na travessia, respeite a DEC-023: na passagem, a agenda sorteia entre atravessar e escalar (C14);
+   - isolamento dos testes por `--perfil-de-teste` antes de gravar qualquer arquivo real (C17).
+2. Depois da Fase 5: a curiosidade (DEC-026) com o observador de janela ativa (P7), junto com o modo de tela cheia.
+3. Toda verificação de tela avisa o usuário antes. Nada de commit automático.
 
 ## Estado e evidência que orientam o handoff
 
@@ -61,11 +40,10 @@ Mescle arquivo por arquivo com diff, porque a árvore principal recebeu mudança
 - **Fase 3:** árbitro puro `src/Buzzy.Core/Entrada/ArbitroDeGestos.cs` e adaptador em `JanelaPersonagem.cs` (DEC-021).
   - Testes: Core 171/171 e integração 25/25.
   - `--fase 3`: 33 OK, 2 N/A, 0 falhas.
-- **Fase 4 (em `f4`):**
-  - Core 180/180; integração 29/29.
-  - `--fase 4`: 17 OK, 0 falhas. Segurou no meio da queda; caminhada com passo máximo de 3 px e intervalo p95 de 31,9 ms; subiu 176/176, pendurou-se 146 vezes e voltou ao chão em 16 s; repouso com 0,000% de CPU e relógio desligado.
+- **Fase 4 (árvore principal):**
+  - Core 267/267; App 37/37 com a integração.
+  - `--fase 4`: 28 OK, 0 falhas, cobrindo queda segurada, caminhada, escalada, repouso, quique, lateral interna, cipó, parede e esconderijo.
   - Pendência [MANUAL]: critério 5, gravação a 120 qps.
-  - As 21 falhas de `PortaoApis` dentro de `f4` são do ambiente (sem `spikes/`), não do código.
 - **Identidade:** DEC-018/DEC-019 aprovaram pixel art fiel às pranchas e semelhança intencional com Luffy, incluindo chapéu de palha e faixa vermelha. O quadro parado e o ícone já estão integrados; animações pertencem à Fase 6. A fonte visual é `docs/IDENTIDADE_VISUAL.md` e os arquivos em `src/Buzzy.Visual/Pixel/` / `assets/identidade/pixel/`.
 
 ## Alertas históricos
@@ -143,3 +121,17 @@ Mantenha aqui um resumo do estado atual e acrescente uma entrada curta por marco
       - `--fase 4`: **22 OK, 0 falhas**, com quique e subida pela lateral interna.
   - `f4` não é mais a fonte; a árvore principal é.
   - Próximo: medições de 10 min (`medir-desempenho.ps1 -Modo repouso` e `-Modo autonomia`), sincronizar PROJECT_CONTEXT, DEVELOPMENT_LOG e SECURITY 10, e depois a Fase 5. Os desenhos de 3 áreas estão em `scratchpad\fase5\`; o de travessia ainda está rodando.
+- **2026-09-30 17:30 — Claude:** os pedidos do usuário foram implementados e verificados **na árvore principal**:
+  - cipó na borda de cima;
+  - agarrar onde é solto, preso até o usuário tirar (DEC-024);
+  - esconderijo pelo clique duplo (estado `PEEKING`, DEC-025). O painel de energia vai para o menu na Fase 8.
+  - Resultados:
+    - `tools/testar.ps1` código 0: Core 267/267, portão 73/73, App 26/26;
+    - integração 37/37;
+    - `--fase 3`: 34 OK e 2 N/A; `--fase 4`: 28 OK.
+  - Medições de 10 min feitas:
+    - repouso: 0,003% de CPU;
+    - autonomia: 3–4% de CPU em movimento. A memória fica num patamar depois da 1ª coleta do GC; não é vazamento. O diagnóstico está no DEVELOPMENT_LOG, e o log de diagnóstico ganhou as linhas `MEMORIA` e `SPRITE`, só por evento.
+  - Curiosidade (DEC-026) entra depois da Fase 5.
+  - Commits `828c1f7` e `803a54b` foram feitos com a identidade do usuário; Claude não commita.
+  - **Próximo: Fase 5**, na ordem P1–P16 da crítica de integração (`scratchpad\fase5\critico-integracao.md`). As DECs da Fase 5 passam a ser DEC-027 a DEC-030, porque 023 a 026 já estão ocupadas. Os desenhos das 4 áreas estão em `scratchpad\fase5\projetista-*.md`.

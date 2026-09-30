@@ -81,6 +81,61 @@ internal sealed class PoseTestes
     }
 
     [Teste]
+    public void Cipo_BalancaAndandoEFicaNoMeioAgarrado()
+    {
+        string[] quadros = [.. Enumerable.Range(0, 8).Select(i => PoseDoPersonagem.Escolher(R(Estado.Hanging), i * 10).Pose)];
+        Afirmar.Sequencia(new[] { "cipo-1", "cipo-2", "cipo-3", "cipo-2", "cipo-1", "cipo-2", "cipo-3", "cipo-2" }, quadros, "balanço: esquerda, meio, direita, meio");
+        Afirmar.Igual("cipo-2", PoseDoPersonagem.Escolher(R(Estado.Hanging), 37, new Dinamica(0, 0, false, Agarrado: true)).Pose, "agarrado, parado no meio");
+        Afirmar.Igual("escalando-1", PoseDoPersonagem.Escolher(R(Estado.Climbing), 37, new Dinamica(0, 0, false, Agarrado: true)).Pose, "grudado na parede, parado");
+        Afirmar.Nulo(PoseDoPersonagem.Escolher(R(Estado.Hanging), 0).Expressao, "com a cara neutra, fica o riso da pose");
+        Afirmar.Igual("curioso", PoseDoPersonagem.Escolher(R(Estado.Hanging, expressao: Expressao.Curioso), 0).Expressao, "outras caras aparecem no cipó");
+    }
+
+    [Teste]
+    public void Cipo_EncostaNaBordaDeCimaEOCorpoNaoEncostaNasLaterais()
+    {
+        foreach (string pose in new[] { "cipo-1", "cipo-2", "cipo-3" })
+        {
+            foreach (bool espelhado in new[] { false, true })
+            {
+                BitmapSource bmp = SpriteProvisorio.Renderizar(new QuadroDoSprite(pose, espelhado, null), 96);
+                int[] p = Pixels(bmp);
+                int w = bmp.PixelWidth, h = bmp.PixelHeight;
+                string onde = $"{pose}{(espelhado ? " espelhado" : "")}";
+                // Os pés podem tocar a linha de baixo, como em toda pose (a âncora fica ali).
+                Afirmar.Verdadeiro(Enumerable.Range(0, w).Any(x => Alfa(p[x]) == 255), $"{onde}: o cipó encosta na borda de cima, onde se prende na tela");
+                Afirmar.Verdadeiro(Enumerable.Range(0, h).All(y => Alfa(p[y * w]) == 0 && Alfa(p[y * w + w - 1]) == 0), $"{onde}: nada encosta nas laterais");
+                Afirmar.Igual(0, p.Count(x => Alfa(x) is not 0 and not 255), $"{onde}: alfa só 0 ou 255");
+            }
+        }
+    }
+
+    [Teste]
+    public void Escondido_SoACabecaEAsMaosAparecemJuntoABordaDoEsconderijo()
+    {
+        foreach ((LadoDoEsconderijo lado, Giro giro) in new[] { (LadoDoEsconderijo.Baixo, Giro.Nenhum), (LadoDoEsconderijo.Esquerda, Giro.Horario), (LadoDoEsconderijo.Direita, Giro.AntiHorario) })
+        {
+            var dinamica = new Dinamica(0, 0, false, Esconderijo: lado);
+            foreach (Estado estado in new[] { Estado.Peeking, Estado.Reacting, Estado.Pressed })
+            {
+                QuadroDoSprite q = PoseDoPersonagem.Escolher(R(estado), 0, dinamica);
+                Afirmar.Igual(("escondido", giro), (q.Pose, q.Giro), $"{lado}, {estado}: a pose do esconderijo, sem o corpo aparecer de relance");
+            }
+            BitmapSource bmp = SpriteProvisorio.Renderizar(PoseDoPersonagem.Escolher(R(Estado.Peeking), 0, dinamica), 96);
+            (int e, int t, int d, int b) = Limites(bmp);
+            int w = bmp.PixelWidth, h = bmp.PixelHeight;
+            bool certo = lado switch
+            {
+                LadoDoEsconderijo.Baixo => b == h && t > h / 2,
+                LadoDoEsconderijo.Esquerda => e == 0 && d < w / 2,
+                _ => d == w && e > w / 2,
+            };
+            Afirmar.Verdadeiro(certo, $"{lado}: só a cabeça e as mãos, encostadas na borda do esconderijo ({e},{t})-({d},{b}) num quadro de {w}×{h}");
+        }
+        Afirmar.Igual("surpreso", PoseDoPersonagem.Escolher(R(Estado.Pressed), 0, new Dinamica(0, 0, false, Esconderijo: LadoDoEsconderijo.Baixo)).Expressao, "pressionado no esconderijo, cara de surpresa");
+    }
+
+    [Teste]
     public void TodaPoseEscolhidaExisteNaPixelArtComQualquerDeformacao()
     {
         var dinamicas = new[] { default(Dinamica), new Dinamica(1200, 0, false), new Dinamica(-800, 1, false), new Dinamica(-1000, 0, true) };

@@ -120,6 +120,20 @@ internal static class ReacomodarTestes
         Afirmar.Igual(Ret(-300, 708, 0, 1008), r144.Retangulo, "retângulo encostado em x = 0");
     }
 
+    // Fase 5 (ARCHITECTURE.md 2.8): a posição passa a guardar a tela do monitor em que foi descrita
+    // por último, que é a que a partida seguinte procura quando a chave não existir mais.
+    [Teste]
+    public static void MesmoMonitorComTelaNovaGuardaATelaNova()
+    {
+        Topologia maior = ComMonitor(SecundarioAEsquerda, Display2, m => m with { Tela = Ret(-2560, -360, 0, 1080), AreaUtil = Ret(-2560, -360, 0, 1032) });
+        PosicaoDoPersonagem nova = Posicionador.Reacomodar(maior, PosicaoNoSecundario, Sprite).NovaPosicao;
+        Afirmar.Igual(Ret(-2560, -360, 0, 1080), nova.TelaDoMonitor, "tela nova do secundário");
+        Afirmar.Igual(PosicaoNoSecundario.FracaoX, nova.FracaoX, "fração x guardada");
+
+        // Sem mudança, a tela guardada continua a mesma.
+        Afirmar.Igual(Ret(-1920, 0, 0, 1080), Posicionador.Reacomodar(SecundarioAEsquerda, PosicaoNoSecundario, Sprite).NovaPosicao.TelaDoMonitor, "mesma topologia");
+    }
+
     // ---------------------------------------------------------------- monitor que some
 
     [Teste]
@@ -136,11 +150,27 @@ internal static class ReacomodarTestes
         (_, PosicaoDoPersonagem novaDireita) = AfirmarReacomodacao(semMeio, aDireita, Display3, new PontoPx(5568, 1832), "cai no terceiro");
         AfirmarPosicao(Display3, 0.9, 1.0, new PontoPx(5568, 1832), novaDireita, "posição passa a ser do terceiro");
 
-        // Perto da esquerda, em (2112,1432): o principal está a √161858 ≈ 402 px e o terceiro a 1728 px.
+        // Perto da esquerda, em (2112,1432): do pixel dos pés (2112,1431), o principal está a
+        // √161153 ≈ 401 px e o terceiro a 1728 px.
         PosicaoDoPersonagem aEsquerda = Posicionador.Descrever(Posicionador.NoMonitor(meio, 0.1, 1, Sprite));
         Afirmar.Igual(new PontoPx(2112, 1432), aEsquerda.AncoraAbsoluta, "partida à esquerda");
         (_, PosicaoDoPersonagem novaEsquerda) = AfirmarReacomodacao(semMeio, aEsquerda, Display1, new PontoPx(192, 1032), "cai no principal");
         AfirmarPosicao(Display1, 0.1, 1.0, new PontoPx(192, 1032), novaEsquerda, "posição passa a ser do principal");
+    }
+
+    // Fase 5: o monitor mais próximo é medido a partir do pixel dos pés, a mesma convenção de
+    // Maquina.MonitorDaAncora. Com a barra oculta, a âncora no chão fica em Tela.Base, que numa
+    // pilha já é o primeiro pixel do monitor de baixo.
+    [Teste]
+    public static void MonitorRemovidoComAAncoraNaBaseDaTelaUsaOPixelDosPes()
+    {
+        var pilha = new Topologia([
+            Principal(Display1, Ret(0, 0, 1920, 1080), Ret(0, 0, 1920, 1080), 96),
+            Secundario(Display2, Ret(0, 1080, 1920, 2160), Ret(0, 1080, 1920, 2112), 96),
+        ]);
+        var noChaoDeUmMonitorQueSumiu = new PosicaoDoPersonagem(Display3, 0.5, 1, new PontoPx(960, 1080));
+        AfirmarReacomodacao(pilha, noChaoDeUmMonitorQueSumiu, Display1, new PontoPx(960, 1080), "o pixel (960,1079) é do DISPLAY1; a âncora crua cairia no DISPLAY2");
+        Afirmar.Igual(new PontoPx(960, 1079), Posicionador.PixelDosPes(new PontoPx(960, 1080)), "o pixel dos pés fica logo acima da âncora");
     }
 
     [Teste]

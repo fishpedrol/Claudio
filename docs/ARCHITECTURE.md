@@ -136,6 +136,14 @@ STATUS: PLANNED. Estado de comportamento e expressão são dimensões independen
 | `REACTING` | usuário | Reação curta a um clique. |
 | `HIDDEN` | sistema | Escondido. Sem relógio, sem desenho. Guarda **por que** foi escondido: `POR_USUARIO`, `POR_SESSAO`, `POR_SUSPENSAO` ou `POR_TELA_CHEIA`. |
 | `EXITING` | sistema | Grava estado e encerra. |
+| `PEEKING` | autônomo | Escondido atrás da borda de baixo (a barra de tarefas) ou de uma lateral, só com a cabeça e as mãos para fora (DEC-025). Entra e sai pelo clique duplo. Sem relógio; a agenda só troca a cara. |
+
+**Dimensões da Fase 4 ligadas às escolhas do usuário:**
+
+| Dimensão | Valores | Efeito |
+|---|---|---|
+| Preso pelo usuário | sim ou não | O usuário o soltou na lateral ou no cipó: lá fica até o usuário tirá-lo. A agenda só o faz passear pela mesma superfície (DEC-024). |
+| Esconderijo | nenhum, baixo, esquerda ou direita | A borda atrás da qual ele está escondido. Sobrevive ao primeiro clique do clique duplo, a `HIDDEN` e às revalidações (DEC-025). |
 
 **Dimensões ortogonais.** As informações abaixo acompanham o personagem sem fazer parte do estado de comportamento:
 
@@ -173,6 +181,9 @@ STATUS: PLANNED. Estado de comportamento e expressão são dimensões independen
 | `DRAGGING` | `DRAG_MOVE(p)` | `DRAGGING` | Posição = cursor menos o deslocamento da pegada. |
 | `DRAGGING` | `DRAG_END` ou `DRAG_CANCEL` | `SETTLING` | Validação da seção 2.7. |
 | `SETTLING` | com apoio | `IDLE` | Autonomia retomada depois de um intervalo de acomodação, exceto se o painel de energia estiver aberto. |
+| `SETTLING` | com esconderijo marcado | `PEEKING` | Volta ao esconderijo na mesma borda, perto do lugar validado (DEC-025). |
+| `SETTLING` | sem apoio, a mais de 32 DIP do chão, com o topo do sprite a até 96 DIP da borda de cima | `HANGING` agarrado ao cipó | Parado e sem relógio. Se foi o usuário que o soltou ali (`DRAG_END`, `DRAG_CANCEL`), ou se ele já estava preso, fica preso pelo usuário (DEC-024). |
+| `SETTLING` | sem apoio, a mais de 32 DIP do chão, com a âncora a até 64 DIP de uma lateral | `CLIMBING` agarrado à parede | Idem, olhando para a parede. Com as duas bordas perto, vale a mais próxima em proporção ao alcance. |
 | `SETTLING` | sem apoio | `FALLING` | Cai até o chão do monitor. |
 | `PRESSED` (segundo clique), `IDLE`, `REACTING` | `DOUBLE_CLICK` ou menu "Energia" | `SETTLING` se vier de `PRESSED`; senão permanece | A partir da Fase 8, abre o painel compacto somente com o seletor de energia; pausa a autonomia enquanto estiver aberto. Antes da Fase 8, o segundo clique só produz reação não verbal. |
 | qualquer estado visível com painel aberto | `ENERGY_SELECTED(nivel)` | permanece | Atualiza a mesma preferência persistida; o novo nível afeta as próximas decisões autônomas. |
@@ -185,6 +196,11 @@ STATUS: PLANNED. Estado de comportamento e expressão são dimensões independen
 | `CLIMBING` | alcança borda superior apoiável | `HANGING` | Agarra a borda; a apresentação escolhe a pose correspondente. |
 | `HANGING` | deslocamento autônomo, `AUTONOMY_TIMER` ou passagem compatível | `HANGING`, `CLIMBING`, `JUMPING` ou `FALLING` | Move-se apenas ao longo de uma borda alcançável; soltar-se leva a `FALLING`. |
 | `RESTING` | `AUTONOMY_TIMER` | `IDLE` | Acorda e volta a decidir. O relógio só é religado neste momento. |
+| `CLIMBING`, `HANGING` presos pelo usuário | `AUTONOMY_TIMER` | permanece | Fica e troca de cara, ou passeia de 40 a 220 DIP pela mesma superfície. Na parede, nunca chega ao chão nem passa para o cipó; no cipó, dá meia-volta nas quinas. Nunca salta, se solta nem desce ao chão (DEC-024). |
+| `CLIMBING`, `HANGING` agarrados, sem estarem presos | `AUTONOMY_TIMER` | `CLIMBING`, `HANGING`, `JUMPING` ou `FALLING` | Volta a escalar para cima ou para baixo, segue pela borda, salta ou se solta. Isso acontece, por exemplo, depois da reação a um clique no meio de uma escalada (DEC-024). |
+| `PRESSED`, `IDLE`, `REACTING`, `PEEKING` | `DOUBLE_CLICK` com o esconderijo ligado | `SETTLING`, depois `PEEKING` ou o estado da acomodação | Fora do esconderijo, esconde-se atrás da lateral mais próxima (se está no alto e junto dela) ou da borda de baixo. Escondido, sai: de pé no chão, ou grudado na parede e preso pelo usuário. O painel de energia não abre pelo clique duplo (DEC-025). |
+| `PEEKING` | `AUTONOMY_TIMER` | permanece | Só troca a cara, espiando. |
+| `PEEKING` | `PRESS`, `CLICK` | `PRESSED`, `REACTING`, depois `PEEKING` | Um clique faz a cabeça reagir e o deixa escondido; um arraste (`DRAG_START`) o tira do esconderijo. |
 | qualquer estado visível, exceto `PRESSED`, `DRAGGING` e `EXITING` | `FULLSCREEN_TARGETS_CHANGED(monitoresOcupados)` | `SETTLING` no monitor livre, `HIDDEN(POR_TELA_CHEIA)` ou estado atual | Uma vez por mudança e só se a âncora estiver num monitor ocupado: transfere instantaneamente para um monitor livre sem ativar a janela; se todos estiverem ocupados, fecha o painel e oculta. Guarda a posição anterior só em memória, se ainda não houver uma guardada. |
 | `PRESSED`, `DRAGGING` | `FULLSCREEN_TARGETS_CHANGED` | sem troca de estado | Só atualiza os monitores ocupados em cache. O gesto do usuário nunca é interrompido; ao soltar, `SETTLING` respeita o ponto escolhido pelo usuário, mesmo que seja um monitor ocupado, e descarta o retorno temporário. Um arraste (`DRAG_END` ou `DRAG_CANCEL` em `DRAGGING`) sempre descarta o retorno; um clique, clique duplo ou cancelamento em `PRESSED` só o descarta se a tela cheia mudou durante o gesto (DEC-020). |
 | `HIDDEN(POR_TELA_CHEIA)` | `FULLSCREEN_TARGETS_CHANGED` com monitor livre | `SETTLING` | Reaparece no monitor livre; mantém o retorno temporário. |
@@ -344,6 +360,8 @@ STATUS: PLANNED.
 - **Trocar asset** significa trocar o manifesto e as imagens. O núcleo, o movimento, a arbitragem, o mundo do desktop e a segurança não mudam. Um teste automático roda a mesma suíte do núcleo com dois manifestos diferentes.
 - Até a Fase 6, o app mostra quadros estáticos da pixel art, com o chapéu de palha (DEC-018 e DEC-019). Na Fase 4, `PoseDoPersonagem` escolhe uma pose provisória por estado: ciclo de caminhada e de escalada, pendurado, impulso, no ar, caindo, pousando, sentado ou dormindo, segurado, reagindo e os gestos, espelhada para a esquerda.
 - **Toon force (DEC-023):** a pose também pode vir achatada (impacto) ou esticada (velocidade), pela dinâmica do movimento (`Dinamica`: velocidade vertical, quiques e foguete). A deformação é da própria pixel art (`Tela.Deformada`, vizinho mais próximo, pés na mesma linha), então a janela, a âncora e a regra do alfa não mudam.
+- **Cipó (DEC-024):** na borda de cima, o personagem aparece pendurado num cipó (`cipo-1` a `cipo-3`). Balança em ciclo quando anda pela borda e fica no quadro do meio quando está agarrado. Agarrado à parede, a pose da escalada fica parada.
+- **Esconderijo (DEC-025):** em `PEEKING`, e também em `PRESSED` e `REACTING` de quem continua escondido, aparece a pose `escondido`, só com o chapéu, a cabeça e as mãos na borda. Nas laterais, ela é girada 90° (`Tela.Girada`, sem perda).
 - A apresentação só redesenha quando o quadro muda ou quando a posição exige. Um clipe de 10 quadros por segundo gera 10 redesenhos por segundo, não 60.
 - A máscara de clique sai do canal alfa do quadro atual.
 
@@ -485,3 +503,4 @@ As escolhas do usuário e as pendências ainda abertas estão numeradas (Q-01 em
 | 2026-09-30 | Linha nova da tabela 2.6: desligar o modo de tela cheia desfaz o efeito temporário, inclusive no fim de um gesto que não escolheu posição. | DEC-020 |
 | 2026-09-30 | Fase 4: física de passo fixo no núcleo (andar, escalar, pendurar-se, pular, cair), superfícies do monitor da âncora, relógio pelos quadros do compositor e poses provisórias por estado (seções 2.5, 2.9 e 2.13.4). | DEC-022 |
 | 2026-09-30 | Toon force, a pedido do usuário: toda lateral é escalável, quique e foguete de borracha, esticar e achatar nas poses (seções 2.5, 2.6, 2.9 e 2.10). | DEC-023 |
+| 2026-09-30 | A pedido do usuário: cipó na borda de cima; agarrar onde é solto e ficar preso até o usuário tirar; estado `PEEKING` (esconderijo) pelo clique duplo, com o painel de energia passando para o menu (seções 2.6 e 2.10). | DEC-024, DEC-025 |

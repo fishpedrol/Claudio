@@ -158,9 +158,12 @@ internal static class ReproducaoTestes
             new SessionUnlocked(), new Suspending(), new Resumed(), new SessionEnding(), new Tick(),
             new FullscreenTargetsChanged(new MonitoresOcupados([TopologiasDeExemplo.Display2, TopologiasDeExemplo.Display1])),
             new FullscreenTargetsChanged(MonitoresOcupados.Nenhum),
-            new SettingsChanged(new Preferencias(NivelDeEnergia.Baixa, false)), new MovementSignal(SinalDeMovimento.BordaSuperior),
+            new SettingsChanged(new Preferencias(NivelDeEnergia.Baixa, false)), new SettingsChanged(new Preferencias(NivelDeEnergia.Alta, true, AtravessarMonitores: false)),
+            new MovementSignal(SinalDeMovimento.BordaSuperior),
             new AutonomyTimer(12), new ExpressionChange(Expressao.Travesso),
             new Loaded(umMonitor, new PosicaoDoPersonagem(TopologiasDeExemplo.Display1, 0.5, 1, new PontoPx(960, 1032)), Preferencias.Padrao),
+            new Loaded(umMonitor, new PosicaoDoPersonagem(TopologiasDeExemplo.Display2, 0.25, 1, new PontoPx(-1440, 1032)) { TelaDoMonitor = new RetanguloPx(-1920, 0, 0, 1080) }, Preferencias.Padrao),
+            new Loaded(umMonitor, null, new Preferencias(NivelDeEnergia.Baixa, false, AtravessarMonitores: false)),
             new TopologyChanged(umMonitor),
         ];
         EstadoDoNucleo estado = EstadoDoNucleo.Inicial(1);
@@ -174,6 +177,33 @@ internal static class ReproducaoTestes
         }
         Afirmar.Igual(36, Gravacao.Ler("Tick vezes=36", _ => umMonitor, estado).Count, "Tick vezes=N");
         Afirmar.Lanca<FormatException>(() => Gravacao.Ler("Voar alto=sim", _ => umMonitor, estado));
+    }
+
+    // A preferência de atravessar monitores (Fase 5) só aparece desligada, como "travessia=nao": com o
+    // padrão (ligada), as linhas são as de antes, e as referências gravadas 01 a 05 não mudam.
+    [Teste]
+    public static void Preferencias_TravessiaSoApareceDesligada()
+    {
+        Topologia umMonitor = TopologiasDeExemplo.UmMonitor;
+        EstadoDoNucleo estado = EstadoDoNucleo.Inicial(1);
+        var desligada = new Preferencias(NivelDeEnergia.Alta, false, AtravessarMonitores: false);
+
+        Afirmar.Igual("SettingsChanged energia=Alta telaCheia=nao travessia=nao", Gravacao.Escrever(new SettingsChanged(desligada), _ => "UmMonitor"), "SETTINGS_CHANGED");
+        Afirmar.Igual("Loaded topologia=UmMonitor energia=Media telaCheia=sim travessia=nao",
+            Gravacao.Escrever(new Loaded(umMonitor, null, Preferencias.Padrao with { AtravessarMonitores = false }), _ => "UmMonitor"), "Loaded");
+        Afirmar.Igual("GravarPreferencias energia=Alta telaCheia=nao travessia=nao", Gravacao.DescreverEfeito(new GravarPreferencias(desligada)), "efeito");
+
+        Afirmar.Igual("SettingsChanged energia=Alta telaCheia=nao", Gravacao.Escrever(new SettingsChanged(desligada with { AtravessarMonitores = true }), _ => "UmMonitor"), "ligada: como antes");
+        Afirmar.Igual("Loaded topologia=UmMonitor energia=Media telaCheia=sim", Gravacao.Escrever(new Loaded(umMonitor, null, Preferencias.Padrao), _ => "UmMonitor"), "padrão: como antes");
+        Afirmar.Igual("GravarPreferencias energia=Media telaCheia=sim", Gravacao.DescreverEfeito(new GravarPreferencias(Preferencias.Padrao)), "efeito com o padrão: como antes");
+
+        // Ida e volta; sem o campo vale o padrão (ligada), e só "sim" e "nao" são aceitos.
+        Afirmar.Igual(new SettingsChanged(desligada), Gravacao.Ler("SettingsChanged energia=Alta telaCheia=nao travessia=nao", _ => umMonitor, estado).Single(), "desligada");
+        Afirmar.Igual(new SettingsChanged(Preferencias.Padrao), Gravacao.Ler("SettingsChanged energia=Media telaCheia=sim", _ => umMonitor, estado).Single(), "sem o campo, ligada");
+        Afirmar.Igual(new SettingsChanged(Preferencias.Padrao), Gravacao.Ler("SettingsChanged energia=Media telaCheia=sim travessia=sim", _ => umMonitor, estado).Single(), "travessia=sim");
+        Loaded carga = (Loaded)Gravacao.Ler("Loaded topologia=UmMonitor energia=Baixa telaCheia=sim travessia=nao", _ => umMonitor, estado).Single();
+        Afirmar.Igual(new Preferencias(NivelDeEnergia.Baixa, true, false), carga.Preferencias, "Loaded com a travessia desligada");
+        Afirmar.Lanca<FormatException>(() => Gravacao.Ler("SettingsChanged energia=Media telaCheia=sim travessia=talvez", _ => umMonitor, estado), "travessia=talvez");
     }
 
     /// <summary>
@@ -305,8 +335,11 @@ internal static class ReproducaoTestes
 
     private static string Linha(IReadOnlyList<string> linhas, int i) => i < linhas.Count ? linhas[i] : "(fim)";
 
-    /// <summary>Pasta-fonte deste projeto de testes (a que tem o .csproj e <c>Referencias/</c>).</summary>
-    private static string PastaDasFontes([CallerFilePath] string caminho = "")
+    /// <summary>
+    /// Pasta-fonte deste projeto de testes (a que tem o .csproj e <c>Referencias/</c>). Vale chamada de
+    /// qualquer arquivo de teste numa subpasta do projeto, como <c>Personagem/</c> ou <c>Persistencia/</c>.
+    /// </summary>
+    internal static string PastaDasFontes([CallerFilePath] string caminho = "")
         => AcharPastaDasFontes(caminho, AppContext.BaseDirectory)
            ?? throw new FalhaDeAfirmacao($"pasta-fonte do projeto não encontrada: nem acima de {caminho} nem acima de {AppContext.BaseDirectory}");
 

@@ -185,7 +185,10 @@ STATUS: PLANNED. A implementação (DEC-022 e a toon force pedida pelo usuário 
 
 - **Objetivo:** dar ao mascote liberdade para circular e agir como um macaquinho, de forma determinística, em um monitor.
 - **Inclui:** superfícies aprovadas em Q-05; andar pelo chão e por bordas horizontais alcançáveis; subir e descer paredes laterais; ficar pendurado brevemente na borda superior; saltar, cair, pousar, descansar e executar pequenas ações autônomas; estados `WALKING`, `CLIMBING`, `HANGING`, `JUMPING`, `FALLING`, `LANDING` e `RESTING`; agenda ajustada pelo nível de energia; interrupção imediata por interação; poses provisórias por estado.
-- **Incluído a pedido do usuário em 2026-09-30 (DEC-023, toon force):** subir por qualquer lateral da área útil, inclusive a encostada em outro monitor; quique de borracha; foguete de borracha parede acima; achatar e esticar nas poses provisórias.
+- **Incluído a pedido do usuário em 2026-09-30:**
+  - toon force (DEC-023): subir por qualquer lateral da área útil, inclusive a encostada em outro monitor; quique de borracha; foguete de borracha parede acima; achatar e esticar nas poses provisórias;
+  - cipó na borda de cima; agarrar o cipó ou a parede onde é solto e ficar preso até o usuário tirá-lo (DEC-024);
+  - esconderijo pelo clique duplo, na barra de tarefas ou nas laterais, só com a cabeça e as mãos para fora (DEC-025).
 - **Exclui:** passagem entre monitores e troca de escala em movimento (Fase 5); animações completas (Fase 6).
 - **Depende de:** Fase 3; Q-05.
 - **Critérios de aceitação:**
@@ -202,6 +205,10 @@ STATUS: PLANNED. A implementação (DEC-022 e a toon force pedida pelo usuário 
      - às vezes sobe a parede num foguete, com a frequência seguindo a energia;
      - as poses achatam no impacto e esticam na velocidade;
      - nada disso quebra o apoio, a prioridade do usuário, o determinismo ou a mesma física em todos os níveis. [AUTO e MANUAL]
+  9. Pedidos do usuário (DEC-024 e DEC-025):
+     - solto no alto, agarra o cipó da borda de cima; solto junto a uma lateral, gruda na parede;
+     - posto lá pelo usuário, só sai quando o usuário o tira, sem gastar relógio parado;
+     - o clique duplo o esconde atrás da barra de tarefas ou de uma lateral, só com a cabeça e as mãos para fora, e outro o tira de lá. [AUTO e MANUAL]
 - **Testes automatizados:** trajetórias de referência com passo fixo, colisões contra superfícies de exemplo, testes de propriedade de apoio. [AUTO]
 - **Evidências de 2026-09-30:**
   - [AUTO] `MovimentoTestes`, 14 testes com relógio virtual:
@@ -228,13 +235,22 @@ STATUS: PLANNED. A implementação (DEC-022 e a toon force pedida pelo usuário 
     - `PoseTestes`: pose por estado e dinâmica; achatar e esticar mantêm os pés, o alfa só 0 ou 255 e os cantos transparentes;
     - `MovimentoIntegracaoTestes`: a janela anda dentro da área útil, e pressionar no meio do movimento segura.
     - Contagens atuais em DEVELOPMENT_LOG.md.
-  - [MANUAL] com input SINTÉTICO (`Buzzy.Verificacao --fase 4`, `resultados/verificacao-fase4.log`): **22 OK, 0 falhas.**
+  - [MANUAL] com input SINTÉTICO (`Buzzy.Verificacao --fase 4`, `resultados/verificacao-fase4.log`): **28 OK, 0 falhas.**
     - Critério 3: segurado no meio da queda, parado 600 ms, depois caiu e pousou.
     - Critério 5, só como medição instrumentada: posição da janela amostrada de outro processo na caminhada; maior passo 3 px, intervalo entre mudanças com mediana de 15,8 ms, p95 de 31,2 ms e máximo de 41,8 ms.
     - Critério 7: 177/177 amostras encostadas na lateral, 131 posições diferentes no teto, de volta ao chão em 16 s.
     - Critério 4: 15 s em RESTING com 0,000% de CPU e relógio desligado.
     - Critério 8: dois quiques e pouso; subida pela lateral esquerda do principal (encostada no secundário) com 29/29 amostras na lateral, sem sair do principal, terminando pendurado.
+    - Critério 9, com a agenda ligada e 12 s ou 8 s de observação em cada caso:
+      - arrastado para o alto, agarrou o cipó e ficou (194/194 amostras na borda de cima, nenhuma saída);
+      - arrastado para a lateral direita, grudou e ficou (195/195);
+      - arrastado para o chão, ficou livre;
+      - clique duplo no chão: escondeu atrás da barra e ficou (129/129); outro clique duplo o tirou;
+      - na parede: escondeu atrás da lateral (129/129) e voltou à parede.
     - Foco mantido no aplicativo em uso em todos os cenários.
+  - [AUTO] `AgarrarTestes` (7) e `EsconderijoTestes` (5): agarrar, ficar preso, passeios na mesma superfície, clique e pausa sem tirá-lo; esconder, trocar de cara, reagir escondido, arrastar para tirar e voltar ao esconderijo depois de esconder e mostrar pela bandeja.
+  - Critério 4 [MANUAL, instrumentado], 10 min pausado: CPU média de 0,003% de um núcleo, p95 0,000%, memória estável (`resultados/desempenho-20260930-160012.txt`).
+  - Com autonomia: cerca de 3–4% de um núcleo em movimento. A memória sobe no aquecimento até o orçamento do GC e fica num patamar, sem vazamento. Diagnóstico em DEVELOPMENT_LOG.md.
   - Pendente [MANUAL]: critério 5 com gravação de tela a 120 qps, em 60 Hz e em outra taxa disponível.
 
 ### Fase 5 — Multi-monitor completo e posição persistida
@@ -282,6 +298,12 @@ STATUS: PLANNED. A implementação (DEC-022 e a toon force pedida pelo usuário 
 
 - **Objetivo:** fazer o Buzzy parecer um mascote curioso e expressivo por reações, poses e pequenas ações determinísticas.
 - **Inclui:** reações não verbais a clique; curiosidade expressa por olhar, espiar, explorar bordas e gestos de macaquinho; integrar a personalidade Baixa/Média/Alta às escolhas de ação, pausas e expressões; garantir prioridade para ações diretas do usuário.
+- **Pedido do usuário em 2026-09-30 (DEC-026), antecipado para logo depois da Fase 5 junto com o observador de janela ativa do P7:**
+  - com a mesma janela ativa por bastante tempo, ele chega perto dela e fica olhando com a cara curiosa;
+  - com a janela ativa há 30 s em outro monitor, ele muda de monitor para ver;
+  - usa só o monitor, o retângulo e o tempo em primeiro plano da janela ativa, nada de conteúdo;
+  - nunca age pausado, preso, escondido ou num monitor em tela cheia.
+  - Critérios: a decisão é determinística para a mesma sequência de eventos [AUTO]; o adaptador nunca entrega título, processo ou conteúdo [AUTO]; custo por eventos, sem polling, medido com o usuário digitando e mexendo o mouse [MANUAL, instrumentado].
 - **Exclui:** chat, diálogo, campo de texto, respostas escritas, voz, IA, rede e memória. O painel de energia e as configurações pertencem à Fase 8.
 - **Depende de:** Fase 6. P4 não se aplica.
 - **Critérios de aceitação:**
@@ -294,7 +316,7 @@ STATUS: PLANNED. A implementação (DEC-022 e a toon force pedida pelo usuário 
 ### Fase 8 — Configurações e persistência local
 
 - **Objetivo:** preferências completas, persistidas de forma previsível e recuperável.
-- **Inclui:** interface de configurações; esquema completo; migração de versão; opção de iniciar com o Windows desligada por padrão e ativada pelo usuário (Q-04); energia Baixa/Média/Alta, com Média como padrão (DEC-014); painel compacto aberto por dois cliques contendo somente o seletor, ligado à mesma preferência; modo de tela cheia ligado por padrão e desligável (Q-09); recuperação de arquivo corrompido; cópia `.bak`.
+- **Inclui:** interface de configurações; esquema completo; migração de versão; opção de iniciar com o Windows desligada por padrão e ativada pelo usuário (Q-04); energia Baixa/Média/Alta, com Média como padrão (DEC-014); painel compacto aberto pelo menu ("Energia…"; o clique duplo passou a esconder o mascote, DEC-025) contendo somente o seletor, ligado à mesma preferência; modo de tela cheia ligado por padrão e desligável (Q-09); recuperação de arquivo corrompido; cópia `.bak`.
 - **Depende de:** Fases 5 e 7 e do P7 aprovado. As decisões Q-03, Q-04, Q-07, Q-09, Q-20 e Q-23 estão registradas.
 - **Critérios de aceitação:**
   1. Gravar e ler devolvem as mesmas configurações. [AUTO]
@@ -306,7 +328,7 @@ STATUS: PLANNED. A implementação (DEC-022 e a toon force pedida pelo usuário 
   7. As configurações podem ser percorridas por teclado e seus controles são identificados por um leitor de tela. [MANUAL]
   8. Sempre no topo pode ser ligado e desligado; a opacidade não aparece como opção do MVP. [MANUAL]
   9. A escala do Buzzy pode ser escolhida somente entre os passos fixos oferecidos. [MANUAL]
-  10. O painel de dois cliques e a janela de configurações mostram o mesmo controle de energia em três posições compreensíveis: Baixa (mais tranquila), Média (equilibrada e padrão) e Alta (mais ativa). Alterar qualquer um deles atualiza a mesma preferência persistida e afeta as próximas decisões autônomas, sem mudar física, segurança, prioridade do usuário ou modo de tela cheia. [AUTO e MANUAL]
+  10. O painel aberto pelo menu e a janela de configurações mostram o mesmo controle de energia em três posições compreensíveis: Baixa (mais tranquila), Média (equilibrada e padrão) e Alta (mais ativa). Alterar qualquer um deles atualiza a mesma preferência persistida e afeta as próximas decisões autônomas, sem mudar física, segurança, prioridade do usuário ou modo de tela cheia. [AUTO e MANUAL]
   11. O painel compacto contém somente o seletor de energia, permanece dentro da área visível e permite usar o controle por teclado e leitor de tela. [MANUAL]
   12. Com uma janela em tela cheia no primeiro monitor, o Buzzy move-se para o outro sem roubar foco; se todos estiverem ocupados, fica oculto. Ao sair da tela cheia, volta à posição anterior sem substituir a posição persistida pelo usuário. [MANUAL][HW]
   13. Ocultar, mostrar ou arrastar o Buzzy manualmente prevalece sobre a automação: um arraste durante a tela cheia não é interrompido nem desfeito ao sair dela, e mostrar pela bandeja enquanto está oculto por tela cheia o faz aparecer. Pausar a autonomia não desliga o modo. Desligar Q-09 impede a mudança automática. [AUTO e MANUAL]

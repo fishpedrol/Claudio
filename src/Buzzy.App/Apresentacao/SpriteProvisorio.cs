@@ -56,6 +56,7 @@ internal static class SpriteProvisorio
             ?? throw new ArgumentException($"Pose desconhecida: {quadro.Pose}.", nameof(quadro));
         Tela tela = BonecoPixel.Desenhar(pose, quadro.Expressao);
         if (quadro.Espelhado) tela = tela.Espelhada();
+        if (quadro.Giro != Giro.Nenhum) tela = tela.Girada(horario: quadro.Giro == Giro.Horario);
         tela = quadro.Deformacao switch
         {
             Deformacao.Achatado => tela.Deformada(EscalaAchatada.X, EscalaAchatada.Y),

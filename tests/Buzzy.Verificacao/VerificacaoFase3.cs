@@ -120,10 +120,18 @@ internal sealed partial class Verificacao
 
         EventoBuzzy? duplo = Nucleo(marca, "DoubleClick", "Pressed", "Settling", 3000);
         EventoBuzzy? primeiro = Nucleo(marca, "Click", "Pressed", "Reacting", 500);
+        // DEC-025: o clique duplo esconde o personagem atrás da borda de baixo; outro o tira de lá.
+        EventoBuzzy? escondeu = Nucleo(marca, "DoubleClick", "Settling", "Peeking", 3000);
+        long marcaSaida = LogDoBuzzy.Tamanho();
+        Nativo.POINT cabeca = PontoDoCorpo();
+        _inj.CliqueDuploEsquerdo(cabeca.X, cabeca.Y, _hBuzzy);
+        EventoBuzzy? saiu = Nucleo(marcaSaida, "DoubleClick", "Settling", "Idle", 3000);
         (bool frente, bool desativou) = FocoNoReceptor(marcaR);
         Registrar("critério 9 — clique duplo é reconhecido dentro do intervalo do Windows", duplo is not null && primeiro is not null && frente && !desativou,
             $"GetDoubleClickTime={Nativo.GetDoubleClickTime()} ms; primeiro clique na hora (CLICK→Reacting)={primeiro is not null}; "
-            + $"DOUBLE_CLICK de PRESSED={duplo is not null}; antes da Fase 8 só reage, sem painel; receptor na frente={frente}; desativado={desativou}");
+            + $"DOUBLE_CLICK de PRESSED={duplo is not null}; sem painel; receptor na frente={frente}; desativado={desativou}");
+        Registrar("DEC-025 — clique duplo esconde atrás da borda de baixo e outro clique duplo tira de lá", escondeu is not null && saiu is not null,
+            $"escondido (Settling→Peeking)={escondeu is not null}; clique duplo na cabeça em {cabeca}; saiu do esconderijo (Settling→Idle)={saiu is not null}");
     }
 
     /// <summary>

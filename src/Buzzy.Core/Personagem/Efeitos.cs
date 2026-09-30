@@ -46,7 +46,10 @@ public sealed record FecharPainelDeEnergia : Efeito;
 /// <summary>Abre a janela de configurações (Fase 8).</summary>
 public sealed record AbrirConfiguracoes : Efeito;
 
-/// <summary>Grava a posição escolhida pelo usuário (persistência da Fase 5).</summary>
+/// <summary>
+/// Grava a posição escolhida pelo usuário (persistência da Fase 5), com a tela do monitor da época
+/// (<see cref="PosicaoDoPersonagem.TelaDoMonitor"/>), que a partida seguinte usa na restauração.
+/// </summary>
 public sealed record GravarPosicao(PosicaoDoPersonagem Posicao) : Efeito;
 
 /// <summary>Grava as preferências (persistência da Fase 8).</summary>

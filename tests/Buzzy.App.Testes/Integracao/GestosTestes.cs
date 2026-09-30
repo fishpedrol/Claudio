@@ -119,8 +119,17 @@ internal sealed class GestosTestes
             b.PostarMouse(msg, msg == NativoTeste.WM_LBUTTONDOWN ? NativoTeste.MK_LBUTTON : 0, opaco);
         Nucleo(b, marcaDupla, "Click", "Pressed", "Reacting", 3000, "primeiro clique, na hora");
         Nucleo(b, marcaDupla, "DoubleClick", "Pressed", "Settling", 3000, "DOUBLE_CLICK a partir de PRESSED");
-        Nucleo(b, marcaDupla, "DoubleClick", "Settling", "Idle", 3000, "acomodado depois do clique duplo");
-        Afirmar.Falso(BuzzyEmTeste.EventosDesde(marcaDupla).Any(e => e.Chave == "NUCLEO" && e["efeitoPendente"] == "AbrirPainelDeEnergia"), "antes da Fase 8 o clique duplo não abre painel");
+        // DEC-025: o clique duplo esconde o personagem atrás da borda de baixo, no mesmo x.
+        Nucleo(b, marcaDupla, "DoubleClick", "Settling", "Peeking", 3000, "escondido atrás da borda de baixo");
+        Afirmar.Igual(antes, b.RetanguloDaJanela(), "no chão, o esconderijo fica no mesmo lugar: só a pose muda");
+        Afirmar.Falso(BuzzyEmTeste.EventosDesde(marcaDupla).Any(e => e.Chave == "NUCLEO" && e["efeitoPendente"] == "AbrirPainelDeEnergia"), "o clique duplo não abre o painel de energia");
+
+        // Outro clique duplo tira do esconderijo, numa posição onde a cabeça aparece: o miolo de baixo do quadro.
+        var cabeca = new PontoPx((antes.Esquerda + antes.Direita) / 2, antes.Base - 20);
+        long marcaSaida = BuzzyEmTeste.TamanhoDoLog();
+        foreach (int msg in new[] { NativoTeste.WM_LBUTTONDOWN, NativoTeste.WM_LBUTTONUP, NativoTeste.WM_LBUTTONDOWN, NativoTeste.WM_LBUTTONUP })
+            b.PostarMouse(msg, msg == NativoTeste.WM_LBUTTONDOWN ? NativoTeste.MK_LBUTTON : 0, cabeca);
+        Nucleo(b, marcaSaida, "DoubleClick", "Settling", "Idle", 3000, "saiu do esconderijo, de pé no chão");
 
         // Botão direito: o mesmo menu da Fase 1, pela arbitragem; fechado sem teclado.
         long marcaMenu = BuzzyEmTeste.TamanhoDoLog();

@@ -25,7 +25,9 @@ internal static class PreviaPixel
         {
             foreach (string expressao in Rostos.Expressoes.Keys)
             {
-                Tela t = BonecoPixel.Desenhar(pose, expressao);
+                // O cipó (DEC-024) é o único desenho que encosta numa borda, a de cima, onde se prende
+                // na tela: a conferência vale para o corpo, sem ele.
+                Tela t = BonecoPixel.Desenhar(pose with { Cipo = null }, expressao);
                 if (t.Limites() is not { } l) continue;
                 bool encosta = l.Esquerda <= 0 || l.Topo <= 0 || l.Direita >= BonecoPixel.Lado || l.Base > BonecoPixel.Lado;
                 if (encosta && expressao == pose.Expressao)

@@ -16,14 +16,8 @@ namespace Buzzy.Verificacao;
 /// </summary>
 internal sealed partial class Verificacao
 {
-    /// <summary>A mesma configuração do núcleo que Aplicacao.Iniciar usa na Fase 4.</summary>
-    private static ConfiguracaoDoNucleo ConfiguracaoDoApp => new()
-    {
-        Tamanho = new TamanhoDip(128, 128),
-        Acoes = AcoesAutonomas.Todas,
-        QuedaFisica = true,
-        Movimento = true,
-    };
+    /// <summary>A configuração do núcleo que Aplicacao.Iniciar usa (fonte única no núcleo).</summary>
+    private static ConfiguracaoDoNucleo ConfiguracaoDoApp => ConfiguracaoDoNucleo.DoAplicativo(new TamanhoDip(128, 128));
 
     internal Sumario ExecutarFase4()
     {
@@ -55,6 +49,10 @@ internal sealed partial class Verificacao
             Digitar("H6-quique;");
             F4SobePelaLateralInterna(topologia);
             Digitar("H7-lateral;");
+            F4ArrastadoFicaNoCipoENaParede(topologia);
+            Digitar("H8-preso;");
+            F4EsconderijoNaBarraENaLateral(topologia);
+            Digitar("H9-esconderijo;");
             _prefixo = "";
 
             _inj.ConferirUltimoInput();
@@ -335,6 +333,141 @@ internal sealed partial class Verificacao
             $"semente {escolha.Semente}; lateral {(lado < 0 ? "esquerda" : "direita")} do principal encostada no outro monitor; solto perto dela={soltou}; subiu={subiu is not null}; "
             + $"amostras escalando encostadas nela={naLateral.Count(x => x)}/{naLateral.Count}; saiu do principal={saiuDoPrincipal}; chegou ao topo e se pendurou={pendurou}");
         FecharBuzzy("lateral interna");
+    }
+
+    /// <summary>
+    /// Critério 8 (DEC-024, pedidos do usuário): arrastado para perto da borda de cima, agarra o
+    /// cipó e fica; arrastado para junto de uma lateral, gruda na parede e fica; com a agenda
+    /// ligada, nada autônomo o tira de lá; arrastado para o chão, volta a ser livre.
+    /// </summary>
+    private void F4ArrastadoFicaNoCipoENaParede(Topologia topologia)
+    {
+        const string Criterio = "critério 8 (DEC-024) — arrastado para o alto agarra o cipó, para a lateral gruda na parede, e só sai de lá quando o usuário tira";
+        AbrirBuzzyComAutonomia(SementeCalma(topologia));
+        MonitorDoDesktop principal = topologia.Principal;
+        Superficies sup = Superficies.Do(topologia, principal, ConfiguracaoDoApp.Tamanho.ParaPixels(principal.Dpi));
+        RetanguloPx area = principal.AreaUtil;
+
+        // 1. Para o alto: a âncora 60 px abaixo do teto, no meio da área útil.
+        bool noCipo = ArrastarAncoraPara(new PontoPx((sup.Esquerda + sup.Direita) / 2, sup.Teto + 60), "agarra o cipó");
+        (bool ficouNoCipo, string resumoCipo) = Observar("Hanging", q => q.Top == area.Topo, TimeSpan.FromSeconds(12));
+
+        // 2. Para a lateral direita, na meia altura.
+        bool naParede = ArrastarAncoraPara(new PontoPx(sup.Direita - 30, (sup.Teto + sup.Chao) / 2), "fica grudado na parede");
+        (bool ficouNaParede, string resumoParede) = Observar("Climbing", q => q.Right == area.Direita, TimeSpan.FromSeconds(12));
+
+        // 3. De volta ao chão: livre.
+        long marcaChao = LogDoBuzzy.Tamanho();
+        bool noChao = ArrastarAncoraPara(new PontoPx((sup.Esquerda + sup.Direita) / 2, sup.Chao), null)
+            && LogDoBuzzy.Esperar(marcaChao, e => e.Chave == "NUCLEO" && e["evento"] == "DragEnd" && e["para"] == "Idle", 2000) is not null;
+
+        Registrar(Criterio, noCipo && ficouNoCipo && naParede && ficouNaParede && noChao,
+            $"agarrou o cipó={noCipo}; ficou no cipó={ficouNoCipo} ({resumoCipo}); grudou na parede={naParede}; ficou na parede={ficouNaParede} ({resumoParede}); "
+            + $"solto no chão ficou livre (IDLE)={noChao}");
+        (bool frente, bool desativou) = FocoNoReceptor(_logReceptor.Contar());
+        Registrar("agarrar no cipó e na parede não tira o foco do aplicativo em uso", frente && !desativou, $"receptor na frente={frente}; desativado={desativou}");
+        FecharBuzzy("preso");
+    }
+
+    /// <summary>
+    /// Critério 8 (DEC-025, pedido do usuário): o clique duplo esconde o personagem atrás da borda de
+    /// baixo (a barra de tarefas) e outro o tira de lá; na parede, o clique duplo o esconde atrás da
+    /// lateral e outro o devolve à parede. Escondido, com a agenda ligada, ele não sai.
+    /// </summary>
+    private void F4EsconderijoNaBarraENaLateral(Topologia topologia)
+    {
+        const string Criterio = "critério 8 (DEC-025) — clique duplo esconde atrás da barra de tarefas ou da lateral, só com a cabeça e as mãos, e outro clique duplo tira de lá";
+        AbrirBuzzyComAutonomia(SementeCalma(topologia));
+        MonitorDoDesktop principal = topologia.Principal;
+        Superficies sup = Superficies.Do(topologia, principal, ConfiguracaoDoApp.Tamanho.ParaPixels(principal.Dpi));
+        RetanguloPx area = principal.AreaUtil;
+
+        // 1. No chão: esconde atrás da barra de tarefas e fica; outro clique duplo tira de lá.
+        bool naBarra = CliqueDuploEspera("Peeking");
+        (bool ficouNaBarra, string resumoBarra) = Observar("Peeking", q => q.Bottom == area.Base, TimeSpan.FromSeconds(8));
+        bool saiuDaBarra = CliqueDuploEspera("Idle");
+
+        // 2. Na parede direita: esconde atrás da lateral e fica; outro clique duplo o devolve à parede.
+        bool naParede = ArrastarAncoraPara(new PontoPx(sup.Direita - 30, (sup.Teto + sup.Chao) / 2), "fica grudado na parede");
+        bool naLateral = CliqueDuploEspera("Peeking");
+        (bool ficouNaLateral, string resumoLateral) = Observar("Peeking", q => q.Right == area.Direita, TimeSpan.FromSeconds(8));
+        bool voltouAParede = CliqueDuploEspera("Climbing");
+
+        // 3. De volta ao chão.
+        ArrastarAncoraPara(new PontoPx((sup.Esquerda + sup.Direita) / 2, sup.Chao), null);
+
+        Registrar(Criterio, naBarra && ficouNaBarra && saiuDaBarra && naParede && naLateral && ficouNaLateral && voltouAParede,
+            $"escondeu na barra={naBarra}; ficou lá={ficouNaBarra} ({resumoBarra}); saiu com outro clique duplo={saiuDaBarra}; "
+            + $"na parede={naParede}; escondeu na lateral={naLateral}; ficou lá={ficouNaLateral} ({resumoLateral}); voltou à parede={voltouAParede}");
+        (bool frente, bool desativou) = FocoNoReceptor(_logReceptor.Contar());
+        Registrar("o esconderijo não tira o foco do aplicativo em uso", frente && !desativou, $"receptor na frente={frente}; desativado={desativou}");
+        FecharBuzzy("esconderijo");
+    }
+
+    /// <summary>Clique duplo num ponto do corpo visível; espera a acomodação terminar no estado dado.</summary>
+    private bool CliqueDuploEspera(string para)
+    {
+        Nativo.POINT p = PontoDoCorpo();
+        long marca = LogDoBuzzy.Tamanho();
+        _inj.CliqueDuploEsquerdo(p.X, p.Y, _hBuzzy);
+        return LogDoBuzzy.Esperar(marca, e => e.Chave == "NUCLEO" && e["evento"] == "DoubleClick" && e["para"] == para, 3000) is not null;
+    }
+
+    /// <summary>
+    /// Arrasta o personagem por um ponto do corpo até a âncora ficar em <paramref name="alvo"/> e
+    /// solta; com <paramref name="regra"/>, espera essa transição no log do núcleo.
+    /// </summary>
+    private bool ArrastarAncoraPara(PontoPx alvo, string? regra)
+    {
+        Nativo.RECT r = Nativo.Retangulo(_hBuzzy);
+        Nativo.POINT p = PontoDoCorpo();
+        var soltar = new Nativo.POINT(alvo.X + (p.X - (r.Left + r.Largura / 2)), alvo.Y + (p.Y - r.Bottom));
+        long marca = LogDoBuzzy.Tamanho();
+        ArrastarEmPassos(p, soltar, 30);
+        if (regra is null) return true;
+        return LogDoBuzzy.Esperar(marca, e => e.Chave == "NUCLEO" && e["regra"].Contains(regra, StringComparison.Ordinal), 2000) is not null;
+    }
+
+    /// <summary>
+    /// Observa por <paramref name="duracao"/>: o estado do núcleo continua <paramref name="estado"/>
+    /// e a janela continua encostada onde deve. Devolve o resumo das amostras.
+    /// </summary>
+    private (bool Ficou, string Resumo) Observar(string estado, Func<Nativo.RECT, bool> encostada, TimeSpan duracao)
+    {
+        long marca = LogDoBuzzy.Tamanho();
+        int amostras = 0, encostadas = 0;
+        var relogio = Stopwatch.StartNew();
+        while (relogio.Elapsed < duracao)
+        {
+            amostras++;
+            if (encostada(Nativo.Retangulo(_hBuzzy))) encostadas++;
+            Thread.Sleep(50);
+        }
+        List<EventoBuzzy> saidas = [.. LogDoBuzzy.Desde(marca).Where(e => e.Chave == "NUCLEO" && e.Campos.ContainsKey("para") && e["para"] != estado)];
+        int passeios = LogDoBuzzy.Desde(marca).Count(e => e.Chave == "NUCLEO" && e["regra"].Contains("passeia", StringComparison.Ordinal));
+        return (saidas.Count == 0 && encostadas == amostras,
+            $"{encostadas}/{amostras} amostras encostadas; transições para outro estado={saidas.Count}; passeios da agenda={passeios}");
+    }
+
+    /// <summary>
+    /// Um ponto do corpo, na pose que estiver: o primeiro ponto de uma grade dentro da janela cujo
+    /// dono é o Buzzy (o teste de clique da janela layered só aceita pixel opaco). Não lê pixels.
+    /// </summary>
+    private Nativo.POINT PontoDoCorpo()
+    {
+        Nativo.RECT r = Nativo.Retangulo(_hBuzzy);
+        int passo = Math.Max(2, r.Largura / 16);
+        var candidatos = new List<Nativo.POINT>();
+        for (int y = r.Top + passo; y < r.Bottom - passo; y += passo)
+            for (int x = r.Left + passo; x < r.Right - passo; x += passo)
+                candidatos.Add(new Nativo.POINT(x, y));
+        // Primeiro o miolo do corpo: mais longe das bordas do quadro.
+        int cx = (r.Left + r.Right) / 2, cy = (r.Top + r.Bottom) / 2;
+        foreach (Nativo.POINT c in candidatos.OrderBy(c => Math.Abs(c.X - cx) + Math.Abs(c.Y - cy)))
+        {
+            if (Nativo.DonoDoPonto(c.X, c.Y) == _hBuzzy) return c;
+        }
+        throw new FalhaDeVerificacao($"nenhum ponto do corpo do Buzzy em {r}");
     }
 
     // ------------------------------------------------------------------ apoio da Fase 4

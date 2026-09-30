@@ -108,6 +108,21 @@ public sealed class Tela
         return t;
     }
 
+    /// <summary>
+    /// A tela girada 90° (DEC-025), sem perda: <paramref name="horario"/> leva a linha de baixo para
+    /// a coluna da esquerda (esconderijo na lateral esquerda); anti-horário, para a da direita.
+    /// </summary>
+    public Tela Girada(bool horario)
+    {
+        if (Largura != Altura) throw new InvalidOperationException("Só telas quadradas giram sem mudar de tamanho.");
+        int n = Largura;
+        var t = new Tela(n, n);
+        for (int y = 0; y < n; y++)
+            for (int x = 0; x < n; x++)
+                t[x, y] = horario ? this[y, n - 1 - x] : this[n - 1 - y, x];
+        return t;
+    }
+
     /// <summary>Margem livre, em pixels, que a deformação deixa até as bordas de cima e dos lados.</summary>
     public const int MargemDaDeformacao = 3;
 

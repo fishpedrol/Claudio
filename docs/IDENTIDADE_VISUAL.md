@@ -68,6 +68,8 @@ Tons-base lidos da prancha de referência (swatches e figura de frente).
 | `Sobrancelha` | `#2E2230` | sobrancelhas |
 | `Palha` / `PalhaClara` / `PalhaEscura` | `#EFB262` / `#FCCB7E` / `#C27F45` | chapéu de palha (com pontos de trama) |
 | `Faixa` / `FaixaEscura` | `#B83A37` / `#862A2B` | faixa vermelha do chapéu |
+| `Cipo` / `CipoEscuro` / `CipoClaro` | `#6B8A34` / `#46601F` / `#93B24F` | cipó da borda de cima (DEC-024) |
+| `Folha` / `FolhaEscura` | `#4EA24A` / `#2E6B2E` | folhas do cipó |
 
 ## 4. Estilo
 
@@ -87,8 +89,15 @@ Tons-base lidos da prancha de referência (swatches e figura de frente).
 2. **Tamanho físico** = 64 pixels de arte × escala inteira do DPI do monitor da âncora (2×, 3× ou 4×).
 3. **Espelhamento:** poses de perfil olham para a direita; a esquerda é o espelho horizontal da tela
    inteira. Os brilhos dos olhos ficam do mesmo lado nos dois olhos.
-4. **Quadro:** nenhuma pose encosta na borda (conferido por `tools/Buzzy.Identidade`).
+4. **Quadro:** o corpo nunca encosta na borda do quadro (conferido por `tools/Buzzy.Identidade`). Há duas exceções, nas duas a borda do quadro coincide com uma borda da tela:
+   - o cipó encosta na borda de cima, onde se prende na tela (DEC-024);
+   - o esconderijo tem a borda atrás da qual o corpo some na última linha do quadro, e as mãos a seguram (DEC-025).
 5. **Âncora por pose:** declarada no manifesto da Fase 6.
+6. **Deformação e giro (Fase 4):**
+   - achatar e esticar (DEC-023) redimensionam o desenho por vizinho mais próximo, com os pés no lugar;
+   - o esconderijo nas laterais é a pose de baixo girada 90° (DEC-025).
+
+   Nenhum dos dois cria cor nova nem meio-tom.
 
 ## 6. Expressões
 
@@ -121,7 +130,9 @@ Poses-chave em `PosesPixel`, uma por estado ou gesto de ARCHITECTURE.md 2.6. As 
 | `parado` | frente | `IDLE` |
 | `andando-1` a `andando-4` | perfil | `WALKING` (ciclo de quatro quadros) |
 | `escalando-1`, `escalando-2` | perfil | `CLIMBING` |
-| `pendurado` | frente | `HANGING` |
+| `pendurado` | frente | `HANGING` sem cipó (guardada; o app usa o cipó desde DEC-024) |
+| `cipo-1` a `cipo-3` | frente | `HANGING` no cipó da borda de cima: balanço esquerda, meio e direita (DEC-024) |
+| `escondido` | frente (girada nas laterais) | `PEEKING`: atrás da borda, só chapéu, cabeça e mãos (DEC-025) |
 | `impulso`, `no-ar` | perfil | `JUMPING` |
 | `caindo` | frente | `FALLING` |
 | `pousando` | frente | `LANDING` |
@@ -162,3 +173,5 @@ passe a ser a fonte, registrado aqui.
 | 2026-09-29 | Primeira direção (vetorial): sagui-acrobata violeta-índigo, topete de três tufos, cauda com ponta menta. Registrada em DEC-017. |
 | 2026-09-29 | O usuário não gostou da direção vetorial e pediu algo mais fiel às pranchas, em pixel art. Nova direção (DEC-018): macaquinho azul-marinho em pixel art 64 × 64, paleta tirada da prancha, sem o chapéu. A vetorial foi arquivada em `assets/identidade/arquivo-vetorial/`. |
 | 2026-09-29 | O usuário pediu o chapéu de palha e a personalidade do Luffy ("a ideia central do projeto é essa"). O chapéu entrou na pixel art e reage às emoções; o esqueleto encolheu cerca de um pixel para caber no quadro; o ícone da bandeja ganhou o chapéu (DEC-019). |
+| 2026-09-30 | Toon force: achatar e esticar a pixel art nas poses provisórias (DEC-023). |
+| 2026-09-30 | A pedido do usuário: cipó na borda de cima (`cipo-1` a `cipo-3`, verdes novos na paleta; DEC-024) e esconderijo atrás da barra ou das laterais (`escondido`, girada nas laterais; DEC-025). |

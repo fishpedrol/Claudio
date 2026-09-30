@@ -15,14 +15,8 @@ namespace Buzzy.App.Testes.Integracao;
 [Integracao]
 internal sealed class MovimentoIntegracaoTestes
 {
-    /// <summary>A mesma configuração do núcleo que Aplicacao.Iniciar usa na Fase 4.</summary>
-    private static ConfiguracaoDoNucleo ConfiguracaoDoApp => new()
-    {
-        Tamanho = new TamanhoDip(128, 128),
-        Acoes = AcoesAutonomas.Todas,
-        QuedaFisica = true,
-        Movimento = true,
-    };
+    /// <summary>A configuração do núcleo que Aplicacao.Iniciar usa (fonte única no núcleo).</summary>
+    private static ConfiguracaoDoNucleo ConfiguracaoDoApp => ConfiguracaoDoNucleo.DoAplicativo(new TamanhoDip(128, 128));
 
     /// <summary>
     /// Semente em que a primeira decisão autônoma é andar ou pular, e cedo (até 12 s), simulada

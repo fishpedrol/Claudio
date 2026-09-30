@@ -49,6 +49,24 @@ public sealed record ParametrosDeMovimento
 
     /// <summary>Foguete de borracha: subida disparada parede acima até a borda superior, em DIP/s.</summary>
     public double VelocidadeDoFoguete { get; init; } = 1000;
+
+    // Agarrar onde o usuário solta (DEC-024): solto no alto, agarra o cipó da borda de cima; solto
+    // junto a uma lateral, fica grudado na parede. Perto do chão, cai como antes.
+
+    /// <summary>Distância máxima, em DIP, entre o topo do sprite e a borda de cima para agarrar o cipó.</summary>
+    public double DistanciaParaOCipo { get; init; } = 96;
+
+    /// <summary>Distância máxima, em DIP, entre a âncora e o limite de uma lateral para grudar na parede.</summary>
+    public double DistanciaParaAParede { get; init; } = 64;
+
+    /// <summary>Altura mínima dos pés acima do chão, em DIP, para agarrar em vez de cair; também é a folga que o preso deixa até o chão.</summary>
+    public double AlturaMinimaParaAgarrar { get; init; } = 32;
+
+    /// <summary>Menor passeio, em DIP, de quem está preso pelo usuário, pela parede ou pelo cipó.</summary>
+    public int PasseioPresoMinimo { get; init; } = 40;
+
+    /// <summary>Maior passeio, em DIP, de quem está preso pelo usuário.</summary>
+    public int PasseioPresoMaximo { get; init; } = 220;
 }
 
 /// <summary>
@@ -72,6 +90,12 @@ public sealed record EstadoDoMovimento(double X, double Y, double VX, double VY,
 
     /// <summary>Escalada: sobe disparado, num foguete de borracha (toon force, DEC-023).</summary>
     public bool Foguete { get; init; }
+
+    /// <summary>
+    /// Parado, agarrado à lateral ou ao cipó (DEC-024): o passo físico não move nada e o relógio
+    /// fica desligado até a próxima decisão.
+    /// </summary>
+    public bool Agarrado { get; init; }
 }
 
 /// <summary>

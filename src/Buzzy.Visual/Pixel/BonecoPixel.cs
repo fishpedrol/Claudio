@@ -80,6 +80,14 @@ public sealed record PosePixel
     /// tudo abaixo dela some, e as mãos que a agarram ficam na frente da cabeça.
     /// </summary>
     public double? Borda { get; init; }
+
+    /// <summary>
+    /// Cipó (DEC-024): se houver, um cipó desce do topo do quadro até a mão B, que o segura. O
+    /// valor é o deslocamento horizontal, em pixels, do ponto em que ele sai do topo em relação à
+    /// mão: negativo inclina o cipó para a esquerda, como no balanço para a direita. É o único
+    /// desenho que encosta numa borda do quadro, a de cima, onde ele se prende na borda da tela.
+    /// </summary>
+    public double? Cipo { get; init; }
 }
 
 /// <summary>
@@ -106,6 +114,9 @@ public static class BonecoPixel
         Rosto rosto = Rostos.Expressoes[expressao ?? pose.Expressao];
         var tela = new Tela(Lado, Lado);
         var e = new Esqueleto(pose);
+
+        // O cipó vem antes do corpo: a mão que o segura fica por cima dele.
+        if (pose.Cipo is { } deslocamento) DesenharCipo(tela, MaoDoBraco(e.OmbroB, pose.BracoB, pose.MaoB), deslocamento);
 
         if (pose.Vista == Vista.Frente)
         {
@@ -204,6 +215,52 @@ public static class BonecoPixel
         (double X, double Y) centroDaBarriga = frente ? e.NoTronco(0, 8.2) : e.NoTronco(2.4, 8.2);
         Mascara barriga = Nova().Elipse(centroDaBarriga.X, centroDaBarriga.Y, frente ? 3.9 : 3.0, 7.6, graus).Intersectar(corpo);
         tela.Pintar(barriga, Cor.Creme, Cor.CremeSombra);
+    }
+
+    /// <summary>Centro da mão de um braço, pelo mesmo esqueleto de <see cref="DesenharBraco"/>.</summary>
+    private static (double X, double Y) MaoDoBraco((double X, double Y) ombro, Membro membro, Mao mao)
+    {
+        (double X, double Y) cotovelo = Somar(ombro, Escalar(Direcao(membro.Superior), BracoSuperior));
+        (double X, double Y) pulso = Somar(cotovelo, Escalar(Direcao(membro.Inferior), Antebraco));
+        return Somar(pulso, Escalar(Direcao(membro.Inferior), mao == Mao.Aberta ? 1.9 : 1.2));
+    }
+
+    /// <summary>
+    /// Cipó (DEC-024): desce do topo do quadro, em x = mão + <paramref name="deslocamento"/>, até a
+    /// mão, com uma curva leve e duas folhas. Passa um pouco acima do quadro para encostar na borda
+    /// de cima, onde se prende na borda da tela.
+    /// </summary>
+    private static void DesenharCipo(Tela tela, (double X, double Y) mao, double deslocamento)
+    {
+        (double X, double Y) topo = (mao.X + deslocamento, -2);
+        // Curva de Bézier quadrática: o meio do cipó cede para o lado de fora do balanço.
+        (double X, double Y) meio = ((topo.X + mao.X) / 2 + (deslocamento >= 0 ? -1.2 : 1.2), (topo.Y + mao.Y) / 2);
+        Mascara cipo = Nova();
+        (double X, double Y) anterior = topo;
+        const int Segmentos = 8;
+        for (int i = 1; i <= Segmentos; i++)
+        {
+            double t = i / (double)Segmentos;
+            (double X, double Y) ponto = Bezier(topo, meio, mao, t);
+            cipo.Capsula(anterior.X, anterior.Y, ponto.X, ponto.Y, 1.25, 1.25);
+            anterior = ponto;
+        }
+        tela.Pintar(cipo, Cor.Cipo, Cor.CipoEscuro, Cor.CipoClaro);
+
+        // Duas folhas, alternando os lados, a um terço e a dois terços do caminho.
+        Mascara folhas = Nova();
+        foreach ((double t, int lado) in new[] { (0.30, -1), (0.62, 1) })
+        {
+            (double X, double Y) p = Bezier(topo, meio, mao, t);
+            folhas.Elipse(p.X + lado * 2.4, p.Y + 0.4, 2.3, 1.3, lado * 35);
+        }
+        tela.Pintar(folhas, Cor.Folha, Cor.FolhaEscura, null, Cor.CipoEscuro);
+    }
+
+    private static (double X, double Y) Bezier((double X, double Y) a, (double X, double Y) b, (double X, double Y) c, double t)
+    {
+        double u = 1 - t;
+        return (u * u * a.X + 2 * u * t * b.X + t * t * c.X, u * u * a.Y + 2 * u * t * b.Y + t * t * c.Y);
     }
 
     private static void DesenharBraco(Tela tela, (double X, double Y) ombro, Membro membro, Mao mao, bool longe)

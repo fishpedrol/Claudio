@@ -21,19 +21,19 @@ public static class Maquina
     }
 
     /// <summary>
-    /// Monitor em que está a âncora: o que contém o pixel logo acima dela. A âncora fica na borda
-    /// inferior exclusiva do sprite (Posicionador), que numa pilha de monitores já é o primeiro
-    /// pixel do monitor de baixo.
+    /// Monitor em que está a âncora: o que contém o pixel dos pés, logo acima dela
+    /// (<see cref="Posicionador.PixelDosPes"/>). A âncora fica na borda inferior exclusiva do sprite,
+    /// que numa pilha de monitores já é o primeiro pixel do monitor de baixo.
     /// </summary>
     public static MonitorDoDesktop MonitorDaAncora(Topologia topologia, PontoPx ancora)
     {
         ArgumentNullException.ThrowIfNull(topologia);
-        return topologia.MonitorMaisProximo(new PontoPx(ancora.X, ancora.Y - 1));
+        return topologia.MonitorMaisProximo(Posicionador.PixelDosPes(ancora));
     }
 
     /// <summary>Estados em que a agenda autônoma mantém um temporizador pendente.</summary>
     public static bool DecideNoEstado(Estado estado)
-        => estado is Estado.Idle or Estado.Resting or Estado.Climbing or Estado.Hanging;
+        => estado is Estado.Idle or Estado.Resting or Estado.Climbing or Estado.Hanging or Estado.Peeking;
 
     private sealed class Passo
     {
@@ -108,11 +108,20 @@ public static class Maquina
             // esconder, bloqueio ou suspensão anteriores à carga) ou EXITING.
             if (_s.Carregado || _s.Estado is not (Estado.Booting or Estado.Hidden)) return;
 
+            // A posição salva é restaurada pela cascata da partida (ARCHITECTURE.md 2.8): chave, tela do
+            // monitor da época, principal. Sem ela, a posição inicial; o texto da regra fica o de sempre.
             Posicionamento lugar;
             PosicaoDoPersonagem posicao;
+            string restaurada = "";
             if (e.PosicaoSalva is { } salva)
             {
-                (lugar, posicao) = Posicionador.Reacomodar(e.Topologia, salva, _cfg.Tamanho);
+                (lugar, posicao, OrigemDaRestauracao origem) = Posicionador.Restaurar(e.Topologia, salva, _cfg.Tamanho);
+                restaurada = origem switch
+                {
+                    OrigemDaRestauracao.PelaChave => "; posição salva restaurada pela chave",
+                    OrigemDaRestauracao.PeloRetangulo => "; posição salva restaurada pelo retângulo do monitor",
+                    _ => "; posição salva restaurada no monitor principal",
+                };
             }
             else
             {
@@ -122,9 +131,9 @@ public static class Maquina
             _s = _s with { Carregado = true, Topologia = e.Topologia, Preferencias = Sanear(e.Preferencias), Lugar = lugar, Posicao = posicao };
 
             if (_s.Estado == Estado.Booting)
-                Acomodar(lugar.Ancora, "BOOTING: configurações e topologia carregadas", posicao);
+                Acomodar(lugar.Ancora, "BOOTING: configurações e topologia carregadas" + restaurada, posicao);
             else if (_s.Motivo == MotivoDoOcultamento.Nenhum)
-                Acomodar(lugar.Ancora, "HIDDEN: pedido de mostrar anterior à carga", posicao);
+                Acomodar(lugar.Ancora, "HIDDEN: pedido de mostrar anterior à carga" + restaurada, posicao);
 
             // O modo de tela cheia vale desde a partida: monitores ocupados avisados antes da carga
             // estão em cache.
@@ -198,6 +207,11 @@ public static class Maquina
         private void CliqueDuplo()
         {
             Estado de = _s.Estado;
+            if (_cfg.EsconderijoNoCliqueDuplo)
+            {
+                if (de is Estado.Pressed or Estado.Idle or Estado.Reacting or Estado.Peeking) AlternarEsconderijo(de);
+                return;
+            }
             if (de is not (Estado.Pressed or Estado.Idle or Estado.Reacting)) return;
 
             if (_cfg.PainelDeEnergiaDisponivel)
@@ -212,11 +226,74 @@ public static class Maquina
             }
         }
 
+        /// <summary>
+        /// Clique duplo com o esconderijo ligado (DEC-025): escondido, sai de lá; senão, esconde-se
+        /// atrás da borda mais próxima, só com a cabeça e as mãos para fora.
+        /// </summary>
+        private void AlternarEsconderijo(Estado de)
+        {
+            if (_s.Topologia is null) return;
+            // O fim do gesto vem antes: com o modo de tela cheia desligado no meio dele, ele devolve
+            // o personagem à posição de antes da tela cheia (DEC-020), e é de lá que ele se esconde.
+            if (de == Estado.Pressed) FimDoGestoDoUsuario(escolheuPosicao: false);
+            if (_s.Lugar is not { } lugar) return;
+            if (_s.Esconderijo != LadoDoEsconderijo.Nenhum)
+            {
+                // Sai do esconderijo pela mão do usuário: na borda de baixo, fica de pé no chão; numa
+                // lateral, fica grudado na parede (DEC-024).
+                _s = _s with { Esconderijo = LadoDoEsconderijo.Nenhum, Expressao = Expressao.Feliz, Sinal = Sinal.FoiClicadoDuasVezes };
+                Acomodar(lugar.Ancora, "DOUBLE_CLICK: sai do esconderijo", pelaMaoDoUsuario: true);
+                return;
+            }
+            LadoDoEsconderijo lado = LadoMaisProximo(lugar);
+            _s = _s with { Esconderijo = lado, Expressao = Expressao.Curioso, Sinal = Sinal.FoiClicadoDuasVezes };
+            Acomodar(lugar.Ancora, $"DOUBLE_CLICK: esconde-se atrás da borda ({lado})");
+        }
+
+        /// <summary>
+        /// Borda do esconderijo (DEC-025): a lateral mais próxima, se o personagem está no alto e junto
+        /// dela (na parede, por exemplo); senão, a de baixo.
+        /// </summary>
+        private LadoDoEsconderijo LadoMaisProximo(Posicionamento lugar)
+        {
+            Superficies sup = Superficies.Do(_s.Topologia!, lugar.Monitor, lugar.Tamanho);
+            double escala = lugar.Monitor.Dpi / 96.0;
+            PontoPx a = lugar.Ancora;
+            bool noAlto = sup.Chao - a.Y >= _cfg.Fisica.AlturaMinimaParaAgarrar * escala;
+            double aEsquerda = a.X - sup.Esquerda, aDireita = sup.Direita - a.X;
+            bool juntoDeUmaLateral = Math.Min(aEsquerda, aDireita) <= _cfg.Fisica.DistanciaParaAParede * escala;
+            if (!noAlto || !juntoDeUmaLateral) return LadoDoEsconderijo.Baixo;
+            return aDireita <= aEsquerda ? LadoDoEsconderijo.Direita : LadoDoEsconderijo.Esquerda;
+        }
+
+        /// <summary>
+        /// Onde fica o esconderijo na borda dada (DEC-025), perto do lugar atual: na de baixo, os pés
+        /// no chão (o quadro inteiro fica acima da barra e a pose só mostra a cabeça e as mãos); numa
+        /// lateral, encostado nela, na mesma altura. O sprite continua inteiro na área útil.
+        /// </summary>
+        private Posicionamento EsconderijoPara(Posicionamento lugar, LadoDoEsconderijo lado)
+        {
+            Superficies sup = Superficies.Do(_s.Topologia!, lugar.Monitor, lugar.Tamanho);
+            PontoPx a = lugar.Ancora;
+            PontoPx ancora = lado switch
+            {
+                LadoDoEsconderijo.Direita => new PontoPx(sup.Direita, Math.Clamp(a.Y, sup.Teto, sup.Chao)),
+                LadoDoEsconderijo.Esquerda => new PontoPx(sup.Esquerda, Math.Clamp(a.Y, sup.Teto, sup.Chao)),
+                _ => new PontoPx(Math.Clamp(a.X, sup.Esquerda, sup.Direita), sup.Chao),
+            };
+            return NoLugar(lugar.Monitor, ancora);
+        }
+
+        /// <summary>Caras de quem está escondido, espiando o que acontece (DEC-025).</summary>
+        private static readonly Expressao[] ExpressoesDoEscondido = [Expressao.Curioso, Expressao.Travesso, Expressao.Feliz, Expressao.Surpreso, Expressao.Pensativo, Expressao.Rindo];
+
         private void IniciarArraste()
         {
             if (_s.Estado != Estado.Pressed) return;
             // Invariante 9: iniciar um arraste fecha o painel de energia.
             FecharPainelSeAberto();
+            // Arrastar tira o personagem do esconderijo (DEC-025).
+            _s = _s with { Esconderijo = LadoDoEsconderijo.Nenhum };
             IrPara(Estado.Dragging, "DRAG_START");
         }
 
@@ -234,7 +311,7 @@ public static class Maquina
             var ancora = new PontoPx(cursor.X - _s.Pegada.X, cursor.Y - _s.Pegada.Y);
             // Soltar é escolha manual: descarta o retorno temporário da tela cheia (DEC-013).
             FimDoGestoDoUsuario(escolheuPosicao: true);
-            Acomodar(ancora, "DRAG_END");
+            Acomodar(ancora, "DRAG_END", pelaMaoDoUsuario: true);
             if (_s.Posicao is not null) _depois.Add(new GravarPosicao(_s.Posicao));
         }
 
@@ -245,7 +322,7 @@ public static class Maquina
             {
                 // O personagem fica onde estava; não volta ao ponto de origem (ARCHITECTURE.md 2.7).
                 FimDoGestoDoUsuario(escolheuPosicao: true);
-                Acomodar(_s.Lugar.Ancora, "DRAG_CANCEL");
+                Acomodar(_s.Lugar.Ancora, "DRAG_CANCEL", pelaMaoDoUsuario: true);
                 if (_s.Posicao is not null) _depois.Add(new GravarPosicao(_s.Posicao));
             }
             else if (_s.Estado == Estado.Pressed)
@@ -689,6 +766,47 @@ public static class Maquina
                     _s = _s with { Sinal = Sinal.Acordou, Expressao = Expressao.Neutro };
                     IrPara(Estado.Idle, "RESTING + AUTONOMY_TIMER: acorda");
                     break;
+                case Estado.Peeking:
+                    // Escondido (DEC-025): nada o tira de lá; só troca a cara, espiando.
+                    (int cara, Aleatorio aDaCara) = _s.Aleatorio.Entre(0, ExpressoesDoEscondido.Length - 2);
+                    Expressao atual = _s.Expressao;
+                    Expressao[] outras = [.. ExpressoesDoEscondido.Where(e => e != atual)];
+                    _s = _s with { Aleatorio = aDaCara, Expressao = outras[Math.Min(cara, outras.Length - 1)] };
+                    _transicoes.Add(new Transicao(Estado.Peeking, Estado.Peeking, "PEEKING + AUTONOMY_TIMER: espia com outra cara"));
+                    break;
+                case Estado.Climbing or Estado.Hanging when _cfg.Movimento && _s.PresoPeloUsuario:
+                    DecidirPreso();
+                    break;
+                case Estado.Climbing when _cfg.Movimento && _s.Movimento.Agarrado:
+                    // Agarrado sem ter sido posto pelo usuário (numa revalidação): volta a escalar,
+                    // para cima ou para baixo, salta ou se solta.
+                    Escolher("CLIMBING agarrado + AUTONOMY_TIMER", calmo: false,
+                        (Estado.Climbing, Permite(AcoesAutonomas.Escalar) ? 4 : 0),
+                        (Estado.Jumping, Permite(AcoesAutonomas.Pular) ? Perfil.PesoPular : 0),
+                        (Estado.Falling, 1));
+                    if (_s.Estado == Estado.Climbing)
+                    {
+                        (int sobe, Aleatorio a) = _s.Aleatorio.Entre(0, 1);
+                        _s = _s with { Aleatorio = a, Movimento = _s.Movimento with { Agarrado = false, SentidoVertical = sobe == 0 ? -1 : 1 } };
+                        if (sobe == 0) TalvezFoguete();
+                    }
+                    else if (_s.Estado == Estado.Jumping)
+                    {
+                        SaltarDaParede();
+                    }
+                    break;
+                case Estado.Hanging when _cfg.Movimento && _s.Movimento.Agarrado:
+                    bool naQuinaAgarrado = Mundo(out _, out Superficies supAgarrado, out _) && supAgarrado.NaLateral(_s.Movimento.X, out _);
+                    Escolher("HANGING agarrado + AUTONOMY_TIMER", calmo: false,
+                        (Estado.Hanging, 3),
+                        (Estado.Climbing, naQuinaAgarrado ? 2 : 0),
+                        (Estado.Jumping, Permite(AcoesAutonomas.Pular) ? Perfil.PesoPular : 0),
+                        (Estado.Falling, 1));
+                    if (_s.Estado == Estado.Hanging)
+                        _s = _s with { Movimento = _s.Movimento with { Agarrado = false } };
+                    else
+                        SairDoTeto();
+                    break;
                 case Estado.Climbing:
                     Escolher("CLIMBING + AUTONOMY_TIMER", calmo: false,
                         (Estado.Jumping, Permite(AcoesAutonomas.Pular) ? Perfil.PesoPular : 0),
@@ -871,6 +989,12 @@ public static class Maquina
         {
             if (!Mundo(out MonitorDoDesktop m, out Superficies sup, out double escala)) return;
             EstadoDoMovimento mv = _s.Movimento;
+            if (mv.Agarrado) return;
+            if (_s.PresoPeloUsuario)
+            {
+                PassoPresoNaParede(m, sup, escala);
+                return;
+            }
             // Pausado ou com o painel aberto, desce até o chão em vez de subir (e o foguete apaga).
             int sentido = Calmo ? 1 : mv.SentidoVertical;
             bool foguete = mv.Foguete && sentido < 0;
@@ -895,9 +1019,54 @@ public static class Maquina
             MoverPara(m, x, y);
         }
 
+        /// <summary>
+        /// Preso pelo usuário na parede (DEC-024): percorre o passeio sorteado pela mesma lateral, sem
+        /// chegar ao chão nem passar para o cipó, e para agarrado no fim, num limite ou com calma.
+        /// </summary>
+        private void PassoPresoNaParede(MonitorDoDesktop m, Superficies sup, double escala)
+        {
+            EstadoDoMovimento mv = _s.Movimento;
+            double passo = PorPasso(_cfg.Fisica.VelocidadeEscalando, escala);
+            double baixo = Math.Max(sup.Teto, sup.Chao - _cfg.Fisica.AlturaMinimaParaAgarrar * escala);
+            double y = mv.Y + mv.SentidoVertical * passo;
+            bool noLimite = y <= sup.Teto || y >= baixo;
+            y = Math.Clamp(y, sup.Teto, baixo);
+            double restante = mv.Restante - passo;
+            _s = _s with { Movimento = mv with { Restante = restante } };
+            MoverPara(m, Sentido > 0 ? sup.Direita : sup.Esquerda, y);
+            if (Calmo || noLimite || restante <= 0) _s = _s with { Movimento = _s.Movimento with { Agarrado = true } };
+        }
+
+        /// <summary>
+        /// Preso pelo usuário no cipó (DEC-024): percorre o passeio sorteado pela borda de cima; numa
+        /// quina dá meia-volta em vez de descer; para agarrado no fim ou com calma.
+        /// </summary>
+        private void PassoPresoNoCipo(MonitorDoDesktop m, Superficies sup, double escala)
+        {
+            EstadoDoMovimento mv = _s.Movimento;
+            double passo = PorPasso(_cfg.Fisica.VelocidadePendurado, escala);
+            double x = mv.X + Sentido * passo;
+            int limite = Sentido > 0 ? sup.Direita : sup.Esquerda;
+            if (Sentido > 0 ? x >= limite : x <= limite)
+            {
+                x = limite;
+                Virar();
+            }
+            double restante = mv.Restante - passo;
+            _s = _s with { Movimento = mv with { Restante = restante } };
+            MoverPara(m, x, sup.Teto);
+            if (Calmo || restante <= 0) _s = _s with { Movimento = _s.Movimento with { Agarrado = true } };
+        }
+
         private void PassoPendurado()
         {
             if (!Mundo(out MonitorDoDesktop m, out Superficies sup, out double escala)) return;
+            if (_s.Movimento.Agarrado) return;
+            if (_s.PresoPeloUsuario)
+            {
+                PassoPresoNoCipo(m, sup, escala);
+                return;
+            }
             if (Calmo)
             {
                 IrPara(Estado.Falling, "HANGING: autonomia pausada ou painel aberto (solta-se)");
@@ -1036,6 +1205,39 @@ public static class Maquina
             _s = _s with { Movimento = _s.Movimento with { VX = vx, VY = vy0 } };
         }
 
+        /// <summary>Expressões de quem está preso pelo usuário e só olha em volta (DEC-024).</summary>
+        private static readonly Expressao[] ExpressoesDoPreso = [Expressao.Feliz, Expressao.Curioso, Expressao.Travesso, Expressao.Rindo, Expressao.Pensativo];
+
+        /// <summary>
+        /// Preso pelo usuário (DEC-024): a agenda nunca o tira de lá. Ou ele fica, trocando de cara,
+        /// ou passeia um pouco pela mesma superfície: sobe ou desce pela parede, vai para um lado ou
+        /// outro pelo cipó. O passeio para agarrado, e o relógio desliga.
+        /// </summary>
+        private void DecidirPreso()
+        {
+            bool naParede = _s.Estado == Estado.Climbing;
+            (int escolha, Aleatorio a) = _s.Aleatorio.Ponderado([2, 2, 2]);
+            (int dip, Aleatorio a2) = a.Entre(_cfg.Fisica.PasseioPresoMinimo, _cfg.Fisica.PasseioPresoMaximo);
+            (int cara, Aleatorio a3) = a2.Entre(0, ExpressoesDoPreso.Length - 1);
+            _s = _s with { Aleatorio = a3 };
+            string onde = naParede ? "CLIMBING preso pelo usuário" : "HANGING preso pelo usuário no cipó";
+            if (escolha == 0)
+            {
+                _s = _s with { Expressao = ExpressoesDoPreso[cara] };
+                _transicoes.Add(new Transicao(_s.Estado, _s.Estado, $"{onde} + AUTONOMY_TIMER: fica e olha em volta"));
+                return;
+            }
+            double escala = Mundo(out _, out _, out double e) ? e : 1;
+            EstadoDoMovimento passeio = _s.Movimento with { Agarrado = false, Restante = dip * escala };
+            if (naParede)
+                _s = _s with { Movimento = passeio with { SentidoVertical = escolha == 1 ? -1 : 1 } };
+            else
+                _s = _s with { Movimento = passeio, Direcao = escolha == 1 ? Direcao.Direita : Direcao.Esquerda };
+            _transicoes.Add(new Transicao(_s.Estado, _s.Estado, naParede
+                ? $"{onde} + AUTONOMY_TIMER: passeia pela parede, para {(escolha == 1 ? "cima" : "baixo")}"
+                : $"{onde} + AUTONOMY_TIMER: passeia pela borda, para a {(escolha == 1 ? "direita" : "esquerda")}"));
+        }
+
         /// <summary>A agenda decidiu pular da parede: salta para longe dela, de costas para a parede.</summary>
         private void SaltarDaParede()
         {
@@ -1074,19 +1276,83 @@ public static class Maquina
         /// próximo, num vão), prende o sprite na área útil dele e decide pelo apoio. Sem apoio, cai
         /// (<see cref="ConfiguracaoDoNucleo.QuedaFisica"/>) ou, antes da Fase 4, vai direto ao chão.
         /// </summary>
-        private void Acomodar(PontoPx desejada, string regra, PosicaoDoPersonagem? preferida = null)
+        /// <param name="pelaMaoDoUsuario">
+        /// O usuário acabou de soltar o personagem (DRAG_END, DRAG_CANCEL do arraste). Se ele agarrar
+        /// uma lateral ou o cipó, fica preso lá até o usuário tirá-lo (DEC-024).
+        /// </param>
+        private void Acomodar(PontoPx desejada, string regra, PosicaoDoPersonagem? preferida = null, bool pelaMaoDoUsuario = false)
         {
             IrPara(Estado.Settling, regra);
             (Posicionamento lugar, PosicaoDoPersonagem posicao, bool comApoio) = Validar(desejada, preferida);
             _s = _s with { Lugar = lugar, Posicao = posicao };
             _reagendar = true;
 
+            // Escondido (DEC-025): toda acomodação o devolve ao esconderijo, na mesma borda.
+            if (_s.Esconderijo != LadoDoEsconderijo.Nenhum)
+            {
+                Posicionamento escondido = EsconderijoPara(lugar, _s.Esconderijo);
+                _s = _s with { Lugar = escondido, Posicao = Posicionador.Descrever(escondido) };
+                IrPara(Estado.Peeking, $"SETTLING: escondido atrás da borda ({_s.Esconderijo})");
+                return;
+            }
+
+            // Solto no alto ou junto a uma lateral, agarra ali em vez de cair (DEC-024). Quem já
+            // estava preso pelo usuário continua preso: um clique ou uma revalidação não o tiram.
+            if (!comApoio && _cfg.Movimento && OndeAgarrar(lugar) is { } agarre)
+            {
+                bool preso = pelaMaoDoUsuario || _s.PresoPeloUsuario;
+                _s = _s with { Lugar = agarre.Lugar, Posicao = Posicionador.Descrever(agarre.Lugar), Direcao = agarre.Direcao, PresoPeloUsuario = preso };
+                IrPara(agarre.Estado, agarre.Estado == Estado.Hanging
+                    ? "SETTLING: solto perto da borda de cima, agarra o cipó"
+                    : "SETTLING: solto junto a uma lateral, fica grudado na parede");
+                // IrPara recomeça o movimento quando o estado muda: parado, agarrado, sem relógio.
+                _s = _s with { Movimento = _s.Movimento with { Agarrado = true } };
+                return;
+            }
+
+            _s = _s with { PresoPeloUsuario = false };
             if (comApoio)
                 IrPara(Estado.Idle, "SETTLING com apoio");
             else if (_cfg.QuedaFisica)
                 IrPara(Estado.Falling, "SETTLING sem apoio");
             else
                 IrPara(Estado.Idle, "SETTLING sem apoio: preso no chão (a queda animada é da Fase 4)");
+        }
+
+        /// <summary>
+        /// Onde agarrar um personagem sem apoio (DEC-024): o cipó da borda de cima, se o topo do sprite
+        /// está perto dela; a lateral, se a âncora está perto dela; a mais próxima das duas, em
+        /// proporção ao alcance de cada uma. Perto do chão, nenhuma: ele cai.
+        /// </summary>
+        private (Estado Estado, Posicionamento Lugar, Direcao Direcao)? OndeAgarrar(Posicionamento lugar)
+        {
+            if (_s.Topologia is not { } topologia) return null;
+            MonitorDoDesktop m = lugar.Monitor;
+            Superficies sup = Superficies.Do(topologia, m, lugar.Tamanho);
+            double escala = m.Dpi / 96.0;
+            ParametrosDeMovimento f = _cfg.Fisica;
+            PontoPx a = lugar.Ancora;
+            if (sup.Chao - a.Y < f.AlturaMinimaParaAgarrar * escala) return null;
+
+            double paraOCipo = (a.Y - sup.Teto) / (f.DistanciaParaOCipo * escala);
+            double paraAParede = Math.Min(a.X - sup.Esquerda, sup.Direita - a.X) / (f.DistanciaParaAParede * escala);
+            bool cipo = paraOCipo <= 1, parede = paraAParede <= 1;
+            if (!cipo && !parede) return null;
+
+            if (cipo && (!parede || paraOCipo <= paraAParede))
+            {
+                var ancora = new PontoPx(Math.Clamp(a.X, sup.Esquerda, sup.Direita), sup.Teto);
+                return (Estado.Hanging, NoLugar(m, ancora), _s.Direcao);
+            }
+            bool direita = sup.Direita - a.X <= a.X - sup.Esquerda;
+            var naParede = new PontoPx(direita ? sup.Direita : sup.Esquerda, Math.Clamp(a.Y, sup.Teto, sup.Chao));
+            return (Estado.Climbing, NoLugar(m, naParede), direita ? Direcao.Direita : Direcao.Esquerda);
+        }
+
+        private Posicionamento NoLugar(MonitorDoDesktop monitor, PontoPx ancora)
+        {
+            TamanhoPx tamanho = _cfg.Tamanho.ParaPixels(monitor.Dpi);
+            return new Posicionamento(monitor, ancora, tamanho, Posicionador.RetanguloDoSprite(ancora, tamanho));
         }
 
         /// <summary>
@@ -1104,7 +1370,7 @@ public static class Maquina
 
             var lugar = new Posicionamento(monitor, presa, tamanho, Posicionador.RetanguloDoSprite(presa, tamanho));
             PosicaoDoPersonagem posicao = preferida is not null && presa == desejada && preferida.ChaveMonitor == monitor.Chave
-                ? preferida with { AncoraAbsoluta = presa }
+                ? preferida with { AncoraAbsoluta = presa, TelaDoMonitor = monitor.Tela }
                 : Posicionador.Descrever(lugar);
             return (lugar, posicao, comApoio);
         }
@@ -1158,7 +1424,9 @@ public static class Maquina
             }
 
             // Relógio: só com movimento, reação, pouso ou gesto (DEC-011; critério 3 da Fase 2).
-            bool relogio = _s.Estado.EmMovimento() || _s.Estado == Estado.Reacting || (_s.Estado == Estado.Idle && _s.Gesto != Gesto.Nenhum);
+            // Agarrado à parede ou ao cipó (DEC-024), nada se move: o relógio fica desligado.
+            bool agarrado = _s.Estado is Estado.Climbing or Estado.Hanging && _s.Movimento.Agarrado;
+            bool relogio = (_s.Estado.EmMovimento() && !agarrado) || _s.Estado == Estado.Reacting || (_s.Estado == Estado.Idle && _s.Gesto != Gesto.Nenhum);
             if (relogio != _s.RelogioAtivo)
             {
                 tempo.Add(relogio ? new LigarRelogio() : new DesligarRelogio());

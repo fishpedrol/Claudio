@@ -30,6 +30,11 @@ public enum Cor : byte
     PalhaEscura,
     Faixa,
     FaixaEscura,
+    Cipo,
+    CipoEscuro,
+    CipoClaro,
+    Folha,
+    FolhaEscura,
 }
 
 public static class Paleta
@@ -60,6 +65,12 @@ public static class Paleta
         Cor.PalhaEscura => 0xFFC27F45,
         Cor.Faixa => 0xFFB83A37,
         Cor.FaixaEscura => 0xFF862A2B,
+        // Cipó da borda de cima (DEC-024): verde-oliva de mata, com folhas mais vivas.
+        Cor.Cipo => 0xFF6B8A34,
+        Cor.CipoEscuro => 0xFF46601F,
+        Cor.CipoClaro => 0xFF93B24F,
+        Cor.Folha => 0xFF4EA24A,
+        Cor.FolhaEscura => 0xFF2E6B2E,
         _ => throw new ArgumentOutOfRangeException(nameof(cor), cor, "Cor fora da paleta."),
     };
 

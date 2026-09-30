@@ -41,6 +41,26 @@
     - regressão da Fase 1: 25 OK, 4 SIMULADO;
     - regressão da Fase 3: 33 OK, 2 N/A.
   - Pendente: gravação de tela a 120 qps (critério 5).
+- **2026-09-30 — Medições de 10 min com a Fase 4:**
+  - **Repouso, pausado** (`resultados/desempenho-20260930-160012.txt`): CPU média de 0,003% de um núcleo, p95 0,000%. Memória privada 60,58 → 60,42 MB. Nenhuma rede, nenhum processo filho, e a resolução do timer não mudou. M6 520 ms.
+  - **Autonomia**, com semente 20260930 (`resultados/desempenho-20260930-161054.txt` e `-162409.txt`):
+    - CPU média de 0,37% e de 1,45% de um núcleo, com 77 s e 210 s em movimento. Em movimento, fica em cerca de 3–4% de um núcleo, dentro da meta de animação de Q-08 (até 5%).
+    - As duas rodadas divergiram apesar da mesma semente: os temporizadores reais da agenda se intercalam com o movimento, que segue os quadros do compositor. O núcleo continua determinístico para a mesma sequência de eventos (critério 1).
+  - **Memória na autonomia:** subiu 40–48 MB nos primeiros 3–4 minutos e depois ficou num patamar (médias por terço 101,8 → 123,6 → 125,5 MB). O diagnóstico, com linhas `MEMORIA` e `SPRITE` no log de diagnóstico e sem timer, mostrou que não é vazamento:
+    - a primeira coleta do GC só acontece por volta de 3,5 min;
+    - depois dela, o heap vivo tem 1,1 MB, mas o GC mantém 50 MB comprometidos (orçamento da geração 0 nesta máquina);
+    - o cache de sprites terminou com 50 quadros, cerca de 3 MB.
+  - A estabilidade de 1 h e 8 h fica para a Fase 10. Um ajuste do GC (limite de heap ou `ConserveMemory`) fica para a Fase 11, se o tamanho importar.
+
+- **2026-09-30 — Pedidos do usuário durante a Fase 4:**
+  - Cipó na borda de cima e agarrar onde é solto, preso até o usuário tirar (DEC-024).
+  - Esconderijo pelo clique duplo, na barra de tarefas ou nas laterais, só com a cabeça e as mãos para fora (DEC-025). O painel de energia passa a abrir pelo menu.
+  - O estado novo `PEEKING` entrou no teste de propriedade, que o alcança e o deixa nas sequências aleatórias.
+  - A configuração do app virou fonte única no núcleo (`ConfiguracaoDoNucleo.DoAplicativo`).
+  - Contagens: Core 267/267, portão 73/73, App 37/37 com a integração.
+  - Verificação de tela com input SINTÉTICO: Fase 3 com 34 OK e 2 N/A; Fase 4 com 28 OK. Em ambas, o esconderijo e o cipó ficaram no lugar com a agenda ligada.
+  - Curiosidade (DEC-026) registrada para depois da Fase 5, com o observador de janela ativa do P7.
+  - Mais um commit (`803a54b`) foi feito com a identidade git do usuário.
 
 ## Estado desta atualização documental
 

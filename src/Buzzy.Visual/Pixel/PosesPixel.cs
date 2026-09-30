@@ -67,6 +67,10 @@ public static class PosesPixel
             Cauda = Cauda.Caida,
             Expressao = "feliz",
         },
+        // Cipó da borda de cima (DEC-024): segura o cipó com a mão B e balança; o quadro 2 é o do meio.
+        Cipo("cipo-1", tronco: 9, deslocamentoDoCipo: 5.5, pernaA: new(-2, 10), pernaB: new(24, 44)),
+        Cipo("cipo-2", tronco: 0, deslocamentoDoCipo: 0, pernaA: new(-8, 0), pernaB: new(18, 34)),
+        Cipo("cipo-3", tronco: -9, deslocamentoDoCipo: -5.5, pernaA: new(-18, -8), pernaB: new(10, 22)),
         new PosePixel
         {
             Nome = "sentado",
@@ -139,6 +143,21 @@ public static class PosesPixel
             Estado = "gesto: espiar",
             QuadrilY = 78,
             Borda = 58,
+            BracoA = new(-80, 150),
+            BracoB = new(80, -150),
+            MaoA = Mao.Fechada,
+            MaoB = Mao.Fechada,
+            Cauda = Cauda.Alta,
+            Expressao = "curioso",
+        },
+        // Esconderijo (DEC-025): o "espiando" com a borda na última linha do quadro, onde fica a borda
+        // da tela. Só o chapéu, a cabeça e as mãos, que seguram a borda; nas laterais, girado.
+        new PosePixel
+        {
+            Nome = "escondido",
+            Estado = "PEEKING",
+            QuadrilY = 84,
+            Borda = 64,
             BracoA = new(-80, 150),
             BracoB = new(80, -150),
             MaoA = Mao.Fechada,
@@ -228,6 +247,32 @@ public static class PosesPixel
             Expressao = "determinado",
         },
     ];
+
+    /// <summary>
+    /// Pendurado no cipó (DEC-024), de frente: a mão B segura o cipó acima e ao lado do chapéu, a A
+    /// balança solta, a cauda sobe para equilibrar. O tronco e o cipó inclinam juntos no balanço.
+    /// </summary>
+    private static PosePixel Cipo(string nome, double tronco, double deslocamentoDoCipo, Membro pernaA, Membro pernaB) => new()
+    {
+        Nome = nome,
+        Estado = "HANGING",
+        QuadrilX = 30 - tronco * 0.25,
+        QuadrilY = 50,
+        Tronco = tronco,
+        // Ombros encolhidos, como quem se pendura: a cabeça desce e o chapéu sai do caminho da mão.
+        CabecaDescida = 6,
+        BracoA = new(-60 + tronco, -40 + tronco),
+        // O braço do cipó segue pouco a inclinação do tronco, para a mão ficar fora da aba do chapéu.
+        BracoB = new(144 + tronco * 0.3, 150 + tronco * 0.3),
+        MaoA = Mao.Aberta,
+        MaoB = Mao.Fechada,
+        PernaA = pernaA,
+        PernaB = pernaB,
+        PesNoChao = false,
+        Cauda = Cauda.Alta,
+        Expressao = "rindo",
+        Cipo = deslocamentoDoCipo,
+    };
 
     private static PosePixel Andando(string nome, Membro perto, Membro longe, Membro bracoPerto, Membro bracoLonge, double y) => new()
     {

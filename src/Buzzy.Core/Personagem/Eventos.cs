@@ -142,8 +142,9 @@ public sealed record CmdExit : Evento
 // Sistema.
 
 /// <summary>
-/// Configurações e topologia carregadas (primeira linha da tabela de transições). A posição
-/// salva é nula até a persistência da Fase 5.
+/// Configurações e topologia carregadas (primeira linha da tabela de transições). A posição salva,
+/// quando há, é restaurada pela cascata da partida (<see cref="Posicionador.Restaurar"/>); nula, o
+/// personagem começa na posição inicial.
 /// </summary>
 public sealed record Loaded(Topologia Topologia, PosicaoDoPersonagem? PosicaoSalva, Preferencias Preferencias) : Evento
 {
@@ -271,10 +272,17 @@ public sealed class MonitoresOcupados : IEquatable<MonitoresOcupados>
     public override string ToString() => string.Join(",", _chaves);
 }
 
-/// <summary>Preferências que o núcleo usa. A Fase 8 acrescenta as demais e a persistência.</summary>
+/// <summary>
+/// Preferências que o núcleo usa. Desde a Fase 5 são guardadas no settings.json
+/// (<see cref="Persistencia.EsquemaDeConfiguracoes"/>); a Fase 8 acrescenta as demais.
+/// </summary>
 /// <param name="Energia">Nível de energia; padrão Média (DEC-014).</param>
 /// <param name="ModoTelaCheia">Modo automático de tela cheia (Q-09); padrão ligado.</param>
-public sealed record Preferencias(NivelDeEnergia Energia, bool ModoTelaCheia)
+/// <param name="AtravessarMonitores">
+/// Se o personagem pode passar sozinho de um monitor para outro (Q-05); padrão ligado. É a escolha do
+/// usuário; até a travessia entrar no núcleo, só é guardada e reproduzida.
+/// </param>
+public sealed record Preferencias(NivelDeEnergia Energia, bool ModoTelaCheia, bool AtravessarMonitores = true)
 {
-    public static readonly Preferencias Padrao = new(NivelDeEnergia.Media, true);
+    public static readonly Preferencias Padrao = new(NivelDeEnergia.Media, true, true);
 }

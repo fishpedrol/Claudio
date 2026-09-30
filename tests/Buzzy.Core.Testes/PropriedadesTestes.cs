@@ -99,20 +99,24 @@ internal static class PropriedadesTestes
             VerificarPosicionamento(r, tamanho, Onde);
             Verificar(posicao.ChaveMonitor == r.Monitor.Chave, () => $"{Onde()}: nova posição aponta para {posicao.ChaveMonitor}, resultado está em {r.Monitor.Chave}");
             Verificar(posicao.AncoraAbsoluta == r.Ancora, () => $"{Onde()}: âncora absoluta {posicao.AncoraAbsoluta} diferente da âncora {r.Ancora}");
+            Verificar(posicao.TelaDoMonitor == r.Monitor.Tela, () => $"{Onde()}: a nova posição guarda a tela {posicao.TelaDoMonitor}, a do monitor é {r.Monitor.Tela}");
 
             if (nova.PorChave(atual.ChaveMonitor) is not null)
             {
-                // O monitor continua: fica nele, com as mesmas frações.
+                // O monitor continua: fica nele, com as mesmas frações (campo a campo: a âncora e a
+                // tela guardada passam a ser as de agora, conferidas acima; Equals porque NaN fica NaN).
                 Verificar(r.Monitor.Chave == atual.ChaveMonitor, () => $"{Onde()}: saiu do monitor {atual.ChaveMonitor}, que continua na topologia");
-                Verificar(posicao == (atual with { AncoraAbsoluta = r.Ancora }), () => $"{Onde()}: frações mudaram: {posicao}");
+                Verificar(posicao.FracaoX.Equals(atual.FracaoX) && posicao.FracaoY.Equals(atual.FracaoY), () => $"{Onde()}: frações mudaram: {posicao}");
             }
             else
             {
-                // O monitor sumiu: vai para o de tela mais próxima da última âncora; em empate, o principal.
-                long menor = nova.Monitores.Min(m => m.Tela.DistanciaAoQuadrado(atual.AncoraAbsoluta));
-                long obtida = r.Monitor.Tela.DistanciaAoQuadrado(atual.AncoraAbsoluta);
-                Verificar(obtida == menor, () => $"{Onde()}: {r.Monitor.Chave} está a d² = {obtida} da última âncora, e há monitor a d² = {menor}");
-                bool principalEmpata = nova.Principal.Tela.DistanciaAoQuadrado(atual.AncoraAbsoluta) == menor;
+                // O monitor sumiu: vai para o de tela mais próxima do pixel dos pés da última âncora
+                // (Posicionador.PixelDosPes); em empate, o principal.
+                PontoPx pes = Posicionador.PixelDosPes(atual.AncoraAbsoluta);
+                long menor = nova.Monitores.Min(m => m.Tela.DistanciaAoQuadrado(pes));
+                long obtida = r.Monitor.Tela.DistanciaAoQuadrado(pes);
+                Verificar(obtida == menor, () => $"{Onde()}: {r.Monitor.Chave} está a d² = {obtida} do pixel dos pés da última âncora, e há monitor a d² = {menor}");
+                bool principalEmpata = nova.Principal.Tela.DistanciaAoQuadrado(pes) == menor;
                 Verificar(!principalEmpata || r.Monitor.Principal, () => $"{Onde()}: empate com o principal, mas escolheu {r.Monitor.Chave}");
             }
 

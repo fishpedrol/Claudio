@@ -509,6 +509,79 @@ O usuário aceitou estas metas em 2026-09-27. A Fase 1 deve apenas estabelecer a
   - TODO.md inclui a toon force na Fase 4;
   - os testes de movimento e de pose cobrem quique, foguete, laterais e deformação.
 
+## DEC-024 — Cipó na borda de cima e agarrar onde o usuário solta
+
+- **Data:** 2026-09-30
+- **Estado da decisão:** pedidos do usuário, com a interpretação técnica de Claude sob DEC-015.
+- **STATUS:** PLANNED até o gate da Fase 4 ser registrado em TODO.md.
+- **Pedidos do usuário (2026-09-30):**
+  - "e se a animação fosse ele escalando com um cipó? pelo menos quando estiver na borda de cima";
+  - "quando eu arrastar ele pra cima ele ficar no cipó e tal, também quero que quando eu arraste ele pras laterais ele fique preso lá";
+  - "não literalmente preso, mas só sai de lá quando eu tirar".
+- **Decisão:**
+  1. **Cipó:** na borda de cima, o personagem fica pendurado num cipó que desce da borda da tela até a mão, em vez de se segurar direto na borda. Andando pela borda, balança em três quadros (esquerda, meio, direita).
+     - É a única pose que encosta numa borda do quadro, a de cima, onde o cipó se prende na tela.
+     - A paleta ganha verdes de mata para o cipó e as folhas.
+  2. **Agarrar onde é solto:** sem apoio, a acomodação (`SETTLING`) agarra em vez de cair. Se as duas coisas valem, fica com a mais próxima, em proporção ao alcance de cada uma. Perto do chão (menos de 32 DIP), cai como antes.
+     - Com o topo do sprite a até 96 DIP da borda de cima, agarra o cipó (`HANGING`).
+     - Com a âncora a até 64 DIP de uma lateral, gruda na parede, olhando para ela (`CLIMBING`).
+  3. **Agarrado:** parado, o relógio fica desligado e a agenda decide depois.
+  4. **Preso pelo usuário** (`PresoPeloUsuario`): quando é o usuário que o solta ali, ele só sai quando o usuário o tira.
+     - A agenda nunca o faz saltar, se soltar ou descer ao chão.
+     - Ou ele fica, trocando de cara, ou passeia de 40 a 220 DIP pela mesma superfície: sobe ou desce pela parede sem chegar ao chão, ou vai e volta pelo cipó, dando meia-volta nas quinas.
+     - Um clique não o tira de lá, e pausado ele fica parado.
+     - Arrastado para outro lugar, a acomodação decide de novo.
+  5. **Agarrado sem ter sido posto pelo usuário** (por exemplo, a reação a um clique no meio de uma escalada): volta a escalar, salta ou se solta, como na Fase 4. Antes ele caía depois da reação.
+- **Motivo:** o macaquinho fica onde o usuário o põe, como pedido, sem custo parado e sem nenhum invariante de apoio relaxado. A lateral, o cipó e o chão são todos apoio.
+- **Trade-offs:** o preso só é lembrado durante a execução. A persistência da Fase 5 grava a posição, não a condição de preso.
+- **Consequências:** ARCHITECTURE 2.6 (linhas de `SETTLING`, `CLIMBING` e `HANGING`), 2.9 e 2.10; TODO Fase 4 (critério 8); testes `AgarrarTestes` e a verificação de tela.
+
+## DEC-025 — Esconderijo pelo clique duplo; painel de energia pelo menu
+
+- **Data:** 2026-09-30
+- **Estado da decisão:** pedido do usuário, com a interpretação técnica de Claude sob DEC-015. **Muda uma decisão anterior do usuário:** o clique duplo não abre mais o painel de energia (Q-23, DEC-014).
+- **STATUS:** PLANNED até o gate da Fase 4 ser registrado em TODO.md.
+- **Pedido do usuário (2026-09-30):** "quero que crie um modo dele escondido, que ele fica só com a cabecinha e as mãos para fora escondendo seu corpo, tanto na barra de tarefas quanto nas laterais" e "quero que esse modo seja ativado com 2 cliques nele".
+- **Decisão:**
+  1. **Estado novo `PEEKING`:** o personagem escondido atrás da borda de baixo da área útil (a barra de tarefas, com a barra embaixo) ou de uma lateral, só com o chapéu, a cabeça e as mãos, que seguram a borda.
+     - A janela fica inteira na área útil, com a borda da pose na borda da tela.
+     - Na lateral, a pose é a de baixo girada 90°, sem perda na pixel art.
+  2. **O clique duplo alterna o modo:**
+     - esconde atrás da lateral mais próxima, se o personagem está no alto e junto dela (na parede, por exemplo); senão, atrás da borda de baixo, no mesmo x;
+     - escondido, outro clique duplo o tira de lá: na borda de baixo, fica de pé no chão; na lateral, volta a grudar na parede, preso pelo usuário (DEC-024).
+  3. **Escondido, só o usuário o tira:**
+     - a agenda só troca a cara (curioso, travesso, feliz, surpreso, pensativo, rindo), e não há relógio;
+     - um clique simples faz a cabeça reagir, e ele continua escondido;
+     - pressionar mostra a cara de surpresa sem o corpo aparecer;
+     - arrastar o tira do esconderijo;
+     - esconder e mostrar pela bandeja, mudar a topologia ou transferir pela tela cheia o devolvem ao esconderijo na mesma borda.
+  4. **Painel de energia (Fase 8):** abre pelo menu de contexto ("Energia…"), já previsto na tabela de ARCHITECTURE 2.6. O núcleo guarda a regra antiga atrás de `EsconderijoNoCliqueDuplo = false`, para os testes das Fases 2 e 8.
+  5. **Configuração do app:** fica numa fonte única, `ConfiguracaoDoNucleo.DoAplicativo`, usada pelo app e pelas simulações que escolhem sementes nos testes (lacuna L2 da crítica da Fase 5).
+- **Motivo:** o usuário pediu o gesto e o modo; o painel continua acessível pelo menu, que funciona por teclado e leitor de tela.
+- **Trade-offs:** um terceiro clique rápido não conta como outro clique duplo, como no Windows.
+- **Consequências:**
+  - ARCHITECTURE 2.6 (estado `PEEKING` e linhas do clique duplo) e 2.10;
+  - PRODUCT_SPEC (controle);
+  - TODO: Fase 4 (critério 8) e Fase 8, critérios 10 e 11: o painel vem pelo menu;
+  - testes `EsconderijoTestes`, `PoseTestes`, integração e verificação de tela.
+
+## DEC-026 — Curiosidade: ir ver o que o usuário está fazendo
+
+- **Data:** 2026-09-30
+- **Estado da decisão:** pedido do usuário. Desenho de Claude sob DEC-015, a implementar depois da Fase 5.
+- **STATUS:** PLANNED.
+- **Pedido do usuário (2026-09-30):** "quero também que o mascote seja curioso: se eu estou fazendo alguma tarefa por muito tempo ele fica perto olhando com uma cara curiosa e tal; caso eu fique por 30 segundos em uma tela específica ele muda de tela para ver o que estou fazendo".
+- **Decisão (desenho):**
+  1. **O que ele observa:** só em que monitor está a janela ativa, o retângulo dela e há quanto tempo ela está em primeiro plano. Usa os eventos do Windows limitados à janela ativa, o mesmo mecanismo e a mesma privacidade de DEC-013 (modo de tela cheia, protótipo P7).
+     - Nunca título, conteúdo, nome ou caminho de processo, pixels, teclado ou mouse fora da janela dele.
+     - Nada é gravado nem registrado; o dado é transitório.
+  2. **Mesma janela ativa por bastante tempo:** ele se aproxima dela pelo chão ou pela borda (sem cobrir o meio) e fica olhando com a cara `Curioso`, com o gesto de espiar de vez em quando.
+  3. **Janela ativa há 30 s num monitor onde ele não está:** ele muda de monitor para ver. Anda e atravessa pelas passagens da Fase 5; a toon force pode abreviar o caminho.
+  4. **Nunca age** pausado, preso pelo usuário (DEC-024), escondido (DEC-025), sendo arrastado, escondido pela bandeja ou num monitor em tela cheia. O usuário sempre prevalece.
+  5. **Custo:** por eventos, sem polling. P7 mede o custo com o usuário digitando e mexendo o mouse, como DEC-013 já exige.
+- **Dependências:** Fase 5 (travessia entre monitores) e P7 (observador da janela ativa). A curiosidade entra depois da Fase 5, junto com o observador e o modo de tela cheia, que antecipam parte das Fases 7 e 8.
+- **Consequências:** SECURITY 3.1 passa a citar a curiosidade como segundo uso, igualmente limitado, da geometria da janela ativa; TODO Fases 7 e 8.
+
 ## Decisões de produto registradas pelo usuário
 
 Em 2026-09-26 e 2026-09-27 o usuário respondeu às escolhas abaixo em `docs/DECISOES_DO_USUARIO.md`. Elas estão aceitas como escopo planejado; ainda não significam que qualquer comportamento esteja implementado ou verificado.

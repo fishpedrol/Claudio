@@ -50,6 +50,27 @@ public enum Estado
 
     /// <summary>Grava o estado e encerra.</summary>
     Exiting,
+
+    /// <summary>
+    /// Escondido atrás da borda de baixo (a barra de tarefas) ou de uma lateral, só com a cabeça e
+    /// as mãos para fora (DEC-025). Entra e sai pelo clique duplo; sem relógio; a agenda só troca a cara.
+    /// </summary>
+    Peeking,
+}
+
+/// <summary>Em que borda o personagem está escondido (DEC-025).</summary>
+public enum LadoDoEsconderijo
+{
+    Nenhum,
+
+    /// <summary>Atrás da borda de baixo da área útil: a barra de tarefas, com a barra embaixo.</summary>
+    Baixo,
+
+    /// <summary>Atrás da lateral esquerda da área útil.</summary>
+    Esquerda,
+
+    /// <summary>Atrás da lateral direita da área útil.</summary>
+    Direita,
 }
 
 /// <summary>Grupo do estado na tabela de ARCHITECTURE.md 2.6.</summary>
@@ -184,7 +205,7 @@ public static class Estados
     public static GrupoDoEstado Grupo(this Estado estado) => estado switch
     {
         Estado.Booting or Estado.Hidden or Estado.Exiting => GrupoDoEstado.Sistema,
-        Estado.Idle or Estado.Walking or Estado.Climbing or Estado.Hanging or Estado.Jumping or Estado.Resting => GrupoDoEstado.Autonomo,
+        Estado.Idle or Estado.Walking or Estado.Climbing or Estado.Hanging or Estado.Jumping or Estado.Resting or Estado.Peeking => GrupoDoEstado.Autonomo,
         Estado.Falling or Estado.Landing => GrupoDoEstado.Fisico,
         Estado.Pressed or Estado.Dragging or Estado.Settling or Estado.Reacting => GrupoDoEstado.Usuario,
         _ => throw new ArgumentOutOfRangeException(nameof(estado), estado, "Estado desconhecido."),

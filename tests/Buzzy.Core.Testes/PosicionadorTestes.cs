@@ -282,6 +282,18 @@ internal static class PosicionadorTestes
                         }
     }
 
+    // Fase 5 (ARCHITECTURE.md 2.8): a posição guarda a tela do monitor da época, não a área útil.
+    [Teste]
+    public static void DescreverGuardaATelaDoMonitor()
+    {
+        MonitorDoDesktop secundario = Afirmar.NaoNulo(SecundarioAEsquerda.PorChave(Display2));
+        PosicaoDoPersonagem descrita = Posicionador.Descrever(Posicionador.NoMonitor(secundario, 0.25, 1, SpritePar));
+        Afirmar.Igual(Ret(-1920, 0, 0, 1080), descrita.TelaDoMonitor, "tela do secundário (a área útil vai até 1032)");
+
+        var feitaAMao = new PosicaoDoPersonagem(Display1, 0.5, 1, new PontoPx(960, 1032));
+        Afirmar.Nulo(feitaAMao.TelaDoMonitor, "posição construída sem a tela: desconhecida");
+    }
+
     [Teste]
     public static void DescreverComNuloLanca()
     {

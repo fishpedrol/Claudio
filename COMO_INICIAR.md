@@ -2,9 +2,10 @@
 
 > **Estado atual:** o Buzzy aparece como o macaquinho em pixel art com o chapéu de palha
 > (`docs/IDENTIDADE_VISUAL.md`). Pode ser arrastado com o mouse e, sozinho, anda pelo chão, escala as
-> laterais da tela, pendura-se na borda de cima, pula e descansa. Por enquanto fica no monitor em que
-> está: atravessar para outro monitor e lembrar a posição chegam na Fase 5. As poses ainda são quadros
-> fixos por estado; as animações completas chegam na Fase 6.
+> laterais da tela (inclusive a que encosta no outro monitor), pendura-se num cipó na borda de cima,
+> pula, quica como borracha e descansa. Por enquanto fica no monitor em que está: atravessar para
+> outro monitor e lembrar a posição chegam na Fase 5. As poses ainda são quadros fixos por estado; as
+> animações completas chegam na Fase 6.
 
 ## 1. Antes da primeira vez
 
@@ -22,7 +23,6 @@
 ## 2. Compilar
 
 No PowerShell, dentro da pasta do projeto:
-
 ```powershell
 cd C:\Users\Cliente\Documents\claudio
 dotnet build src\Buzzy.App\Buzzy.App.csproj -c Release
@@ -61,8 +61,11 @@ Não use "Executar como administrador": o Buzzy recusa rodar assim e mostra um a
 
 | Quero... | Como fazer |
 |---|---|
-| Mudar o Buzzy de lugar | Clique nele e arraste; ao soltar, ele desce até o chão |
-| Ver uma reação | Clique nele uma vez (ou duas) |
+| Mudar o Buzzy de lugar | Clique nele e arraste; solto no meio do ar, ele cai até o chão (e quica, se cair de alto) |
+| Pendurar no cipó | Arraste até perto da borda de cima e solte: ele agarra um cipó e fica lá até você tirá-lo |
+| Grudar numa parede | Arraste até perto de uma lateral da tela e solte: ele gruda na parede e fica lá até você tirá-lo |
+| Esconder o Buzzy na borda | Dois cliques nele: ele se esconde atrás da barra de tarefas (ou da lateral, se estiver numa parede), só com a cabeça e as mãos para fora. Dois cliques de novo tiram ele de lá |
+| Ver uma reação | Clique nele uma vez |
 | Fazer ele ficar quieto | Menu → **Pausar movimento**. Para voltar a circular: menu → **Retomar movimento** |
 | Abrir o menu | Botão direito no personagem, ou botão direito no ícone da bandeja |
 | Esconder o Buzzy | Menu → **Esconder Buzzy** |

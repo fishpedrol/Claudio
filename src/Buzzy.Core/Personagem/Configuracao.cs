@@ -43,6 +43,13 @@ public sealed record ConfiguracaoDoNucleo
     /// <summary>Se o painel de energia existe (Fase 8). Antes, o clique duplo só produz reação.</summary>
     public bool PainelDeEnergiaDisponivel { get; init; }
 
+    /// <summary>
+    /// Se o clique duplo alterna o esconderijo (DEC-025, pedido do usuário): esconde o personagem
+    /// atrás da borda mais próxima, só com a cabeça e as mãos para fora, e o tira de lá no clique
+    /// duplo seguinte. Ligado, o painel de energia não abre pelo clique duplo; abre pelo menu.
+    /// </summary>
+    public bool EsconderijoNoCliqueDuplo { get; init; }
+
     /// <summary>Se a janela de configurações existe (Fase 8).</summary>
     public bool ConfiguracoesDisponiveis { get; init; }
 
@@ -51,6 +58,20 @@ public sealed record ConfiguracaoDoNucleo
 
     /// <summary>Perfis por nível de energia.</summary>
     public Func<NivelDeEnergia, PerfilDeEnergia> Perfil { get; init; } = PerfilDeEnergia.Padrao;
+
+    /// <summary>
+    /// A configuração que o aplicativo usa hoje. É a fonte única: o app e as simulações dos testes
+    /// que escolhem sementes para ele partem daqui, para nunca divergirem.
+    /// </summary>
+    public static ConfiguracaoDoNucleo DoAplicativo(TamanhoDip tamanho) => new()
+    {
+        Tamanho = tamanho,
+        // Fase 4 (DEC-022 a DEC-025): física, queda animada, todas as ações, esconderijo no clique duplo.
+        Acoes = AcoesAutonomas.Todas,
+        QuedaFisica = true,
+        Movimento = true,
+        EsconderijoNoCliqueDuplo = true,
+    };
 }
 
 /// <summary>

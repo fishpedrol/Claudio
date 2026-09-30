@@ -12,6 +12,8 @@
 - **Fase 3 — STATUS: PLANNED.** Clique, clique duplo, arraste, menu e captura do mouse funcionam, com o árbitro puro (DEC-021). Pendem UAC [MANUAL], escalas mistas [HW] e ClickLock ligado [MANUAL].
 - **Fase 4 — STATUS: PLANNED.** O personagem anda, escala, pendura-se, pula, cai e descansa sozinho num monitor, com física de passo fixo no núcleo (DEC-022).
   - A pedido do usuário, tem toon force (DEC-023): sobe por qualquer lateral, inclusive a encostada no outro monitor; quica como borracha; às vezes sobe a parede num foguete; achata e estica.
+  - Solto no alto, agarra um cipó na borda de cima; solto junto a uma lateral, gruda na parede. Posto lá pelo usuário, só sai quando o usuário o tira (DEC-024).
+  - Dois cliques o escondem atrás da barra de tarefas ou de uma lateral, só com a cabeça e as mãos para fora; outros dois o tiram de lá (DEC-025). O painel de energia da Fase 8 abre pelo menu.
   - "Pausar movimento" no menu deixa ele quieto.
   - Pende a gravação de tela a 120 qps (critério 5).
 - **Identidade visual:** refeita em 2026-09-29 a pedido do usuário como **pixel art fiel às pranchas, com o chapéu de palha e a personalidade do Luffy — semelhança intencional** (DEC-018, DEC-019).
@@ -24,19 +26,19 @@
 
 O checkout foi validado em 2026-09-30 com `powershell -NoProfile -File tools/testar.ps1`, com código de saída 0:
 - build Release com 0 avisos e 0 erros;
-- 255 testes do Core;
+- 267 testes do Core;
 - 73 testes do portão;
-- 23 testes do app sem janela;
+- 26 testes do app sem janela;
 - portão de APIs aprovado;
 - nenhum pacote vulnerável.
 
-A integração (`-Integracao`) passou 34/34, com M6 de 485 ms. As verificações de tela usaram input SINTÉTICO:
+A integração (`-Integracao`) passou 37/37. As verificações de tela usaram input SINTÉTICO:
 
 | Fase | Relatório | Resultado |
 |---|---|---|
 | 1 | `resultados/verificacao-fase1.log` | 25 OK, 4 SIMULADO (bandeja) |
-| 3 | `resultados/verificacao-fase3.log` | 33 OK, 2 N/A |
-| 4 | `resultados/verificacao-fase4.log` | 22 OK |
+| 3 | `resultados/verificacao-fase3.log` | 34 OK, 2 N/A |
+| 4 | `resultados/verificacao-fase4.log` | 28 OK |
 
 Nenhuma teve falha.
 

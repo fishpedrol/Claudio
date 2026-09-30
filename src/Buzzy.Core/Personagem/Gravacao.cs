@@ -32,11 +32,11 @@ public static class Gravacao
             DragEnd e => $"DragEnd {Ponto(e.Cursor)}",
             ContextMenu e => $"ContextMenu {Ponto(e.Cursor)}",
             EnergySelected e => $"EnergySelected nivel={e.Nivel}",
-            Loaded e => $"Loaded topologia={nomeDaTopologia(e.Topologia)} energia={e.Preferencias.Energia} telaCheia={SimNao(e.Preferencias.ModoTelaCheia)}"
-                + (e.PosicaoSalva is { } p ? $" posicao={DescreverPosicao(p)}" : ""),
+            Loaded e => $"Loaded topologia={nomeDaTopologia(e.Topologia)} {DescreverPreferencias(e.Preferencias)}"
+                + (e.PosicaoSalva is { } p ? $" posicao={DescreverPosicaoCompleta(p)}" : ""),
             TopologyChanged e => $"TopologyChanged topologia={nomeDaTopologia(e.Topologia)}",
             FullscreenTargetsChanged e => $"FullscreenTargetsChanged ocupados={e.Ocupados}",
-            SettingsChanged e => $"SettingsChanged energia={e.Preferencias.Energia} telaCheia={SimNao(e.Preferencias.ModoTelaCheia)}",
+            SettingsChanged e => $"SettingsChanged {DescreverPreferencias(e.Preferencias)}",
             MovementSignal e => $"MovementSignal sinal={e.Sinal}",
             AutonomyTimer e => string.Create(Invariante, $"AutonomyTimer geracao={e.Geracao}"),
             ExpressionChange e => $"ExpressionChange expressao={e.Expressao}",
@@ -128,7 +128,7 @@ public static class Gravacao
             AgendarDecisao e => string.Create(Invariante, $"AgendarDecisao atrasoMs={(long)e.Atraso.TotalMilliseconds} geracao={e.Geracao}"),
             AbrirMenu e => $"AbrirMenu ponto={Par(e.Ponto)}",
             GravarPosicao e => $"GravarPosicao posicao={DescreverPosicao(e.Posicao)}",
-            GravarPreferencias e => $"GravarPreferencias energia={e.Preferencias.Energia} telaCheia={SimNao(e.Preferencias.ModoTelaCheia)}",
+            GravarPreferencias e => $"GravarPreferencias {DescreverPreferencias(e.Preferencias)}",
             _ => efeito.GetType().Name,
         };
     }
@@ -167,33 +167,66 @@ public static class Gravacao
         return saida;
     }
 
-    /// <summary>Posição relativa como <c>chave;fracaoX;fracaoY;ancoraX;ancoraY</c>.</summary>
+    /// <summary>
+    /// Posição relativa como <c>chave;fracaoX;fracaoY;ancoraX;ancoraY</c>, sem a tela do monitor. É a
+    /// forma do efeito <see cref="GravarPosicao"/> nas reproduções gravadas.
+    /// </summary>
     public static string DescreverPosicao(PosicaoDoPersonagem p)
     {
         ArgumentNullException.ThrowIfNull(p);
         return string.Create(Invariante, $"{p.ChaveMonitor};{p.FracaoX:0.######};{p.FracaoY:0.######};{p.AncoraAbsoluta.X};{p.AncoraAbsoluta.Y}");
     }
 
+    /// <summary>
+    /// Posição com a tela do monitor, quando ela é conhecida:
+    /// <c>chave;fracaoX;fracaoY;ancoraX;ancoraY;esquerda;topo;direita;base</c>. Sem a tela, é igual a
+    /// <see cref="DescreverPosicao"/>. É a forma da posição salva do <see cref="Loaded"/>, para a
+    /// reprodução restaurar pelo retângulo como a partida (Posicionador.Restaurar).
+    /// </summary>
+    public static string DescreverPosicaoCompleta(PosicaoDoPersonagem p)
+    {
+        ArgumentNullException.ThrowIfNull(p);
+        if (p.TelaDoMonitor is not { } t) return DescreverPosicao(p);
+        return string.Create(Invariante, $"{DescreverPosicao(p)};{t.Esquerda};{t.Topo};{t.Direita};{t.Base}");
+    }
+
+    /// <summary>Lê as duas formas: 5 campos (tela desconhecida) ou 9 (com a tela do monitor, que não pode ser vazia).</summary>
     public static PosicaoDoPersonagem LerPosicao(string texto)
     {
         ArgumentNullException.ThrowIfNull(texto);
         string[] p = texto.Split(';');
-        if (p.Length != 5) throw new FormatException($"Posição inválida: {texto}");
-        return new PosicaoDoPersonagem(
+        if (p.Length is not (5 or 9)) throw new FormatException($"Posição inválida (5 ou 9 campos): {texto}");
+        var posicao = new PosicaoDoPersonagem(
             p[0],
             double.Parse(p[1], NumberStyles.Float, Invariante),
             double.Parse(p[2], NumberStyles.Float, Invariante),
             new PontoPx(Inteiro(p[3]), Inteiro(p[4])));
+        if (p.Length == 5) return posicao;
+
+        var tela = new RetanguloPx(Inteiro(p[5]), Inteiro(p[6]), Inteiro(p[7]), Inteiro(p[8]));
+        if (tela.Vazio) throw new FormatException($"Tela do monitor vazia na posição: {texto}");
+        return posicao with { TelaDoMonitor = tela };
     }
 
+    /// <summary>
+    /// Preferências como <c>energia=Media telaCheia=sim</c>, com <c>travessia=nao</c> só quando a travessia
+    /// está desligada: com o padrão, as linhas são as de antes da Fase 5 (referências gravadas 01 a 05).
+    /// </summary>
+    private static string DescreverPreferencias(Preferencias p)
+        => $"energia={p.Energia} telaCheia={SimNao(p.ModoTelaCheia)}" + (p.AtravessarMonitores ? "" : " travessia=nao");
+
+    /// <summary>Lê o que <see cref="DescreverPreferencias"/> escreve; um campo ausente vale o padrão.</summary>
     private static Preferencias LerPreferencias(Dictionary<string, string> campos) => new(
         campos.TryGetValue("energia", out string? e) ? Enum.Parse<NivelDeEnergia>(e) : Preferencias.Padrao.Energia,
-        campos.TryGetValue("telaCheia", out string? t) ? t switch
-        {
-            "sim" => true,
-            "nao" => false,
-            _ => throw new FormatException($"telaCheia={t}: use sim ou nao."),
-        } : Preferencias.Padrao.ModoTelaCheia);
+        campos.TryGetValue("telaCheia", out string? t) ? SimOuNao("telaCheia", t) : Preferencias.Padrao.ModoTelaCheia,
+        campos.TryGetValue("travessia", out string? a) ? SimOuNao("travessia", a) : Preferencias.Padrao.AtravessarMonitores);
+
+    private static bool SimOuNao(string campo, string valor) => valor switch
+    {
+        "sim" => true,
+        "nao" => false,
+        _ => throw new FormatException($"{campo}={valor}: use sim ou nao."),
+    };
 
     private static int Inteiro(string texto) => int.Parse(texto, NumberStyles.AllowLeadingSign, Invariante);
 
