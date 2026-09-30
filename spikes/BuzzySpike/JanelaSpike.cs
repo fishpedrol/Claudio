@@ -16,6 +16,7 @@ internal enum Modo
     P2Anim10,
     P2Anim60,
     P2Anim60Comp,
+    Receptor,
 }
 
 /// <summary>
@@ -77,6 +78,12 @@ internal sealed class JanelaSpike : Window
     private readonly List<double> _latenciasMs = [];
     private int _movimentos;
     private nint _foregroundNoPressionar;
+
+    // Verdadeiro só durante o ReleaseCapture do próprio SOLTAR. ReleaseCapture envia
+    // WM_CAPTURECHANGED de forma síncrona; sem esta marca, o gesto era encerrado duas vezes
+    // (uma como "captura perdida", outra como "soltou"), e o log não distinguia uma perda
+    // de captura real, como a de Alt+Tab, da liberação normal ao soltar.
+    private bool _soltandoPorNos;
 
     // ---- animação (P2) ----
     private DispatcherTimer? _timer;
@@ -295,9 +302,13 @@ internal sealed class JanelaSpike : Window
 
             case Interop.WM_CAPTURECHANGED:
                 // Ponto único de término do gesto, conforme ARCHITECTURE.md 2.7.
-                if (_pressionado)
+                if (_soltandoPorNos)
                 {
-                    Diagnostico.Linha($"WM_CAPTURECHANGED: captura perdida para {wParam}. Encerrando o gesto.");
+                    Diagnostico.Linha($"WM_CAPTURECHANGED: captura liberada por nós ao soltar (esperado), nova dona {lParam}.");
+                }
+                else if (_pressionado)
+                {
+                    Diagnostico.Linha($"WM_CAPTURECHANGED: captura perdida para {lParam} antes de soltar. Encerrando o gesto.");
                     EncerrarGesto("captura perdida");
                 }
                 break;
@@ -390,12 +401,32 @@ internal sealed class JanelaSpike : Window
     {
         int cx = Interop.XComSinal(lParam);
         int cy = Interop.YComSinal(lParam);
+
+        // ARCHITECTURE.md 2.7, passo 3: só é clique se o botão for solto DENTRO do
+        // retângulo de arraste. Num gesto muito rápido, o soltar pode chegar fora dele sem
+        // nenhum WM_MOUSEMOVE intermediário; nesse caso o gesto é arraste e a janela vai
+        // para o ponto em que o botão foi solto.
+        if (!_arrastando)
+        {
+            int dx = cx - _agarreX;
+            int dy = cy - _agarreY;
+            if (Math.Abs(dx) >= _limiarX || Math.Abs(dy) >= _limiarY)
+            {
+                _arrastando = true;
+                Diagnostico.Linha($"ARRASTE detectado no soltar: o botão foi solto fora do limiar com delta ({dx},{dy}), sem movimento intermediário.");
+                MoverPara(_posX + dx, _posY + dy);
+                _movimentos++;
+            }
+        }
+
         bool eraArraste = _arrastando;
 
         Diagnostico.Linha($"SOLTAR em cliente ({cx},{cy}). Gesto classificado como "
             + $"{(eraArraste ? "ARRASTE" : "CLIQUE")} pelo limiar do sistema.");
 
-        Interop.ReleaseCapture();
+        _soltandoPorNos = true;
+        try { Interop.ReleaseCapture(); }
+        finally { _soltandoPorNos = false; }
         EncerrarGesto(eraArraste ? "soltou depois de arrastar" : "soltou sem passar do limiar");
     }
 
@@ -465,12 +496,15 @@ internal sealed class JanelaSpike : Window
 
     /// <summary>
     /// Segunda via para 60 quadros por segundo, usando o relógio do compositor do WPF em
-    /// vez do timer do Windows. Existe porque DispatcherTimer não alcança 60 qps sem
-    /// elevar a resolução global do timer, o que DEC-011 proíbe.
+    /// vez do timer do Windows. Existe porque, medido, DispatcherTimer pedindo 60 qps
+    /// entregou ~39, mesmo com a resolução global do timer já em 1 ms por outro processo.
+    /// A causa não foi isolada: desde o Windows 10 2004, a resolução pedida por outro
+    /// processo não vale para os timers de quem não a pediu.
     ///
-    /// O custo escondido deste caminho é que o evento do compositor chega na taxa de
-    /// atualização do monitor — 180 Hz nesta máquina — mesmo quando o quadro só é trocado
-    /// 60 vezes por segundo. O contador de eventos registra essa diferença.
+    /// Custo deste caminho: o evento do compositor dispara mais vezes do que o quadro é
+    /// trocado. Medido nesta máquina: ~85 eventos por segundo, com monitor de 180 Hz. O
+    /// disparo abaixo zera a referência a cada quadro e por isso entregou ~40 qps; um
+    /// disparo por acumulador poderia chegar perto de 60, mas não foi medido.
     /// </summary>
     private void IniciarAnimacaoPeloCompositor(int fps)
     {
@@ -532,8 +566,8 @@ internal sealed class JanelaSpike : Window
             {
                 linhas.Add($"Eventos do compositor recebidos: {_eventosCompositor} -> "
                     + $"{(s > 0 ? _eventosCompositor / s : 0):0.00} por segundo. "
-                    + "Este é o custo escondido do caminho pelo compositor: o evento chega na "
-                    + "taxa de atualização do monitor, não na taxa da animação.");
+                    + "O compositor dispara mais vezes do que o quadro é trocado; a diferença é "
+                    + "custo deste caminho.");
             }
         }
 

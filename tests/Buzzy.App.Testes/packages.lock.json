@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0-windows7.0": {
+      "Buzzy": {
+        "type": "Project",
+        "dependencies": {
+          "Buzzy.Core": "[1.0.0, )"
+        }
+      },
+      "buzzy.core": {
+        "type": "Project"
+      },
+      "buzzy.testes.executor": {
+        "type": "Project"
+      }
+    }
+  }
+}

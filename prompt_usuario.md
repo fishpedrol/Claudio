@@ -1,45 +1,37 @@
-# Etapa 0B — validar a stack WPF do Buzzy
+# Diretiva atual para Claude — Buzzy
 
-Estou retomando o trabalho porque o terminal/conversa anterior foi encerrado. Use este prompt e os arquivos do repositório como contexto canônico; não dependa de lembrar a conversa anterior. Leia primeiro `AGENTS.md`, `CLAUDE.md`, `docs/PROJECT_CONTEXT.md`, `docs/PRODUCT_SPEC.md`, `docs/TODO.md`, `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, `docs/SECURITY.md`, `docs/DEVELOPMENT_LOG.md`, `docs/PLAN_REVIEW.md` e `context codex/PROMPT_MESTRE_BUZZY.md`. Inspecione o estado real do Git e dos arquivos antes de alterar qualquer coisa. Se houver protótipos, resultados ou documentação parcialmente atualizada, preserve-os e continue do ponto real; não sobrescreva nem refaça trabalho sem necessidade.
+Atualizada em 2026-09-29. Esta diretiva substitui instruções anteriores que mandavam aguardar, parar após a Fase 1 ou pedir aprovação entre fases.
 
-## Decisão vigente
+## Autorização e objetivo
 
-O usuário delegou ao Codex a escolha da stack e dos próximos passos. A escolha registrada é **WPF com C# e .NET 10 LTS** (DEC-006). Não volte a comparar as nove stacks nem trate Win32 como recomendação atual. Win32 nativo é uma alternativa caso os requisitos decisivos falhem nos protótipos.
+O usuário autoriza Claude a conduzir o projeto de forma contínua: fechar a Etapa 0B, criar a identidade visual original do Buzzy e implementar, testar, corrigir e documentar as fases do MVP na ordem de docs/TODO.md, da Fase 1 à Fase 11. A autorização da Fase 1 já foi dada; após fechar os gates técnicos da Etapa 0B, comece sem pedir confirmação. Não solicite aprovação rotineira de plano, conceito visual, fase ou avanço. Tome decisões técnicas reversíveis dentro de docs/PRODUCT_SPEC.md, docs/ARCHITECTURE.md, docs/DECISIONS.md e docs/SECURITY.md; registre escolhas relevantes.
 
-As duas imagens em `assets/references/` são referências para uma futura proposta visual original melhor. Não são arte final nem especificação literal. Não copie o nome, acessórios, poses ou estilo como requisitos. O escopo de implementação deste ciclo é técnico; a proposta visual ao final será apenas conceitual, sem criar ou alterar arte/assets.
+Peça algo ao usuário apenas se uma decisão de produto realmente fora do escopo, uma permissão externa ou uma ação exclusivamente humana for indispensável. Enquanto isso, avance nas tarefas independentes. Não publique nem distribua o aplicativo.
 
-As respostas do usuário já estão registradas em `docs/DECISOES_DO_USUARIO.md` e na tabela canônica de `docs/DECISIONS.md`. Não pergunte de novo sobre Windows 11, comportamento da janela, superfícies, atalhos, gestos, início com o Windows, tela cheia, ZIP pessoal, ordem das fases, idioma, toque/caneta, acessibilidade ou modo fantasma. Q-08 será decidida depois da medição P2. Formato e assinatura de uma eventual publicação pública ficam para depois; o primeiro ZIP sem assinatura é somente para uso pessoal e testes.
+## Leia e confirme o estado real
 
-## Escopo autorizado deste ciclo
+Comece por AGENTS.md, CLAUDE.md, docs/PROJECT_CONTEXT.md, docs/PRODUCT_SPEC.md, docs/TODO.md e docs/SECURITY.md. Consulte ARCHITECTURE.md e DECISIONS.md para as decisões técnicas pertinentes, DEVELOPMENT_LOG.md para evidências, e spikes/README.md e os arquivos de spikes/ para os testes P1–P3. Inspecione o repositório, os arquivos, resultados e processos antes de afirmar o estado. Preserve todo trabalho em andamento: não faça reset, limpeza ou reversão alheia. Código em spikes/ é protótipo, não código de produto.
 
-Implemente somente protótipos descartáveis de viabilidade WPF para **P1, P3 e P2, nesta ordem**, conforme `docs/TODO.md`. Coloque-os sob `spikes/`, isolados do aplicativo futuro. Ainda não existe autorização para iniciar a Fase 1 ou transformar o protótipo em produto.
+## Identidade visual
 
-Antes de criar arquivos, confira se o SDK do .NET 10 está instalado e registre a versão do Windows e o estado do repositório. Não instale ferramentas nem altere configurações do sistema silenciosamente. Se faltar o SDK ou algum recurso indispensável, pare e informe ao usuário o passo necessário.
+Crie agora uma direção visual completa e original para Buzzy usando as duas referências em assets/references/ como inspiração, não como arte pronta ou lista literal de requisitos. Não aguarde aprovação do usuário. Defina personagem reconhecível por silhueta e paleta próprias, expressões e poses úteis ao produto; prepare os assets ou fontes editáveis necessários e registre a localização e as regras de uso. Não copie personagem, roupa, acessórios, símbolos, falas, silhueta ou combinação visual reconhecível de outra obra. Siga docs/PRODUCT_SPEC.md e DEC-014/Q-23. Use um placeholder estático simples na Fase 1; integre o conjunto de animações na Fase 6.
 
-### P1 — clique através dos pixels transparentes
+## Feche a Etapa 0B com evidência
 
-Crie uma janela WPF `AllowsTransparency` do tamanho de uma figura simples de teste, com pixels alfa 0, alfa 1 e pixels visíveis. Prepare instruções simples para colocar a janela sobre o Bloco de Notas e clicar em cada área. Se não puder fazer essa interação física, pare com P1 como pendente e entregue os passos exatos para o usuário; não declare que passou. Registre versão do Windows, DPI, método de desenho, imagem usada e resultado. Não declare o resultado com base apenas na documentação.
+P1 e P2 foram aceitos pelo usuário nos limites registrados; não os repita sem motivo técnico. Conclua P3 autonomamente com o harness isolado que já estiver em andamento. Prefira um receptor controlado pelo próprio spike, sem interagir com outros aplicativos. Verifique entrega dos eventos no receptor, foco, término dos gestos, ClickLock e restauração do cursor/configurações temporárias. Se corrigir algo, repita o cenário afetado.
 
-### P3 — arraste sem roubar foco
+Não abra, leia, capture ou inspecione conteúdo do Bloco de Notas; não encerre processos ou documentos do usuário, não altere configurações globais do Windows e não use o computador como se uma pessoa estivesse disponível. Não peça ao usuário para fazer gestos de teste. SendInput é input sintético: registre-o como tal e não o apresente como interação humana. A informação dos dez movimentos com o mouse foi corrigida: quem operava era a namorada do usuário; foi exploração informal, não teste formal nem evidência humana aprovada de P3. A execução automática nova deve demonstrar o comportamento técnico sem reivindicar esse crédito.
 
-Teste uma janela que não ativa, com captura do mouse ao pressionar. Arraste rapidamente para fora da janela, solte fora, use Alt+Tab durante o gesto e teste ClickLock. Se a verificação exigir interação física e você não puder realizá-la, pare com P3 pendente e forneça passos claros ao usuário; não declare que passou. Confirme que o Bloco de Notas continua com foco e recebe texto antes e depois. Faça uma repetição entre dois monitores se houver hardware disponível; caso contrário, registre essa parte como pendente de hardware, nunca como aprovada. Se a abordagem falhar, teste somente a margem temporária de captura alfa 1 descrita em TODO.md. Qualquer alternativa que roube foco é reprovada. Não introduza hook global, leitura periódica do cursor ou capacidades proibidas. Se continuar falhando, pare e reporte o bloqueio; não escolha outra stack por conta própria.
+Não enfraqueça critérios de foco ou roteamento para aprovar P3. Se uma limitação técnica real impedir o gate, registre evidência, reabra a decisão técnica correspondente e continue o trabalho independente que não dependa dela; não marque a Fase 0 como concluída.
 
-### P2 — repouso e animação
+## Implemente e avance
 
-Meça o protótipo parado por uma hora sem movimento, animações nem timers periódicos; em seguida, meça uma animação simples a 10 e a 60 quadros por segundo por dez minutos cada. Registre CPU, memória privada, GPU e acordadas por segundo, com ferramenta, máquina, resolução, duração e condições reproduzíveis. Se uma métrica não puder ser obtida, marque-a como não medida; não estime nem invente valores. Os dados informam Q-08. Se houver atividade periódica evitável em repouso, ajuste o protótipo e repita a medição antes de reportar.
+Depois de satisfeitos os gates técnicos da Fase 0, inicie a Fase 1 sem nova autorização e siga o roadmap completo, respeitando em cada fase inclusões, exclusões e dependências. Escreva o código real do produto, rode build, testes automatizados e verificações manuais que o ambiente permitir; corrija falhas e repita os testes afetados. Não pare na Fase 1 nem espere autorização para cada fase. Não introduza chat, texto, voz, IA integrada, rede ou capacidades proibidas.
 
-## Regras de execução
+Se uma verificação depender de hardware indisponível, registre-a como PENDENTE/UNCERTAIN, sem declarar PASS ou VERIFIED. Continue implementação e validações independentes; retorne aos itens pendentes na integração final. Não simule hardware alterando configurações globais ou encerrando aplicativos do usuário. Diferencie teste automatizado, input sintético, observação informal, verificação manual e [HW].
 
-- Use só dependências necessárias e disponíveis no .NET/WPF; fixe versões se adicionar alguma dependência.
-- Não use hooks globais, polling de cursor, captura de tela, rede, telemetria, execução de comandos ou acesso a dados de outros aplicativos.
-- Mantenha o código descartável separado dos módulos planejados do produto. Não comece a janela, bandeja, configurações ou núcleo da Fase 1.
-- Distingua claramente no relatório: o que foi executado, o que foi apenas escrito, o que passou, falhou ou ficou sem hardware/dados.
-- Atualize `docs/DEVELOPMENT_LOG.md`, `docs/TODO.md` e `docs/PROJECT_CONTEXT.md` conforme `AGENTS.md`, conferindo cada afirmação. Não marque `VERIFIED` sem a execução da verificação correspondente.
-- Se P1 ou P3 falhar, não esconda o resultado nem avance. Registre o problema e pare para revisão do Codex. P2 informa a linha de base; resultado ruim exige corrigir e medir de novo.
-- Não altere PRODUCT_SPEC.md nem as decisões de produto durante estes protótipos, exceto para registrar uma lacuna comprovada e necessária.
+Ao fechar cada fase, sincronize os documentos na ordem de AGENTS.md e confira toda afirmação contra o código e os resultados executados. Uma fase só fica VERIFIED/concluída com seus critérios cumpridos; compilar não basta. Preserve históricos úteis e remova instruções duplicadas ou superadas em vez de manter dois estados operacionais.
 
-## Ao terminar
+## Entrega
 
-Depois de concluir e registrar os protótipos técnicos, inclua no relatório uma **proposta conceitual preliminar para o personagem** baseada nas referências, separada dos resultados técnicos. Sugira uma direção original (silhueta, paleta, expressão e como funcionaria como mascote de desktop), explique brevemente como ela evita copiar as referências ou personagens existentes e indique o que o usuário precisaria aprovar. Não crie nem altere imagens, sprites ou outros assets; não mude o nome nem as escolhas registradas; não deixe esta proposta atrasar os testes. Ela não aprova arte final nem autoriza a Fase 1.
-
-Entregue um resumo objetivo dos protótipos executados, evidências e medições, resultados de P1/P3/P2, pendências de hardware, dependências adicionadas e arquivos documentais alterados. Indique se WPF segue tecnicamente viável ou se precisa de revisão. Separe com clareza a proposta visual das evidências técnicas. Pare ao final da Etapa 0B; não comece a Fase 1.
+Trabalhe até concluir o MVP ou encontrar um bloqueio que só o usuário possa resolver. Não envie pedidos de aprovação intermediários. Mantenha a documentação e os resultados como registro completo; ao final, resuma fases concluídas, verificações executadas e limitações reais, sem alegar sucesso sem evidência.

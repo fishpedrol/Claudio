@@ -7,8 +7,8 @@
       3. animação a 60 quadros/s, 10 min, DispatcherTimer
       4. animação a 60 quadros/s, 10 min, pelo compositor do WPF
 
-    O item 4 existe porque a medição curta mostrou que DispatcherTimer não alcança
-    60 quadros por segundo sem elevar a resolução global do timer, o que DEC-011 proíbe.
+    O item 4 existe porque a medição curta mostrou DispatcherTimer entregando cerca de
+    39 quadros por segundo quando se pediam 60; a causa não foi isolada.
     Medir os dois caminhos separa "60 pedidos" de "60 entregues".
 
     Duração total aproximada: 92 minutos, contando os aquecimentos descartados.

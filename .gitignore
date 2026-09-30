@@ -25,3 +25,7 @@ obj/
 # Resultados de execução dos protótipos: gerados por rodada, não versionados.
 # A evidência que precisa sobreviver é resumida em docs/DEVELOPMENT_LOG.md.
 spikes/resultados/
+
+# Resultados das medições do aplicativo (tools/medir-desempenho.ps1): gerados por rodada,
+# não versionados. A evidência que precisa sobreviver é resumida em docs/DEVELOPMENT_LOG.md.
+/resultados/

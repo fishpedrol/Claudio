@@ -1,22 +1,18 @@
-# Buzzy
+# README — Buzzy
 
-Buzzy é um mascote original e interativo para desktop Windows, inspirado na experiência lúdica dos mascotes clássicos de desktop.
+Mascote original e não verbal para desktop Windows. A especificação e as fases descrevem o produto desejado; o estado atual e o que já foi verificado estão em PROJECT_CONTEXT.md.
 
-STATUS: PLANNED. O projeto está na Fase 0 — descoberta e arquitetura, Etapa 0B. A stack escolhida por delegação do usuário é WPF com C# e .NET 10; os protótipos P1–P3 ainda precisam validá-la. Ainda não há código de produto nem instruções de build.
+**Status:** P3 tem evidência nos cenários centrais, mas o relatório agregado ainda falha numa tentativa adicional B4b; veja PROJECT_CONTEXT.md. Arquivos iniciais do aplicativo e testes já existem em src/ e tests/; Fase 1 segue PLANNED até cumprir critérios e verificações. O usuário autorizou Claude a criar a identidade visual e avançar fases sem aprovações rotineiras.
 
-## Documentos
+## Fontes
 
 - [Instruções para agentes](AGENTS.md)
-- [Visão e escopo do produto](docs/PRODUCT_SPEC.md)
-- [Estado atual do projeto](docs/PROJECT_CONTEXT.md)
-- [Fases e pendências](docs/TODO.md)
+- [Estado atual](docs/PROJECT_CONTEXT.md)
+- [Produto](docs/PRODUCT_SPEC.md)
+- [Roadmap e critérios](docs/TODO.md)
 - [Arquitetura](docs/ARCHITECTURE.md)
-- [Decisões registradas e pendências futuras](docs/DECISIONS.md)
-- [Resumo das decisões do usuário](docs/DECISOES_DO_USUARIO.md)
+- [Decisões](docs/DECISIONS.md)
 - [Segurança](docs/SECURITY.md)
-- [Histórico de desenvolvimento](docs/DEVELOPMENT_LOG.md)
-- [Revisão de planos](docs/PLAN_REVIEW.md)
-- [Prompt mestre variável para a fase atual](context%20codex/PROMPT_MESTRE_BUZZY.md)
-- [Prompt de continuidade para enviar ao Claude no terminal](prompt_usuario.md) (rascunho operacional; pode ser limpo depois de copiar)
-
-O nome Buzzy e a inspiração em mascotes antigos não autorizam copiar personagem, visual, voz, marca ou conteúdo existente. IA é ferramenta de desenvolvimento; o MVP do aplicativo permanece local e sem IA integrada.
+- [Evidências e histórico](docs/DEVELOPMENT_LOG.md)
+- [Diretiva atual para Claude](prompt_usuario.md)
+- [Protótipos e instruções de execução](spikes/README.md)

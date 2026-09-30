@@ -2,36 +2,45 @@
 
 > Esta página separa fatos implementados de desenho planejado. Nenhuma proposta aparece como arquitetura existente. Cada seção planejada carrega `STATUS: PLANNED`; escolhas que aguardam decisão do usuário carregam `STATUS: UNCERTAIN` e apontam para [DECISIONS.md](DECISIONS.md).
 >
-> Última atualização: 2026-09-26
+> Última atualização: 2026-09-29
 
 ## 1. Arquitetura implementada
 
-Nenhuma. A inspeção dos arquivos em 2026-09-26 encontrou apenas documentação, um `.gitignore`, o repositório Git e duas pranchas conceituais em `assets/references/`. Não há código, dependência, build ou teste.
+Código da Fase 1 em `src/`, organizado pelas três camadas de DEC-007 (detalhes em DEC-016). O estado de verificação de cada critério está em TODO.md; nada aqui é VERIFIED por estar escrito. O código em `spikes/` continua descartável e não conta como módulo do Buzzy.
+
+| Projeto ou pasta | Camada | O que existe |
+|---|---|---|
+| `src/Buzzy.Core` | núcleo puro (`net10.0`, sem WPF nem Windows) | Geometria em pixels físicos e DIPs; `Topologia` (monitores, principal, impressão digital, monitor que contém um ponto, monitor mais próximo, prender na área útil); `Posicionador` (âncora no centro da base, posição inicial, reacomodação pela posição relativa quando a topologia muda). |
+| `src/Buzzy.App/Plataforma` | adaptador de plataforma | Único arquivo com importações do Windows (`Win32.cs`); leitura da topologia; janela de serviço oculta que recebe as mensagens de topologia, bandeja e `TaskbarCreated`; bandeja v4; menu nativo; instância única; log de diagnóstico opcional. |
+| `src/Buzzy.App/Apresentacao` | apresentação | Janela WPF do personagem (sem borda, `AllowsTransparency`, não ativa, janela de ferramenta, sempre no topo, do tamanho do sprite; responde `MA_NOACTIVATE` e `WM_GETDPISCALEDSIZE`) e o sprite provisório gerado em código. |
+| `src/Buzzy.App/Composicao` | raiz de composição | `Aplicacao` liga janela, serviço, bandeja, menu e topologia. O único timer é de disparo único, para agrupar mudanças de topologia; não há timer periódico. |
+| `src/Buzzy.Visual` | apresentação, a partir da Fase 6 | Renderizador da identidade vetorial (DEC-017); ainda não é usado pelo app. |
+
+Fluxo implementado: o Windows avisa a janela de serviço; a raiz agrupa as mensagens e pede a leitura ao adaptador; o núcleo calcula a nova posição; a raiz move a janela em pixels físicos. Máquina de estados, arbitragem de input, movimento e persistência ainda não existem (Fases 2 a 5).
 
 ## 2. Arquitetura planejada
 
-STATUS: PLANNED. Proposta da Fase 0 revisada pelo Codex; a viabilidade da stack ainda depende dos protótipos. A escolha por delegação do usuário está em DEC-006 ([DECISIONS.md](DECISIONS.md)): WPF, C# e .NET 10. As seções 2.1 a 2.12 valem para qualquer stack; a seção 2.13 mostra como elas se encaixam na stack escolhida.
+STATUS: PLANNED. P1 e P2 foram aceitos nos limites documentados; P3 aguarda validação controlada. WPF/C#/.NET 10 está em DEC-006. As seções 2.1 a 2.12 descrevem o desenho do produto e a seção 2.13 seu encaixe em WPF. DEC-007 a DEC-014 definem o desenho planejado; DEC-015 registra a autorização de execução. P3 é gate antes da Fase 1; P7 é gate antes da Fase 8. P4 foi aposentado porque o produto não terá chat nem campo de texto.
 
 ### 2.1 Princípios
 
 - **Um processo, módulos separados por responsabilidade.** O Buzzy é um único executável. Os módulos são fronteiras de código, não processos, serviços ou plugins. A única exceção aceitável são processos auxiliares que a própria stack impõe, como o motor de um WebView.
-- **Núcleo puro e determinístico.** Estado, eventos, arbitragem de input, movimento e conversa são código sem acesso ao Windows. Com a mesma semente e a mesma sequência de eventos, o núcleo produz a mesma sequência de estados. Isso permite testar quase todo o comportamento sem janela, sem monitor e sem hardware.
+- **Núcleo puro e determinístico.** Estado, eventos, arbitragem de input, movimento, nível de energia e personalidade não verbal são código sem acesso ao Windows. Com a mesma semente, nível de energia e sequência de eventos, o núcleo produz a mesma sequência de estados. Isso permite testar quase todo o comportamento sem janela, sem monitor e sem hardware.
 - **Um único adaptador toca o Windows.** Janela, input bruto, monitores, DPI, bandeja, ciclo de vida e arquivos passam pelo adaptador de plataforma. O resto do código não chama APIs do sistema.
 - **Comportamento separado de aparência.** O núcleo emite estados e sinais lógicos. A apresentação decide quais quadros desenhar. Trocar a arte não altera o núcleo.
-- **Ocioso por eventos.** Quando nada se move nem anima, não há timer periódico. O loop de simulação só roda enquanto há movimento, animação ou arraste.
+- **Ocioso por eventos.** Quando nada se move nem anima, não há timer periódico. O loop de simulação só roda enquanto há movimento, animação ou arraste. A detecção de tela cheia usa eventos WinEvent delimitados em DEC-013; não usa polling periódico global.
 
 ### 2.2 Componentes
 
 | Componente | Responsabilidade | Depende de | Nunca faz |
 |---|---|---|---|
-| Adaptador de plataforma | Cria e move as janelas, recebe input bruto, captura o mouse durante o arraste, enumera monitores, lê DPI, mantém o ícone da bandeja, trata sessão e energia, resolve a pasta de dados. Converte tudo para o sistema de coordenadas canônico. | Windows e a stack escolhida | Decidir comportamento; ler input fora das próprias janelas |
+| Adaptador de plataforma | Cria e move as janelas, recebe input bruto, captura o mouse durante o arraste, enumera monitores, lê DPI, mantém o ícone da bandeja, trata sessão e energia, resolve a pasta de dados e emite eventos limitados da janela em primeiro plano para Q-09. Converte tudo para o sistema de coordenadas canônico. | Windows e a stack escolhida | Decidir comportamento; ler input fora das próprias janelas; ler título, texto, pixels ou identidade de outros apps |
 | Mundo do desktop | Modelo puro da topologia: monitores, áreas úteis, escala, orientação, monitor principal. Deriva superfícies (chão, paredes, passagens). Responde "em que monitor está este ponto" e "qual o ponto válido mais próximo". | Nada | Chamar APIs do sistema |
-| Núcleo do personagem | Máquina de estados, fila de eventos, relógio lógico, agenda de comportamento autônomo com semente. Produz um retrato do estado e uma lista de efeitos. | Mundo do desktop, Movimento, Arbitragem de input, Conversa | Desenhar, gravar arquivo, mover janela diretamente |
-| Arbitragem de input | Converte eventos de ponteiro em gestos (pressionar, clicar, iniciar arraste, arrastar, soltar, cancelar). Decide quem é o dono do input: personagem, caixa de texto ou menu. | Nada | Ler teclado global; interpretar tecla digitada como comando |
-| Movimento | Cinemática com passo fixo: caminhar, escalar, saltar, cair, pousar. Colisão contra as superfícies do mundo do desktop. | Mundo do desktop | Iniciar ação por conta própria; a decisão é do núcleo |
+| Núcleo do personagem | Máquina de estados, fila de eventos, relógio lógico, agenda de comportamento autônomo com semente. Produz um retrato do estado e uma lista de efeitos. | Mundo do desktop, Movimento, Arbitragem de input, Personalidade | Desenhar, gravar arquivo, mover janela diretamente |
+| Arbitragem de input | Converte eventos de ponteiro em gestos (pressionar, clicar, iniciar arraste, arrastar, soltar, cancelar). Decide se o input pertence ao personagem, painel de energia ou menu. | Nada | Ler teclado global; interpretar teclas como comandos de movimento |
+| Movimento | Cinemática com passo fixo: caminhar, escalar, pendurar-se, saltar, cair, pousar. Colisão contra as superfícies do mundo do desktop. | Mundo do desktop | Iniciar ação por conta própria; a decisão é do núcleo |
 | Apresentação | Recebe o retrato do estado e escolhe animação, quadro e expressão pelo manifesto de assets. Desenha a janela transparente e gera a máscara de clique. | Manifesto de assets, adaptador (superfície de desenho) | Alterar estado ou posição do personagem |
-| Personalidade | Conjunto de pesos lidos de um arquivo de dados: com que frequência cada comportamento autônomo é escolhido, quanto tempo o personagem fica parado, quais expressões predominam e qual conjunto de frases a conversa usa. É consultada, nunca decide sozinha. | Arquivo de conteúdo local, somente leitura | Mudar de estado; aprender; guardar histórico |
-| Conversa local | Normaliza o texto digitado e escolhe uma resposta em uma tabela local de intenções, com semente. | Personalidade, arquivo de conteúdo local, somente leitura | Rede, IA, execução de texto como código, gravação do que foi digitado |
+| Personalidade | Pesos locais para a frequência de ações autônomas, duração das pausas e preferência por expressões e gestos curiosos. É consultada pelo núcleo determinístico, nunca decide sozinha. | Perfil de comportamento local | Ler conteúdo de aplicativos; gerar ou armazenar conversa |
 | Configurações e persistência | Esquema tipado com versão, valores padrão, validação, migração e gravação atômica em arquivo local. | Adaptador (caminho da pasta de dados) | Guardar texto digitado, segredos ou dados de outros aplicativos |
 | Raiz de composição | Liga os módulos, executa os efeitos pedidos pelo núcleo e controla o loop. | Todos | Conter regra de comportamento |
 
@@ -50,16 +59,16 @@ Windows --> Adaptador de plataforma --> evento normalizado --> fila do núcleo
                 |
                 +--> Apresentação (desenha quadro, atualiza máscara de clique)
                 +--> Configurações e persistência (grava posição e preferências)
-                +--> Janela da conversa (mostra resposta, abre ou fecha a caixa)
+                +--> Painel de energia (seleciona Baixa, Média ou Alta)
 ```
 
 1. O adaptador recebe uma mensagem do Windows e a converte em um evento normalizado, já em coordenadas canônicas.
 2. A arbitragem transforma eventos de ponteiro em gestos e marca a prioridade de cada evento.
 3. O núcleo aplica o evento ao estado atual pela tabela de transições e devolve o novo retrato e os efeitos.
-4. A raiz de composição executa os efeitos: move a janela, pede um quadro à apresentação, agenda gravação de configurações ou atualiza a caixa de texto.
+4. A raiz de composição executa os efeitos: move a janela, pede um quadro à apresentação, agenda gravação de configurações ou atualiza o painel de energia.
 5. Enquanto houver movimento ou animação, o relógio lógico gera eventos de passo fixo. Quando o personagem para e a animação termina, o relógio para.
 
-Prioridade de eventos, da maior para a menor, conforme [PRODUCT_SPEC.md](PRODUCT_SPEC.md): ação direta do usuário, input local, eventos do sistema, comportamento autônomo. Um evento de prioridade maior interrompe atividade de prioridade menor. Eventos autônomos que chegam durante um estado controlado pelo usuário são descartados, não enfileirados.
+Prioridade de eventos, da maior para a menor, conforme [PRODUCT_SPEC.md](PRODUCT_SPEC.md): ação direta do usuário sobre o personagem (pressionar, arrastar); menu, bandeja, painel de energia e outras ações explícitas do usuário, incluindo ocultar e pausar; eventos do sistema, incluindo o modo de tela cheia; comportamento autônomo. Um evento de prioridade maior interrompe atividade de prioridade menor. Eventos autônomos que chegam durante um estado controlado pelo usuário são descartados, não enfileirados.
 
 ### 2.4 Coordenadas e desktop virtual
 
@@ -78,13 +87,13 @@ STATUS: PLANNED. Proposta registrada em DEC-008.
 
 STATUS: PLANNED. O usuário aceitou Q-05 em [DECISIONS.md](DECISIONS.md): no MVP, as superfícies vêm apenas das áreas úteis dos monitores; janelas de outros aplicativos ficam fora.
 
-Proposta para o MVP: as superfícies são derivadas apenas das áreas úteis dos monitores. Janelas de outros aplicativos não são superfícies.
+Proposta para o MVP: as superfícies são derivadas apenas das áreas úteis dos monitores. Janelas de outros aplicativos não são superfícies. O personagem circula pelas bordas alcançáveis, não pelo conteúdo aberto no desktop.
 
 - **Chão:** a borda inferior da área útil de cada monitor. Com a barra de tarefas embaixo, o chão é o topo da barra.
-- **Parede:** trecho de uma borda lateral da área útil sem monitor vizinho encostado.
-- **Passagem:** trecho de borda lateral encostado em outro monitor com sobreposição vertical. Se o chão vizinho está na mesma altura, dentro de uma tolerância, o personagem atravessa andando. Se está mais baixo, ele cai até o chão vizinho. Se está mais alto, o trecho funciona como parede.
-- **Topo:** a borda superior da área útil limita a escalada. Contato apenas em diagonal, pelo canto, não cria passagem.
-- O chão de um monitor continua sólido mesmo com outro monitor logo abaixo. O personagem só desce para o monitor de baixo quando o usuário o arrasta.
+- **Paredes:** trechos de borda lateral sem monitor vizinho encostado; podem ser escalados para cima e para baixo.
+- **Passagens entre monitores:** trechos vizinhos com sobreposição e suporte geométrico compatível. O personagem atravessa andando quando a altura coincide; sobe ou desce por uma transição segura quando a diferença é alcançável. Um vão sem superfície válida não vira um salto automático ilimitado.
+- **Bordas superiores:** podem servir como uma borda onde o personagem se apoia pelas mãos, fica pendurado por pouco tempo e se desloca até uma passagem alcançável. Soltar-se inicia `FALLING`.
+- O chão de um monitor continua sólido mesmo com outro monitor logo abaixo. A travessia para baixo só ocorre por um caminho apoiado ou por salto dentro do alcance; nunca por queda espontânea causada apenas por um monitor estar abaixo.
 - As superfícies são recalculadas a cada `TOPOLOGY_CHANGED`.
 
 ### 2.6 Máquina de estados
@@ -99,6 +108,7 @@ STATUS: PLANNED. Estado de comportamento e expressão são dimensões independen
 | `IDLE` | autônomo | Parado sobre uma superfície. |
 | `WALKING` | autônomo | Andando sobre o chão. |
 | `CLIMBING` | autônomo | Subindo, descendo ou parado em uma parede. |
+| `HANGING` | autônomo | Sustentado pela borda superior, deslocando-se ou descansando por pouco tempo. |
 | `JUMPING` | autônomo | Em trajetória balística iniciada por decisão autônoma. |
 | `FALLING` | físico | Sem apoio, sob gravidade. |
 | `LANDING` | físico | Transição curta depois de tocar o chão. |
@@ -107,17 +117,20 @@ STATUS: PLANNED. Estado de comportamento e expressão são dimensões independen
 | `DRAGGING` | usuário | Personagem preso ao cursor. |
 | `SETTLING` | usuário | Validação logo depois de soltar ou depois de uma mudança de topologia. |
 | `REACTING` | usuário | Reação curta a um clique. |
-| `CONVERSING` | usuário | Parado com a caixa de texto aberta. Autonomia suspensa. |
 | `HIDDEN` | sistema | Escondido. Sem relógio, sem desenho. Guarda **por que** foi escondido: `POR_USUARIO`, `POR_SESSAO` ou `POR_SUSPENSAO`. |
 | `EXITING` | sistema | Grava estado e encerra. |
 
-**Dimensões ortogonais.** Duas informações acompanham o personagem sem fazer parte do estado de comportamento, do mesmo jeito que a expressão:
+**Dimensões ortogonais.** As informações abaixo acompanham o personagem sem fazer parte do estado de comportamento:
 
 | Dimensão | Valores | Efeito |
 |---|---|---|
 | Expressão | feliz, curioso, sonolento e demais | Nenhum sobre comportamento ou posição |
-| Caixa de texto | aberta ou fechada | Enquanto aberta, a autonomia fica suspensa em qualquer estado. `CONVERSING` é o estado parado com a caixa aberta; arrastar o personagem com a caixa aberta leva a `DRAGGING` sem fechá-la |
-| Motivo do ocultamento | `POR_USUARIO`, `POR_SESSAO`, `POR_SUSPENSAO` | Decide quais eventos podem tirar o personagem de `HIDDEN` |
+| Gesto curto | nenhum, espiar, olhar ao redor, coçar-se, espreguiçar-se, brincar e demais definidos no manifesto | Ação visual de macaquinho com duração limitada, executada na superfície atual (`IDLE`, `CLIMBING` parado ou `HANGING`); não muda estado de comportamento, posição nem superfície; qualquer `PRESS`, `CMD_*` ou evento do sistema a encerra na hora |
+| Autonomia pausada | sim ou não | Definida por `CMD_PAUSE_AUTONOMY`/`CMD_RESUME_AUTONOMY`. Enquanto sim, nenhum `AUTONOMY_TIMER` é agendado; queda ou pouso em curso terminam; arraste, clique, painel, ocultação e modo de tela cheia continuam funcionando |
+| Painel de energia | aberto ou fechado | Enquanto aberto, pausa a autonomia; o movimento físico em curso pode terminar. Arrastar o mascote fecha o painel. Ele contém somente o seletor Baixa/Média/Alta, sem conversa ou campo de texto. |
+| Motivo do ocultamento | `POR_USUARIO`, `POR_SESSAO`, `POR_SUSPENSAO`, `POR_TELA_CHEIA` | Decide quais eventos podem tirar o personagem de `HIDDEN`; tela cheia não desfaz uma ocultação feita pelo usuário |
+| Nível de energia | `BAIXA`, `MEDIA`, `ALTA` | Altera frequência e duração das ações autônomas e a frequência de expressões; padrão `MEDIA` |
+| Retorno temporário do modo de tela cheia | posição e chave do monitor apenas em memória, ou vazio | Restaura a posição prévia sem substituir a posição persistida escolhida pelo usuário. É descartado quando o usuário arrasta o personagem ou o mostra manualmente durante o modo: a escolha manual passa a valer |
 
 **Eventos**
 
@@ -125,8 +138,9 @@ STATUS: PLANNED. Estado de comportamento e expressão são dimensões independen
 |---|---|
 | Ponteiro, somente sobre as janelas do Buzzy ou com captura ativa | `POINTER_DOWN(p, botão)`, `POINTER_MOVE(p)`, `POINTER_UP(p, botão)`, `CAPTURE_LOST` |
 | Gestos derivados pela arbitragem | `PRESS`, `CLICK`, `DOUBLE_CLICK`, `DRAG_START`, `DRAG_MOVE(p)`, `DRAG_END(p)`, `DRAG_CANCEL`, `CONTEXT_MENU` |
-| Caixa de texto | `TEXT_OPEN`, `TEXT_SUBMIT(texto)`, `TEXT_CLOSE`, e os avisos de foco `TEXT_FOCUS_GAINED` e `TEXT_FOCUS_LOST`, que não mudam estado: servem só para a apresentação e para contar o tempo de fechamento por inatividade |
+| Painel de energia | `ENERGY_PANEL_OPEN`, `ENERGY_SELECTED(nivel)`, `ENERGY_PANEL_CLOSE`; `ENERGY_SELECTED` aceita somente `BAIXA`, `MEDIA` ou `ALTA` |
 | Sistema | `TOPOLOGY_CHANGED(topologia)`, `SESSION_LOCKED`, `SESSION_UNLOCKED`, `SUSPENDING`, `RESUMED`, `SESSION_ENDING` |
+| Adaptador de janela ativa | `FULLSCREEN_TARGETS_CHANGED(monitoresOcupados)`; payload contém somente chaves de monitores, sem HWND, processo, título ou texto |
 | Bandeja e menu | `CMD_HIDE`, `CMD_SHOW`, `CMD_PAUSE_AUTONOMY`, `CMD_RESUME_AUTONOMY`, `CMD_OPEN_SETTINGS`, `CMD_RESET_POSITION`, `CMD_EXIT` |
 | Relógio | `TICK(dt)` com passo fixo, `AUTONOMY_TIMER` |
 | Configurações | `SETTINGS_CHANGED(config)` |
@@ -141,25 +155,31 @@ STATUS: PLANNED. Estado de comportamento e expressão são dimensões independen
 | `PRESSED` | `CLICK` | `REACTING` | Reação curta. Depois, `SETTLING` decide o próximo estado. |
 | `DRAGGING` | `DRAG_MOVE(p)` | `DRAGGING` | Posição = cursor menos o deslocamento da pegada. |
 | `DRAGGING` | `DRAG_END` ou `DRAG_CANCEL` | `SETTLING` | Validação da seção 2.7. |
-| `SETTLING` | com apoio e caixa fechada | `IDLE` | Autonomia retomada depois de um intervalo de acomodação. |
-| `SETTLING` | com apoio e caixa aberta | `CONVERSING` | A caixa continua aberta; a autonomia segue suspensa. |
-| `SETTLING` | sem apoio | `FALLING` | Cai até o chão do monitor, com a caixa aberta ou fechada. |
-| `IDLE`, `REACTING` | `DOUBLE_CLICK` ou menu "Conversar" | `CONVERSING` | Marca a caixa como aberta e dá foco a ela. |
-| `CONVERSING` | `TEXT_SUBMIT` | `CONVERSING` | Mostra a resposta local; a caixa continua aberta. |
-| `CONVERSING` | `TEXT_CLOSE` | `IDLE` | Marca a caixa como fechada; autonomia retomada. |
-| `CONVERSING` | `PRESS`, depois `DRAG_START` | `DRAGGING` | A caixa continua aberta e acompanha o personagem. Ao soltar, `SETTLING` devolve a `CONVERSING`. |
-| `FALLING`, `LANDING` com caixa aberta | contato com o chão | `CONVERSING` | A caixa aberta impede retomar autonomia. |
-| `IDLE` | `AUTONOMY_TIMER` | `WALKING`, `CLIMBING`, `JUMPING` ou `RESTING` | Escolha ponderada pela personalidade, com semente. Só acontece com a caixa fechada. |
+| `SETTLING` | com apoio | `IDLE` | Autonomia retomada depois de um intervalo de acomodação, exceto se o painel de energia estiver aberto. |
+| `SETTLING` | sem apoio | `FALLING` | Cai até o chão do monitor. |
+| `PRESSED` (segundo clique), `IDLE`, `REACTING` | `DOUBLE_CLICK` ou menu "Energia" | `SETTLING` se vier de `PRESSED`; senão permanece | A partir da Fase 8, abre o painel compacto somente com o seletor de energia; pausa a autonomia enquanto estiver aberto. Antes da Fase 8, o segundo clique só produz reação não verbal. |
+| qualquer estado visível com painel aberto | `ENERGY_SELECTED(nivel)` | permanece | Atualiza a mesma preferência persistida; o novo nível afeta as próximas decisões autônomas. |
+| qualquer estado visível com painel aberto | `ENERGY_PANEL_CLOSE` | permanece | Fecha o painel e retoma a agenda após intervalo de acomodação. |
+| `FALLING`, `LANDING` | contato com o chão | `LANDING`, depois `IDLE` | O painel não altera a física; se estiver aberto, a autonomia continua pausada. |
+| `IDLE` | `AUTONOMY_TIMER` | `WALKING`, `CLIMBING`, `JUMPING`, `RESTING` ou permanece com um gesto curto | Escolha ponderada pela personalidade e pelo nível de energia, com semente. Só acontece com o painel de energia fechado e a autonomia não pausada. |
 | `WALKING` | parede, passagem ou fim do chão | `IDLE`, `CLIMBING`, `FALLING` ou `WALKING` | Conforme a superfície (seção 2.5). |
 | `CLIMBING` | topo da área útil, fim da parede ou `AUTONOMY_TIMER` | `IDLE`, `WALKING`, `JUMPING` ou `FALLING` | Ao chegar ao topo, para, anda pela borda, salta ou se solta. Soltar-se leva a `FALLING`. |
+| `CLIMBING` | alcança borda superior apoiável | `HANGING` | Agarra a borda; a apresentação escolhe a pose correspondente. |
+| `HANGING` | deslocamento autônomo, `AUTONOMY_TIMER` ou passagem compatível | `HANGING`, `CLIMBING`, `JUMPING` ou `FALLING` | Move-se apenas ao longo de uma borda alcançável; soltar-se leva a `FALLING`. |
 | `RESTING` | `AUTONOMY_TIMER` | `IDLE` | Acorda e volta a decidir. O relógio só é religado neste momento. |
+| qualquer estado visível, exceto `PRESSED`, `DRAGGING` e `EXITING` | `FULLSCREEN_TARGETS_CHANGED(monitoresOcupados)` | `SETTLING` no monitor livre, `HIDDEN(POR_TELA_CHEIA)` ou estado atual | Uma vez por mudança e só se a âncora estiver num monitor ocupado: transfere instantaneamente para um monitor livre sem ativar a janela; se todos estiverem ocupados, fecha o painel e oculta. Guarda a posição anterior só em memória, se ainda não houver uma guardada. |
+| `PRESSED`, `DRAGGING` | `FULLSCREEN_TARGETS_CHANGED` | sem troca de estado | Só atualiza os monitores ocupados em cache. O gesto do usuário nunca é interrompido; ao soltar, `SETTLING` respeita o ponto escolhido pelo usuário, mesmo que seja um monitor ocupado, e descarta o retorno temporário. |
+| `HIDDEN(POR_TELA_CHEIA)` | `FULLSCREEN_TARGETS_CHANGED` com monitor livre | `SETTLING` | Reaparece no monitor livre; mantém o retorno temporário. |
+| visível ou `HIDDEN(POR_TELA_CHEIA)` com retorno temporário guardado | `FULLSCREEN_TARGETS_CHANGED(vazio)` | `SETTLING` | Restaura a posição anterior validada pela seção 2.8 e limpa o retorno temporário. Se o retorno foi descartado por ação manual, o personagem fica onde o usuário o deixou. |
+| `HIDDEN(POR_TELA_CHEIA)` | `CMD_SHOW` | `SETTLING` | O usuário pediu: aparece na posição anterior validada, descarta o retorno temporário e o modo não o oculta de novo até a próxima mudança de tela cheia. |
+| `HIDDEN(POR_TELA_CHEIA)` | `CMD_HIDE` | `HIDDEN(POR_USUARIO)` | A ocultação passa a ser do usuário; o fim da tela cheia não o faz reaparecer. |
+| qualquer estado visível | `CMD_PAUSE_AUTONOMY`, `CMD_RESUME_AUTONOMY` | permanece | Liga ou desliga a dimensão "autonomia pausada"; retomar agenda a próxima decisão após o intervalo de acomodação. |
 | `RESTING`, `CLIMBING` | `PRESS`, `DOUBLE_CLICK`, `CMD_*` | conforme a linha correspondente | Nenhum estado autônomo bloqueia interação do usuário (DEC-004). |
-| `JUMPING`, `FALLING` | contato com o chão | `LANDING`, depois `IDLE` | Com a caixa fechada. |
+| `JUMPING`, `FALLING` | contato com o chão | `LANDING`, depois `IDLE` | Vale com o painel aberto ou fechado; o painel não altera a física. |
 | estados autônomos, físicos e `REACTING` | `TOPOLOGY_CHANGED` | `SETTLING` | Revalida a posição. |
 | `PRESSED`, `DRAGGING` | `TOPOLOGY_CHANGED` | sem troca de estado | Só atualiza a topologia em cache; a validação acontece ao soltar. |
-| `CONVERSING` | `TOPOLOGY_CHANGED` | `SETTLING` | Valida a posição e volta a `CONVERSING`, porque a caixa continua aberta. |
 | `BOOTING`, `HIDDEN`, `EXITING` | `TOPOLOGY_CHANGED` | sem troca de estado | Só atualiza a topologia em cache. `HIDDEN` valida ao reaparecer; `BOOTING` valida ao terminar de carregar. |
-| qualquer, exceto `EXITING` | `CMD_HIDE` | `HIDDEN(POR_USUARIO)` | Encerra captura e arraste, grava a posição. |
+| qualquer, exceto `EXITING` | `CMD_HIDE` | `HIDDEN(POR_USUARIO)` | Fecha o painel, encerra captura e arraste, grava a posição. |
 | qualquer, exceto `EXITING` | `SESSION_LOCKED` | `HIDDEN(POR_SESSAO)` | Idem. Se já estava em `HIDDEN(POR_USUARIO)`, o motivo do usuário é preservado. |
 | qualquer, exceto `EXITING` | `SUSPENDING` | `HIDDEN(POR_SUSPENSAO)` | Idem, com a mesma preservação. |
 | `HIDDEN(POR_USUARIO)` | `CMD_SHOW` | `SETTLING` | Só o usuário desfaz o que o usuário pediu. |
@@ -172,25 +192,29 @@ STATUS: PLANNED. Estado de comportamento e expressão são dimensões independen
 
 1. Em `PRESSED`, `DRAGGING` e `SETTLING`, nenhum evento autônomo muda estado ou posição.
 2. Em `DRAGGING`, a posição do personagem é sempre o cursor menos o deslocamento da pegada. O personagem não anda, não pula, não foge e não começa escalada.
-3. Em `CONVERSING`, eventos de teclado nunca mudam estado de comportamento nem posição.
-4. Nenhum estado autônomo começa enquanto a caixa de texto está aberta.
+3. O painel de energia não recebe nem interpreta texto; teclas locais só alteram seu controle quando ele está focado.
+4. Nenhum comportamento autônomo começa enquanto o painel de energia está aberto.
 5. Depois de `SETTLING`, a âncora está dentro da área útil de algum monitor presente.
 6. A expressão pode mudar em qualquer estado sem alterar estado de comportamento ou posição.
 7. Com a mesma semente e a mesma sequência de eventos, a sequência de retratos é idêntica.
-8. Abrir ou fechar a caixa de texto nunca muda a posição do personagem.
-9. Se a caixa estava aberta antes de um arraste, continua aberta depois dele.
+8. Abrir ou fechar o painel de energia nunca muda a posição do personagem.
+9. Iniciar um arraste fecha o painel de energia; ao soltar, nenhuma preferência de energia é alterada implicitamente.
 10. `SESSION_UNLOCKED` e `RESUMED` nunca fazem o personagem reaparecer quando ele foi escondido pelo usuário.
 11. Todo estado tem pelo menos uma transição de entrada e uma de saída, com duas exceções por construção: `BOOTING`, que só tem saída, e `EXITING`, que só tem entrada.
+12. Um nível de energia mais alto pode aumentar frequência/duração de ações, mas nunca muda colisões, limites de superfície, segurança ou prioridade da ação direta.
+13. O adaptador nunca envia identidade ou conteúdo de outra janela ao núcleo; o modo de tela cheia recebe apenas os monitores cobertos pela janela ativa.
+14. Em `PRESSED` e `DRAGGING`, `FULLSCREEN_TARGETS_CHANGED` não muda estado nem posição. Depois de um arraste ou de `CMD_SHOW` manual durante o modo de tela cheia, o fim da tela cheia não move o personagem.
+15. Um gesto curto nunca muda estado de comportamento, posição ou superfície, e termina ao chegar qualquer evento de prioridade maior.
 
-### 2.7 Arbitragem de input, clique, arraste e foco
+### 2.7 Arbitragem de input, clique, arraste e painel de energia
 
-STATUS: PLANNED. Proposta registrada em DEC-009.
+STATUS: PLANNED. Desenho aceito sob delegação do usuário em DEC-009; P3 valida a janela do personagem antes da Fase 1. P4 foi retirado porque o produto não terá chat, conversa nem entrada de texto.
 
 **Quem recebe o input**
 
 - O personagem só recebe cliques nos pixels visíveis. Pixels transparentes deixam o clique passar para a janela de baixo. Como fazer isso depende da stack (seção 2.13).
-- A janela do personagem **não ativa**: clicar ou arrastar o Buzzy não tira o foco do aplicativo que o usuário está usando. STATUS: UNCERTAIN até o protótipo P3.
-- A caixa de texto fica em uma janela própria, pequena e ativável, ancorada ao lado do personagem. Só ela recebe teclado.
+- A janela do personagem **não ativa**: clicar ou arrastar o Buzzy não tira o foco do aplicativo que o usuário está usando. P3 permanece gate técnico antes da Fase 1.
+- O painel compacto de energia fica em uma janela própria, pequena e ativável, ancorada ao lado do personagem. Ele contém somente o seletor Baixa/Média/Alta e entra na Fase 8, junto com as configurações. Só o controle recebe teclado quando o painel está em foco.
 - O Buzzy não instala hooks globais, não registra atalhos globais e não lê teclado fora das próprias janelas.
 
 **Clique ou arraste**
@@ -211,13 +235,12 @@ STATUS: PLANNED. Proposta registrada em DEC-009.
 5. O personagem identifica a superfície sob os pés. Com apoio, vai para `IDLE`. Sem apoio, vai para `FALLING` até o chão do monitor. Soltar o personagem junto a uma parede não inicia escalada.
 6. Depois de um intervalo de acomodação, a agenda autônoma volta a funcionar.
 
-**Foco da caixa de texto**
+**Foco do painel de energia**
 
-- Com a caixa de texto focada, todo teclado vai para o campo de texto. O núcleo recebe apenas `TEXT_SUBMIT` e `TEXT_CLOSE`, nunca teclas soltas.
-- O MVP não tem atalhos de teclado para controlar o personagem (Q-06). Nenhuma tecla move o personagem, com ou sem foco. Isso não impede a navegação por teclado na conversa e nas configurações, prevista em Q-20.
-- A caixa abre por clique duplo ou pelo menu. Ela pede foco no momento da abertura, que é consequência direta de um clique do usuário.
-- A caixa fecha com Esc, pelo botão de fechar ou depois de um tempo sem foco e sem digitação. O tempo é uma configuração a definir na Fase 7.
-- A caixa aceita IME e acentos, porque é um campo de texto padrão da stack.
+- O painel contém apenas o controle de energia; não há campo de texto nem evento de envio de conteúdo.
+- O MVP não tem atalhos de teclado para controlar o personagem (Q-06). Nenhuma tecla move o personagem, com ou sem foco. A navegação por teclado e leitor de tela aplica-se ao controle e às configurações, conforme Q-20.
+- Na Fase 8, o painel abre por clique duplo ou pelo menu e recebe foco como consequência dessa ação explícita do usuário.
+- O painel fecha com Esc, pelo botão de fechar ou ao perder foco, de acordo com a implementação validada na Fase 8.
 
 ### 2.8 Monitores: restauração, conexão e desconexão
 
@@ -257,7 +280,8 @@ STATUS: PLANNED. O modelo físico detalhado segue as superfícies escolhidas em 
 - **Corpo lógico:** retângulo em DIPs com âncora entre os pés. É independente do tamanho da imagem.
 - **Passo fixo:** simulação com passo fixo e integração semi-implícita, sem depender da taxa de quadros. O valor inicial proposto é 1/60 s, a confirmar na Fase 4, quando o movimento existir e puder ser medido.
 - **Caminhar:** velocidade constante sobre o chão. Diante de parede, vira ou escala. Diante de passagem, atravessa ou cai.
-- **Escalar:** só em paredes, até o topo da área útil. De lá, desce, pula ou se solta.
+- **Escalar:** só em paredes, até o topo da área útil. De lá, desce, pula, se solta ou se pendura na borda superior.
+- **Pendurar-se:** em `HANGING`, desloca-se pelas mãos ao longo de uma borda superior alcançável por tempo limitado; ao terminar, volta a escalar, salta dentro do alcance ou se solta e cai.
 - **Saltar:** trajetória balística calculada para atingir um alvo. O alvo e a velocidade inicial são determinísticos, dada a semente.
 - **Cair:** gravidade com velocidade máxima até tocar o chão.
 - Velocidades e gravidade são definidas em DIPs por segundo e convertidas pela escala do monitor atual.
@@ -273,46 +297,43 @@ STATUS: PLANNED.
 - A apresentação só redesenha quando o quadro muda ou quando a posição exige. Um clipe de 10 quadros por segundo gera 10 redesenhos por segundo, não 60.
 - A máscara de clique sai do canal alfa do quadro atual.
 
-### 2.11 Personalidade e conversa local
+### 2.11 Personalidade ajustável e comportamento não verbal
 
 STATUS: PLANNED.
 
-**Personalidade.** PRODUCT_SPEC.md exige que o MVP comece com uma personalidade local, que influencia frases, reações, expressões e intensidade do comportamento sem depender de IA. Ela é um arquivo de dados com pesos, não código:
+**Personalidade.** O MVP expressa curiosidade, humor e energia por movimento, expressões faciais e gestos. Não há frases, diálogo, chat, texto digitado ou respostas. A intensidade é um valor local de três opções e influencia parâmetros determinísticos do comportamento:
 
 - peso de cada comportamento autônomo, usado pela escolha da transição de `IDLE`;
 - faixa de tempo entre decisões autônomas;
 - tendência de expressão em cada estado;
-- identificador do conjunto de frases que a conversa usa.
+- pesos relativos para espiar, explorar bordas, brincar, reagir a cliques e descansar.
 
-O núcleo lê esses pesos e continua determinístico: com a mesma personalidade, a mesma semente e a mesma sequência de eventos, o resultado é idêntico. Trocar o arquivo muda o comportamento sem mexer no código, do mesmo jeito que trocar o manifesto de assets muda a aparência. O MVP traz uma personalidade; mais de uma é assunto de depois do MVP.
+O usuário informa que o conceito visual e o temperamento do Buzzy se inspiram em Luffy. A tradução dessa inspiração — o que tomar, o que não usar e o critério de distinção — fica em [PRODUCT_SPEC.md](PRODUCT_SPEC.md), seção Visão; aqui ela só orienta pesos e tempos de comportamento (impulsivo, otimista, curioso). A intensidade usa três níveis persistidos em configurações: `BAIXA`, `MEDIA` (padrão) e `ALTA` (Low/Mid/High na ideia do usuário). Baixa produz pausas maiores e menos ações; Média, um ritmo brincalhão equilibrado; Alta aumenta a frequência e a duração das brincadeiras e reações não verbais. O nível pode mudar pesos, intervalos e duração de ações, mas não muda a máquina física nem as regras de segurança. Pausa e comando direto do usuário sempre prevalecem.
 
-- A caixa de texto envia o texto para uma tabela local de intenções: palavras-chave e respostas por personalidade, em um arquivo de conteúdo que acompanha o aplicativo e é somente leitura.
-- A escolha da resposta é determinística, dada a semente, com respostas de reserva quando nada combina.
-- O texto tem limite de tamanho, é tratado só como dado, nunca é interpretado nem executado, e não é gravado em disco nem em log.
-- Não há rede, API, LLM nem memória de conversa.
+Com a mesma semente, nível de energia e sequência de eventos, o núcleo determinístico produz as mesmas escolhas de comportamento. O MVP tem uma personalidade original; não prevê perfis ou conteúdo de diálogo. O seletor aparece no painel aberto por dois cliques e nas configurações, usando a mesma preferência persistida na Fase 8.
 
 ### 2.12 Configurações, persistência e tempo
 
-STATUS: PLANNED. Propostas registradas em DEC-010 e DEC-011.
+STATUS: PLANNED. Decisões registradas em DEC-010 e DEC-011.
 
 - **Arquivo:** um JSON com `schemaVersion` na pasta local do usuário. Sem pacote MSIX, a pasta é `%LOCALAPPDATA%\Buzzy`. Com MSIX, é a pasta local do pacote.
-- **Conteúdo proposto:** posição (seção 2.8), escala do personagem, sempre no topo, iniciar com o Windows, nível de autonomia, permitir atravessar monitores e idioma. Opacidade fica fora do MVP. As decisões de produto correspondentes foram registradas em Q-03 a Q-07 e Q-12; os campos entram nas fases previstas no TODO.md.
+- **Conteúdo proposto:** última posição escolhida pelo usuário (seção 2.8), escala do personagem, sempre no topo, iniciar com o Windows, energia `BAIXA`/`MEDIA`/`ALTA` (padrão `MEDIA`), permitir atravessar monitores, modo de tela cheia ligado por padrão e idioma. Opacidade fica fora do MVP. As decisões de produto correspondentes estão em DEC-013/014 e Q-03 a Q-07, Q-09, Q-12 e Q-23; os campos entram nas fases previstas no TODO.md.
 - **Leitura:** campo desconhecido é ignorado, valor fora da faixa é preso ao limite e arquivo ilegível é trocado pelos valores padrão. Uma cópia do arquivo ilegível é guardada para diagnóstico, no máximo uma.
 - **Gravação:** escreve em um arquivo temporário e substitui o original de forma atômica, mantendo o último arquivo bom como `.bak`. A gravação acontece com atraso depois de soltar o personagem e sempre ao sair.
-- **Tempo:** o relógio lógico só gera `TICK` enquanto há movimento, animação ou arraste. Em `IDLE` sem animação, em `RESTING` e em `HIDDEN`, não há timer periódico. A agenda autônoma usa um único timer até a próxima decisão.
+- **Tempo:** o relógio lógico só gera `TICK` enquanto há movimento, animação ou arraste. Em `IDLE` sem animação, em `RESTING` e em `HIDDEN`, não há timer periódico. A agenda autônoma usa um único timer até a próxima decisão. O modo de tela cheia é notificado por eventos limitados do Windows, sem polling global periódico.
 
 ### 2.13 Encaixe na stack recomendada
 
-STATUS: PLANNED. WPF com C# e .NET 10 foi escolhida em DEC-006. Antes da Fase 1, P1 verifica clique por alfa, P2 mede repouso e animação, e P3 verifica arraste sem roubo de foco. Duas linhas da tabela da seção 2.13.3 dependem ainda de outros protótipos: a identidade estável do monitor depende de P5, e a consulta de aplicativo em tela cheia depende de P7. Esta seção descreve WPF como janela e interface e limita chamadas Win32 diretas ao adaptador de plataforma.
+STATUS: PLANNED. WPF com C# e .NET 10 foi escolhida em DEC-006. P1 e P2 foram aceitos nos limites documentados; P3 ainda verifica arraste sem roubo de foco antes da Fase 1. Duas linhas da tabela da seção 2.13.3 dependem de outros protótipos: a identidade estável do monitor depende de P5, e a consulta de aplicativo em tela cheia depende de P7. Esta seção descreve WPF como janela e interface e limita chamadas Win32 diretas ao adaptador de plataforma.
 
 #### 2.13.1 Janelas
 
 | Janela | Tipo | Por quê |
 |---|---|---|
 | Personagem | `Window` WPF sem borda, do tamanho do sprite, com `AllowsTransparency`; a imagem tem alfa real e a janela não ativa | WPF usa o caminho layered para transparência por pixel. P1 confirma o click-through exato no Windows alvo |
-| Caixa de texto | Janela WPF própria, ativável, com controle de texto padrão, ancorada ao lado do personagem | A janela do personagem não ativa; a conversa precisa de foco de teclado e IME |
+| Painel de energia | Janela WPF própria, compacta e ativável, ancorada ao lado do personagem; contém somente três opções | O personagem não ativa; o painel recebe foco após ação explícita de dois cliques ou menu |
 | Configurações | Janela WPF comum, aberta pelo menu | Usa controles e navegação de teclado do framework |
-| Menu de contexto e bandeja | Menu WPF; ícone de bandeja pelo adaptador, usando a API da Shell ou componente do .NET | Evita dependência de terceiros; o protótipo define a integração concreta |
+| Menu de contexto e bandeja | Menu nativo do Windows (`TrackPopupMenuEx`) com janela dona temporária; ícone de bandeja pelo adaptador, com `Shell_NotifyIcon` versão 4 (DEC-016) | Fecha ao clicar fora e devolve o foco mesmo aberto pelo personagem, que não ativa; teclado e leitor de tela prontos; sem dependência de terceiros |
 
 A janela do personagem tem o tamanho do sprite, nunca o tamanho da tela. A documentação recomenda que a janela layered seja a menor possível, porque cada atualização copia o bitmap inteiro para a memória do sistema, e há relatos de atraso de mouse no sistema todo com overlay de tela cheia.
 
@@ -320,7 +341,7 @@ A janela do personagem tem o tamanho do sprite, nunca o tamanho da tela. A docum
 
 | Componente | Realização na stack recomendada |
 |---|---|
-| Núcleo do personagem, mundo do desktop, arbitragem de input, movimento, conversa, esquema de configurações | Biblioteca C# pura sem referência a WPF nem a APIs Windows. Recebe geometria e tempo como entrada e pode ser testada sem abrir janelas |
+| Núcleo do personagem, mundo do desktop, arbitragem de input, movimento, personalidade não verbal e esquema de configurações | Biblioteca C# pura sem referência a WPF nem a APIs Windows. Recebe geometria e tempo como entrada e pode ser testada sem abrir janelas |
 | Adaptador de plataforma | Único módulo que traduz eventos WPF e chama APIs Windows quando necessário: captura e foco do mouse, topologia, DPI, bandeja, sessão, energia e caminho dos dados |
 | Apresentação | Janela e composição visual WPF, com imagem transparente dimensionada ao sprite; o desenho não fica ativo quando o estado não muda |
 | Configurações e persistência | Serialização JSON versionada; gravação atômica num adaptador de armazenamento local |
@@ -349,7 +370,8 @@ Cada linha liga uma decisão das seções anteriores ao mecanismo que a realiza.
 | Suspensão e tela desligada | 2.6 | Notificação de suspensão e retomada, e notificação de estado da tela da sessão para parar de desenhar com o monitor desligado |
 | Repouso | 2.12 | A fila de mensagens bloqueia quando não há nada a fazer. Animação com timer que o sistema pode agrupar, nunca elevando a resolução global do timer |
 | Pasta de dados | 2.12 | Consulta de pasta conhecida, sem montar o caminho com texto |
-| App em tela cheia | Q-09 | Consulta de estado de notificação do usuário, de baixa frequência. Não existe aviso quando um aplicativo entra em tela cheia |
+| Mudança da janela em primeiro plano | DEC-013 | Eventos WinEvent de primeiro plano e mudança de geometria, fora do processo observado; filtrar a janela de nível superior ativa e emitir só os monitores que ela cobre. **Risco a medir em P7 (hipótese):** o evento de mudança de geometria assinado para todo o sistema também dispara por movimentos de cursor e de janelas de outros apps, o que pode acordar o Buzzy continuamente enquanto o usuário joga ou digita. Se P7 confirmar, restringir a assinatura de geometria à janela ativa (reassinando a cada troca de primeiro plano) ou revisar o desenho |
+| Janela em tela cheia e monitor ocupado | Q-09 | `GetForegroundWindow`, `GetWindowRect`, `MonitorFromWindow`/`GetMonitorInfo`; comparar o retângulo ativo com os limites do monitor. `SHQueryUserNotificationState` pode ser sinal auxiliar, nunca a única fonte |
 
 #### 2.13.4 Apresentação e repouso
 
@@ -359,14 +381,14 @@ WPF apresenta o sprite numa janela layered. O projeto não pressupõe que o fram
 
 - P1 confirma o clique por pixel em janela WPF e define regra de alfa para os assets.
 - P2 confirma que o desenho e os timers param de acordar o processo em repouso e fornece a base para metas de desempenho.
-- P3 confirma o arraste quando a janela não ativa. Se a única forma de arrastar alterar o foco, P3 falha; não adotar essa mudança sem decisão explícita do usuário.
+- P3 valida o arraste sem ativar a janela e sem roubar foco. Use o receptor controlado do harness; input sintético é rotulado como tal. Se a única forma de arrastar alterar o foco, P3 falha; não adotar essa mudança sem decisão registrada.
 - A conversão entre DIPs de WPF e pixels físicos do desktop fica no adaptador; P6 verifica a transição real entre monitores com escalas diferentes.
-- O menu da bandeja usa a API da Shell ou recurso já incluído no .NET. Não adicionar pacote de terceiros sem justificar, fixar versão e revisar a dependência.
+- O menu e a bandeja usam a API da Shell e o menu nativo do Windows (DEC-016). Não adicionar pacote de terceiros sem justificar, fixar versão e revisar a dependência.
 
 #### 2.13.7 Regras que valem para qualquer stack aprovada
 
 1. Nenhum overlay do tamanho da tela; a janela tem o tamanho do sprite.
-2. Nenhum hook global, nenhuma leitura de input em segundo plano, nenhuma captura de tela.
+2. Nenhum hook global de teclado ou mouse, nenhuma leitura de input em segundo plano e nenhuma captura de tela. A única exceção é o observador WinEvent de DEC-013, fora do processo, limitado às mudanças de primeiro plano/geometria; ele não lê conteúdo e entrega ao núcleo somente monitores ocupados.
 3. Topologia em cache, atualizada por evento com agrupamento de rajadas, nunca por consulta periódica.
 4. Física em unidades independentes de dispositivo, convertidas pela escala do monitor da âncora.
 5. Estado de repouso explícito, sem timer de intervalo curto.
@@ -375,11 +397,11 @@ WPF apresenta o sprite numa janela layered. O projeto não pressupõe que o fram
 
 ### 2.14 Limites de complexidade
 
-O MVP usa um processo, arquivos locais e módulos de código. Backend, banco de dados, microserviços, sistema de plugins, comunicação entre processos própria e interface genérica de provedores de IA ficam fora até uma necessidade concreta do MVP aparecer e ser registrada em DECISIONS.md.
+O MVP usa um processo, arquivos locais e módulos de código. Backend, banco de dados, microserviços, sistema de plugins, comunicação entre processos própria e interfaces genéricas de provedores ficam fora. IA no produto também fica fora conforme DEC-003; não há arquitetura de extensão para ela.
 
-### 2.15 IA futura
+### 2.15 Sem IA no aplicativo
 
-STATUS: PLANNED. O MVP funciona sem LLM, RAG, API, memória de IA ou rede. Uma integração futura, se aprovada, será um adaptador opcional fora do núcleo determinístico. Desligar a integração ou perder acesso a ela não pode interromper o personagem. Nenhuma interface genérica de provedor é construída agora.
+STATUS: PLANNED. O aplicativo é um mascote local, determinístico e sem IA. Não haverá conversa, chat, campo de texto, respostas escritas, voz nem reconhecimento de fala. Não integrar nem planejar LLM, RAG, APIs de IA, modelos locais, geração de conteúdo ou memória. Só reabrir o limite de IA por solicitação explícita do usuário (DEC-003).
 
 ## 3. Decisões ainda pendentes
 
@@ -394,3 +416,9 @@ As escolhas do usuário e as pendências ainda abertas estão numeradas (Q-01 em
 | 2026-09-26 | Proposta de arquitetura da Fase 0: componentes, fluxo, coordenadas, máquina de estados, arbitragem de input, multi-monitor, movimento, apresentação, conversa, persistência e tempo. Tudo STATUS: PLANNED. | DEC-006 a DEC-012 (propostas) |
 | 2026-09-26 | WPF/.NET 10 escolhido; seção 2.13 atualizada para janelas, adaptador de APIs Windows, repouso e protótipos P1–P3. STATUS: PLANNED; ainda não executado. | DEC-006 |
 | 2026-09-26 | Correções na máquina de estados depois de auditoria: caixa de texto virou dimensão ortogonal ao estado; mudança de topologia deixou de tirar o personagem de `HIDDEN`; `HIDDEN` passou a guardar o motivo do ocultamento; `CLIMBING` e `RESTING` ganharam transição de saída. Quatro invariantes novos. | DEC-004 |
+| 2026-09-27 | Usuário aceitou DEC-007, DEC-008, DEC-010 e DEC-012 como desenho planejado e as metas Q-08. As decisões não indicam implementação. P1/P2 aceitos como gates limitados; P3 permanece em fechamento. | DEC-007 a DEC-012 |
+| 2026-09-28 | Sob delegação explícita do usuário, Codex aceitou DEC-009 com validação em etapas (P3 antes da Fase 1; P4 antes da Fase 7) e DEC-011 com ociosidade por eventos. P3 e P4 continuam sendo verificações futuras, não gates já passados. | DEC-009, DEC-011 |
+| 2026-09-28 | Usuário esclareceu o Buzzy como mascote sem IA, com circulação e escalada nas superfícies dos monitores; Codex definiu o modo automático por eventos de janela ativa (P7) e a energia Baixa/Média/Alta, padrão Média. Tudo planejado; P7 continua pendente. | DEC-013, DEC-014 |
+| 2026-09-28 | O usuário esclareceu que quer um mascote de verdade, sem chat, texto ou respostas. A personalidade fica inteiramente em movimento, expressões e gestos. Dois cliques abrem somente o seletor de energia, implementado com as configurações na Fase 8; P4 de foco/IME foi aposentado. | DEC-003, DEC-009, DEC-014, Q-07, Q-23 |
+| 2026-09-28 | Revisão documental de coerência (Claude): prioridade alinhada ao PRODUCT_SPEC; dimensões "gesto curto" e "autonomia pausada"; `DOUBLE_CLICK` a partir de `PRESSED`; modo de tela cheia não interrompe `PRESSED`/`DRAGGING`, e arraste ou `CMD_SHOW` manual descartam o retorno temporário; `CMD_SHOW`/`CMD_HIDE` em `HIDDEN(POR_TELA_CHEIA)`; `HANGING` no movimento; risco de frequência do evento de geometria levado a P7; invariantes 14 e 15. Tudo PLANNED. | DEC-004, DEC-013, DEC-014 |
+| 2026-09-29 | Fase 1 implementada nas três camadas de DEC-007 (seção 1); menu de contexto nativo com dono temporário no lugar do menu WPF; renderizador vetorial da identidade em `src/Buzzy.Visual` para a Fase 6. Verificação dos critérios em TODO.md. | DEC-016, DEC-017 |

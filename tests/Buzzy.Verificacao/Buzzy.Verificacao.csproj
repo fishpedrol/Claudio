@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Verificação sintética dos critérios [MANUAL] da Fase 1 que dá para exercitar sem uma
+    pessoa: abre o Buzzy.exe e um receptor de teste próprio, injeta cliques e teclas por
+    SendInput (permitido só em ferramentas de teste fora do executável, SECURITY.md 3.2) e
+    confere os resultados pelos logs. Todo input é rotulado como sintético.
+    Abre janelas e move o cursor: só rodar depois de avisar o usuário. Sem a opção explícita
+    de injetar input na tela (ver Programa.cs), só imprime o uso e sai com código 2.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <PlatformTarget>x64</PlatformTarget>
+    <RootNamespace>Buzzy.Verificacao</RootNamespace>
+    <AssemblyName>Buzzy.Verificacao</AssemblyName>
+    <StartupObject>Buzzy.Verificacao.Programa</StartupObject>
+    <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
+
+    <!--
+      Per-Monitor V2 e asInvoker no manifesto, como o Buzzy.exe: cliques, testes de acerto e
+      pontos do log do Buzzy ficam todos em pixels físicos.
+    -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Buzzy.Core\Buzzy.Core.csproj" />
+  </ItemGroup>
+
+</Project>

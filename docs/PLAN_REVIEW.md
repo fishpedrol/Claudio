@@ -1,10 +1,10 @@
 # PLAN_REVIEW.md — Revisão independente dos planos do Buzzy
 
-> Procedimento estável para o Codex revisar o planejamento produzido por Claude/Fable. A revisão não implementa o plano.
+> Procedimento para revisão independente do Codex, quando solicitada. A revisão não é gate do ciclo de implementação.
 
 ## Papel
 
-Claude, usando o modelo escolhido pelo usuário (Fable ou Opus), prepara o plano da fase atual e, após decisão do usuário, pode implementar a fase autorizada. Codex é o segundo olhar: verifica se o plano é coerente com a intenção do produto, a fase, as decisões, a arquitetura e o estado real. O usuário decide se e quando o trabalho começa.
+Claude, usando o modelo escolhido pelo usuário (Fable ou Opus), prepara e executa o plano da fase atual dentro da autorização contínua registrada em DEC-015. Codex é o segundo olhar quando o usuário pedir uma revisão; essa revisão não suspende a execução já autorizada. O usuário pode mudar o escopo ou revogar a autorização a qualquer momento.
 
 ## Fontes e precedência
 
@@ -12,7 +12,7 @@ Claude, usando o modelo escolhido pelo usuário (Fable ou Opus), prepara o plano
 2. PRODUCT_SPEC.md é a referência estável do produto.
 3. Código, configurações e resultados de teste mostram o que existe de fato.
 4. PROJECT_CONTEXT.md resume estado e fase; ARCHITECTURE.md, DECISIONS.md, SECURITY.md e TODO.md guardam seus detalhes.
-5. context codex/PROMPT_MESTRE_BUZZY.md diz o que o agente deve fazer nesta fase, sem substituir a especificação.
+5. prompt_usuario.md orienta a execução atual; context codex/PROMPT_MESTRE_BUZZY.md contém regras estáveis. Nenhum substitui a especificação nem DEC-015.
 6. O plano de Claude é o objeto revisado, não uma fonte de verdade.
 
 Quando duas fontes discordarem, apontar a divergência e sua consequência. Não tratar intenção PLANNED como comportamento existente, nem declarar VERIFIED sem testes executados.
@@ -21,11 +21,11 @@ Quando duas fontes discordarem, apontar a divergência e sua consequência. Não
 
 Verificar todos os itens aplicáveis:
 
-- **Objetivo e MVP:** o plano atende a personagem, desktop Windows, transparência, posicionamento, drag, movimento, escalada, salto, queda, multi-monitor, expressões, interação, caixa de texto, configurações, persistência local, segurança e performance, respeitando as decisões registradas?
+- **Objetivo e MVP:** o plano atende a personagem, desktop Windows, transparência, posicionamento, drag, movimento, escalada, salto, queda, multi-monitor, curiosidade não verbal, reações, seletor de energia, configurações, persistência local, segurança e performance, respeitando a decisão de não incluir chat nem conversa digitada?
 - **Não-objetivos:** o plano mantém IA integrada, RAG, backend, nuvem, voz, atualização automática, telemetria, analytics, execução de comandos arbitrários e controle genérico do computador fora do MVP?
 - **Fase:** o plano resolve somente a fase atual, declara pré-requisitos e não pula uma decisão que ainda está aberta?
 - **Arquitetura:** separa comportamento determinístico, input, movimento, apresentação, integração Windows e armazenamento apenas onde isso reduz acoplamento real? Evita abstrações futuras sem necessidade presente?
-- **Estados e eventos:** define transições, eventos, distinção entre clique e drag, foco da caixa de texto e cancelamento de comportamentos incompatíveis com interação direta?
+- **Estados e eventos:** define transições, eventos, distinção entre clique e drag, comportamento do painel de energia e cancelamento de comportamentos incompatíveis com interação direta?
 - **Drag:** cobre mouse down, DRAGGING, interrupção de autonomia, acompanhamento do cursor, mouse up, validação de posição e retomada?
 - **Monitores:** cobre desktop virtual, posições relativas arbitrárias, resolução, DPI, orientação, área útil, monitor principal, desconexão/reconexão e persistência?
 - **Tecnologia:** compara opções com evidências e critérios do produto; expõe justificativa, trade-offs, riscos e alternativas sem escolher por popularidade?
@@ -35,7 +35,7 @@ Verificar todos os itens aplicáveis:
 - **Complexidade:** evita backend, banco de dados, IPC, plugin system ou frameworks sem necessidade demonstrada?
 - **Documentação:** identifica atualizações necessárias e não contradiz as fontes canônicas?
 
-Se uma área não se aplicar à fase atual, dizer por quê. Se a stack depender de fatos atuais ou APIs específicas, verificar fontes oficiais antes de aceitar afirmações técnicas.
+Se uma área não se aplicar à fase atual, dizer por quê. Se a stack depender de fatos atuais ou APIs específicas, verificar fontes oficiais antes de aceitar afirmações técnicas. A aplicação deste roteiro só é obrigatória quando o usuário solicitar uma revisão do Codex; não é um gate entre fases para Claude.
 
 ## Formato do relatório
 

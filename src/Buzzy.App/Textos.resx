@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Textos da interface do Buzzy, fora do código (Q-12: somente português do Brasil no MVP).
+  O personagem não exibe texto; estes são os rótulos do menu e da bandeja da Fase 1.
+-->
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="MenuEsconder" xml:space="preserve">
+    <value>&amp;Esconder Buzzy</value>
+    <comment>Item do menu que esconde o personagem. O &amp; marca a tecla de acesso.</comment>
+  </data>
+  <data name="MenuMostrar" xml:space="preserve">
+    <value>&amp;Mostrar Buzzy</value>
+    <comment>Item do menu que mostra o personagem escondido.</comment>
+  </data>
+  <data name="MenuSair" xml:space="preserve">
+    <value>&amp;Sair</value>
+    <comment>Item do menu que encerra o Buzzy.</comment>
+  </data>
+  <data name="DicaDaBandeja" xml:space="preserve">
+    <value>Buzzy</value>
+    <comment>Dica do ícone na bandeja e título das caixas de aviso.</comment>
+  </data>
+  <data name="AvisoElevado" xml:space="preserve">
+    <value>O Buzzy não roda como administrador. Abra-o de novo sem "Executar como administrador".</value>
+    <comment>Aviso mostrado quando o processo foi iniciado elevado (SECURITY.md 8, item 5).</comment>
+  </data>
+</root>

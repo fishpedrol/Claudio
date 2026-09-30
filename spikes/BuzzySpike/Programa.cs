@@ -17,6 +17,8 @@ internal static class Programa
           p2-anim10     P2: animação a 10 quadros por segundo.
           p2-anim60     P2: animação a 60 quadros por segundo, com DispatcherTimer.
           p2-anim60comp P2: animação a 60 quadros por segundo, pelo compositor do WPF.
+          receptor      P3: janela comum com caixa de texto que faz o papel do aplicativo
+                        do usuário; registra só o que ela mesma recebe (ferramentas/SondaP3).
 
         --x e --y posicionam a janela em pixels físicos do desktop virtual.
         Sem eles, a janela vai para o centro da área útil do monitor primário.
@@ -69,7 +71,9 @@ internal static class Programa
         Diagnostico.Iniciar(NomeDoModo(modo.Value));
 
         var app = new Application { ShutdownMode = ShutdownMode.OnMainWindowClose };
-        var janela = new JanelaSpike(modo.Value, x, y);
+        Window janela = modo == Modo.Receptor
+            ? new JanelaReceptor(x, y)
+            : new JanelaSpike(modo.Value, x, y);
         return app.Run(janela);
     }
 
@@ -82,6 +86,7 @@ internal static class Programa
         "p2-anim10" => Modo.P2Anim10,
         "p2-anim60" => Modo.P2Anim60,
         "p2-anim60comp" => Modo.P2Anim60Comp,
+        "receptor" => Modo.Receptor,
         _ => null,
     };
 
@@ -94,6 +99,7 @@ internal static class Programa
         Modo.P2Anim10 => "p2-anim10",
         Modo.P2Anim60 => "p2-anim60",
         Modo.P2Anim60Comp => "p2-anim60comp",
+        Modo.Receptor => "receptor",
         _ => "desconhecido",
     };
 

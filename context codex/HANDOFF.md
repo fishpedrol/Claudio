@@ -1,5 +1,3 @@
-# HANDOFF.md — Ponte para o prompt mestre
+# HANDOFF — Buzzy
 
-O prompt operativo variável por fase está em [PROMPT_MESTRE_BUZZY.md](PROMPT_MESTRE_BUZZY.md). Leia-o junto com os documentos canônicos apontados nele.
-
-Este arquivo é mantido como ponte para referências antigas. Não duplique aqui a fase atual nem as regras de execução; atualize PROMPT_MESTRE_BUZZY.md quando o usuário aceitar uma transição de fase.
+Compatibilidade para sessões antigas. Para retomar, leia [AGENTS.md](../AGENTS.md), [docs/PROJECT_CONTEXT.md](../docs/PROJECT_CONTEXT.md) e [prompt_usuario.md](../prompt_usuario.md). Não mantenha status duplicado aqui.

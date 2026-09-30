@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Aplicativo Buzzy (Fase 1: shell do desktop). WPF, C#, .NET 10 (DEC-006).
+    Toda chamada ao Windows fica em Plataforma/ (adaptador de plataforma, DEC-007);
+    o comportamento puro fica em Buzzy.Core. Nenhum pacote NuGet.
+  -->
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <PlatformTarget>x64</PlatformTarget>
+    <AssemblyName>Buzzy</AssemblyName>
+    <RootNamespace>Buzzy.App</RootNamespace>
+    <Version>0.1.0</Version>
+    <Product>Buzzy</Product>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+
+    <!-- A janela e a aplicação são construídas em código, sem XAML, para ficarem auditáveis. -->
+    <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
+    <StartupObject>Buzzy.App.Programa</StartupObject>
+
+    <!-- Per-Monitor V2 e asInvoker declarados no manifesto (ARCHITECTURE.md 2.13.3, SECURITY.md 2). -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Buzzy.Core\Buzzy.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Buzzy.App.Testes" />
+  </ItemGroup>
+
+  <!--
+    Portão de APIs proibidas (SECURITY.md 3.2 e 8, item 1), executado depois de cada build
+    do aplicativo. A referência ao projeto só garante que o portão esteja compilado antes;
+    o assembly dele não entra no Buzzy. Violação ou erro de leitura reprovam o build.
+    Para diagnosticar sem o portão: dotnet build -p:PularPortaoDeApis=true
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\tools\Buzzy.PortaoApis\Buzzy.PortaoApis.csproj"
+                      ReferenceOutputAssembly="false"
+                      Private="false"
+                      SkipGetTargetFrameworkProperties="true"
+                      SetTargetFramework="TargetFramework=net10.0" />
+  </ItemGroup>
+
+  <Target Name="PortaoDeApisProibidas" AfterTargets="Build" Condition="'$(PularPortaoDeApis)' != 'true'">
+    <PropertyGroup>
+      <_BuzzyPortao>$(MSBuildThisFileDirectory)..\..\tools\Buzzy.PortaoApis\bin\$(Configuration)\net10.0\Buzzy.PortaoApis.dll</_BuzzyPortao>
+    </PropertyGroup>
+    <Exec Command="dotnet &quot;$(_BuzzyPortao)&quot; --binarios &quot;$(OutDir).&quot; --fonte &quot;$(MSBuildThisFileDirectory).&quot; --fonte &quot;$(MSBuildThisFileDirectory)..\Buzzy.Core&quot; --manifesto &quot;$(MSBuildThisFileDirectory)app.manifest&quot;"
+          StdOutEncoding="utf-8"
+          StdErrEncoding="utf-8" />
+  </Target>
+
+</Project>
