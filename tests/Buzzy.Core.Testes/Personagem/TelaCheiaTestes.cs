@@ -412,19 +412,17 @@ internal static class TelaCheiaTestes
         }
     }
 
-    // DEFEITO: SETTINGS_CHANGED desligando o modo com o retorno guardado apaga o retorno sem
-    // restaurá-lo quando o personagem está escondido por outro motivo (usuário, sessão ou
-    // suspensão) ou com o botão pressionado (Maquina.MudarPreferencias, último ramo:
-    // "_s = _s with { RetornoDaTelaCheia = null }" com a Posicao ainda temporária). A posição
-    // temporária do DISPLAY2 vira a do usuário: CMD_EXIT e CMD_HIDE a gravam, e CMD_SHOW,
-    // SESSION_UNLOCKED, RESUMED e o fim do gesto deixam o personagem lá. Contraria a linha
-    // "qualquer, com retorno temporário guardado | SETTINGS_CHANGED que desliga o modo de tela
-    // cheia" ("escondido por outro motivo: não reaparece, mas a posição anterior volta a valer";
-    // "um clique, clique duplo ou cancelamento em PRESSED leva de volta à posição anterior;
-    // esconder no meio do gesto grava e guarda a posição anterior"), o invariante 16, R8 e
-    // DEC-020, item 2. Sequência mínima: LadoALado; Loaded; FullscreenTargetsChanged
-    // ocupados=\\.\DISPLAY1; CmdHide; SettingsChanged energia=Media telaCheia=nao; CmdExit ->
-    // GravarPosicao \\.\DISPLAY2;0.85;1;3552;1032 (esperado \\.\DISPLAY1;0.85;1;1632;1032).
+    // Regressão do defeito achado pela cobertura do gate da Fase 2 e corrigido em 2026-09-30
+    // (Maquina.MudarPreferencias, FimDoGestoDoUsuario e Esconder). Antes, SETTINGS_CHANGED que
+    // desligava o modo com o retorno guardado apagava o retorno sem restaurá-lo com o personagem
+    // escondido por outro motivo (usuário, sessão ou suspensão) ou com o botão pressionado, e a
+    // posição temporária do DISPLAY2 virava a do usuário. A regra é a linha "qualquer, com retorno
+    // temporário guardado | SETTINGS_CHANGED que desliga o modo de tela cheia" (escondido por outro
+    // motivo, a posição anterior volta a valer sem reaparecer; um clique, clique duplo ou
+    // cancelamento em PRESSED leva de volta à posição anterior; esconder no meio do gesto grava e
+    // guarda a posição anterior), o invariante 16, R8 e DEC-020, item 2. Sequência mínima:
+    // LadoALado; Loaded; FullscreenTargetsChanged ocupados=\\.\DISPLAY1; CmdHide; SettingsChanged
+    // energia=Media telaCheia=nao; CmdExit -> GravarPosicao \\.\DISPLAY1;0.85;1;1632;1032.
     [Teste]
     public static void Q1_DesligarOModoComRetornoGuardado_NaoTornaAPosicaoTemporariaDefinitiva()
     {
@@ -464,7 +462,7 @@ internal static class TelaCheiaTestes
         }
         if (defeitos.Count > 0)
         {
-            Afirmar.Falhar("DEFEITO (Maquina.MudarPreferencias): desligar o modo com o retorno guardado, escondido por outro motivo ou com o botão pressionado, "
+            Afirmar.Falhar("Regressão (Maquina.MudarPreferencias): desligar o modo com o retorno guardado, escondido por outro motivo ou com o botão pressionado, "
                 + "torna definitiva a posição temporária do DISPLAY2; esperado o DISPLAY1 de antes da tela cheia (linha SETTINGS_CHANGED que desliga o modo, "
                 + "invariante 16, R8, DEC-020). Casos: " + string.Join(" | ", defeitos));
         }

@@ -15,7 +15,8 @@ namespace Buzzy.Core.Testes.Personagem;
 ///
 /// As referências são lidas da pasta-fonte (não da cópia do build, que pode estar velha), a lista
 /// é fixa (<see cref="Referencias"/>) e o conteúdo inteiro do arquivo precisa ser igual ao que a
-/// regravação escreveria, normalizando só o fim de linha (o Git pode trocar LF por CRLF).
+/// regravação escreveria, byte a byte em UTF-8 sem BOM, normalizando só o fim de linha (o Git pode
+/// trocar LF por CRLF). Um BOM, um byte inválido ou qualquer outra diferença falha.
 ///
 /// Para regravar as referências depois de uma mudança intencional, rode só este teste, fora de
 /// integração contínua, com a variável de ambiente <c>BUZZY_ATUALIZAR_REFERENCIAS=1</c> (por
@@ -40,6 +41,9 @@ internal static class ReproducaoTestes
     /// <summary>Variáveis que os serviços de integração contínua comuns definem.</summary>
     private static readonly string[] VariaveisDeIntegracaoContinua = ["CI", "TF_BUILD", "GITHUB_ACTIONS"];
 
+    /// <summary>UTF-8 estrito, como a regravação escreve: sem BOM e lançando em byte inválido.</summary>
+    private static readonly UTF8Encoding Utf8Estrito = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+
     // Item S da revisão do gate da Fase 2.
     [Teste]
     public static void ReproducoesGravadasBatemComAReferencia()
@@ -59,7 +63,13 @@ internal static class ReproducaoTestes
         foreach (string nome in Referencias)
         {
             string arquivo = Path.Combine(fontes, nome);
-            string conteudo = NormalizarFimDeLinha(File.ReadAllText(arquivo, Encoding.UTF8));
+            byte[] bytes = File.ReadAllBytes(arquivo);
+            if (!atualizar && ProblemaDeCodificacao(bytes) is { } problema)
+            {
+                falhas.Add($"{nome}: {problema}");
+                continue;
+            }
+            string conteudo = NormalizarFimDeLinha(atualizar ? Encoding.UTF8.GetString(bytes).TrimStart('﻿') : Utf8Estrito.GetString(bytes));
             string[] linhas = conteudo.Split('\n');
             string[] cabecalho = [.. linhas.TakeWhile(l => l.StartsWith('#') || l.Length == 0)];
             (ConfiguracaoDoNucleo cfg, ulong semente) = LerCabecalho(cabecalho, arquivo);
@@ -69,22 +79,51 @@ internal static class ReproducaoTestes
 
             if (atualizar)
             {
-                File.WriteAllText(arquivo, esperado, new UTF8Encoding(false));
+                File.WriteAllText(arquivo, esperado, Utf8Estrito);
                 Console.WriteLine($"         referência regravada ({VariavelDeAtualizacao}=1): {arquivo}");
                 continue;
             }
 
-            if (!string.Equals(conteudo, esperado, StringComparison.Ordinal))
+            if (Diferenca(bytes, esperado) is { } diferenca)
             {
                 string obtidoEm = Path.Combine(AppContext.BaseDirectory, "Referencias", Path.ChangeExtension(nome, ".obtido.txt"));
                 Directory.CreateDirectory(Path.GetDirectoryName(obtidoEm)!);
-                File.WriteAllText(obtidoEm, esperado, new UTF8Encoding(false));
-                string[] noArquivo = conteudo.Split('\n'), reproduzido = esperado.Split('\n');
-                int diferente = PrimeiraDiferenca(noArquivo, reproduzido);
-                falhas.Add($"{nome}, linha {diferente + 1}: no arquivo <{Linha(noArquivo, diferente)}>, reproduzido <{Linha(reproduzido, diferente)}> (saída completa em {obtidoEm})");
+                File.WriteAllText(obtidoEm, esperado, Utf8Estrito);
+                falhas.Add($"{nome}, {diferenca} (saída completa em {obtidoEm})");
             }
         }
         if (falhas.Count > 0) Afirmar.Falhar(string.Join(Environment.NewLine + "         ", falhas));
+    }
+
+    // Item S: a comparação normaliza só o fim de linha; BOM, byte inválido, espaço no fim da linha, linha a mais ou a menos e a falta da quebra final falham.
+    [Teste]
+    public static void ComparacaoDasReferencias_NormalizaSoOFimDeLinha()
+    {
+        const string Esperado = "# semente: 42\n> Tick\n= Idle ancora=(1,2)\n";
+        byte[] Bytes(string texto) => Utf8Estrito.GetBytes(texto);
+
+        Afirmar.Nulo(Diferenca(Bytes(Esperado), Esperado), "LF, igual à regravação");
+        Afirmar.Nulo(Diferenca(Bytes(Esperado.Replace("\n", "\r\n", StringComparison.Ordinal)), Esperado), "CRLF do Git no Windows");
+        Afirmar.Nulo(Diferenca(Bytes(Esperado.Replace('\n', '\r')), Esperado), "CR sozinho");
+
+        Afirmar.Contem("BOM", Diferenca([0xEF, 0xBB, 0xBF, .. Bytes(Esperado)], Esperado), "BOM UTF-8 no início");
+        Afirmar.Contem("UTF-8", Diferenca([.. Bytes("# semente: 42\n> Tick\n= Idle ancora=(1,2)"), 0xFF, 0x0A], Esperado), "byte inválido");
+        Afirmar.Contem("linha 2", Diferenca(Bytes("# semente: 42\n> Tick \n= Idle ancora=(1,2)\n"), Esperado), "espaço no fim da linha");
+        Afirmar.Contem("linha 3", Diferenca(Bytes("# semente: 42\n> Tick\n# comentário\n= Idle ancora=(1,2)\n"), Esperado), "linha a mais no meio");
+        Afirmar.Contem("linha 5", Diferenca(Bytes(Esperado + "\n"), Esperado), "linha em branco a mais no fim");
+        Afirmar.NaoNulo(Diferenca(Bytes(Esperado.TrimEnd('\n')), Esperado), "sem a quebra de linha final");
+        Afirmar.NaoNulo(Diferenca(Bytes(Esperado.Replace("(1,2)", "(1,3)", StringComparison.Ordinal)), Esperado), "valor diferente");
+    }
+
+    // Item S: as referências vêm da pasta-fonte mesmo quando o compilador mapeia os caminhos (PathMap ou ContinuousIntegrationBuild gravam "/_/..." no [CallerFilePath]).
+    [Teste]
+    public static void PastaDasFontes_ComCaminhoMapeado_AchaPelaSaidaDoBuild()
+    {
+        string real = PastaDasFontes();
+        Afirmar.Verdadeiro(Directory.Exists(Path.Combine(real, "Referencias")), $"a pasta-fonte tem as referências: {real}");
+        string mapeado = "/_/tests/Buzzy.Core.Testes/Personagem/ReproducaoTestes.cs";
+        Afirmar.Igual(Path.GetFullPath(real), Path.GetFullPath(Afirmar.NaoNulo(AcharPastaDasFontes(mapeado, AppContext.BaseDirectory), "caminho mapeado")), "pela saída do build");
+        Afirmar.Nulo(AcharPastaDasFontes(mapeado, Path.GetPathRoot(AppContext.BaseDirectory)!), "sem a fonte e sem o projeto acima da saída: nenhuma pasta");
     }
 
     // Item S: a regravação só vale como uso local explícito.
@@ -183,6 +222,35 @@ internal static class ReproducaoTestes
 
     private static string NormalizarFimDeLinha(string texto) => texto.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
 
+    /// <summary>
+    /// Nulo se o arquivo é exatamente o texto esperado em UTF-8 sem BOM, normalizando só o fim de
+    /// linha; senão, o problema de codificação ou a primeira linha diferente.
+    /// </summary>
+    private static string? Diferenca(byte[] arquivo, string esperado)
+    {
+        if (ProblemaDeCodificacao(arquivo) is { } problema) return problema;
+        string conteudo = NormalizarFimDeLinha(Utf8Estrito.GetString(arquivo));
+        if (string.Equals(conteudo, esperado, StringComparison.Ordinal)) return null;
+        string[] noArquivo = conteudo.Split('\n'), reproduzido = esperado.Split('\n');
+        int diferente = PrimeiraDiferenca(noArquivo, reproduzido);
+        return $"linha {diferente + 1}: no arquivo <{Linha(noArquivo, diferente)}>, reproduzido <{Linha(reproduzido, diferente)}>";
+    }
+
+    /// <summary>BOM ou UTF-8 inválido, que a leitura comum esconderia: a regravação escreve UTF-8 sem BOM.</summary>
+    private static string? ProblemaDeCodificacao(byte[] arquivo)
+    {
+        if (arquivo.AsSpan().StartsWith((ReadOnlySpan<byte>)[0xEF, 0xBB, 0xBF])) return "BOM UTF-8 no início (a regravação escreve sem BOM)";
+        try
+        {
+            _ = Utf8Estrito.GetString(arquivo);
+            return null;
+        }
+        catch (DecoderFallbackException e)
+        {
+            return $"UTF-8 inválido: {e.Message}";
+        }
+    }
+
     private static Topologia PorNome(string nome)
         => TopologiasDeExemplo.Todas.FirstOrDefault(t => t.Nome == nome).Topologia
            ?? throw new FormatException($"Topologia de exemplo desconhecida: {nome}");
@@ -207,6 +275,9 @@ internal static class ReproducaoTestes
                     break;
                 case "painel":
                     cfg = cfg with { PainelDeEnergiaDisponivel = valor == "sim" };
+                    break;
+                case "movimento":
+                    cfg = cfg with { Movimento = valor == "sim" };
                     break;
                 case "acoes":
                     cfg = cfg with
@@ -234,5 +305,26 @@ internal static class ReproducaoTestes
 
     private static string Linha(IReadOnlyList<string> linhas, int i) => i < linhas.Count ? linhas[i] : "(fim)";
 
-    private static string PastaDasFontes([CallerFilePath] string caminho = "") => Path.GetDirectoryName(Path.GetDirectoryName(caminho)!)!;
+    /// <summary>Pasta-fonte deste projeto de testes (a que tem o .csproj e <c>Referencias/</c>).</summary>
+    private static string PastaDasFontes([CallerFilePath] string caminho = "")
+        => AcharPastaDasFontes(caminho, AppContext.BaseDirectory)
+           ?? throw new FalhaDeAfirmacao($"pasta-fonte do projeto não encontrada: nem acima de {caminho} nem acima de {AppContext.BaseDirectory}");
+
+    /// <summary>
+    /// A pasta do arquivo-fonte, se ela existe e tem o .csproj do projeto (o caso normal); senão, a
+    /// primeira pasta acima da saída do build que o tenha, para quando o compilador mapeou os
+    /// caminhos (PathMap ou ContinuousIntegrationBuild gravam "/_/..." no [CallerFilePath]). Nulo se
+    /// nenhuma das duas achar.
+    /// </summary>
+    private static string? AcharPastaDasFontes(string arquivoFonte, string saidaDoBuild)
+    {
+        string projeto = typeof(ReproducaoTestes).Assembly.GetName().Name + ".csproj";
+        string? pelaFonte = Path.GetDirectoryName(Path.GetDirectoryName(arquivoFonte));
+        if (!string.IsNullOrEmpty(pelaFonte) && File.Exists(Path.Combine(pelaFonte, projeto))) return pelaFonte;
+        for (DirectoryInfo? pasta = new(saidaDoBuild); pasta is not null; pasta = pasta.Parent)
+        {
+            if (File.Exists(Path.Combine(pasta.FullName, projeto))) return pasta.FullName;
+        }
+        return null;
+    }
 }

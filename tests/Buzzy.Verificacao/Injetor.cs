@@ -116,12 +116,16 @@ internal sealed class Injetor
     /// Pressiona o botão esquerdo em (x, y) e o MANTÉM pressionado, com as mesmas conferências do
     /// clique: espera do clique duplo, dono do ponto antes e depois de mover o cursor.
     /// </summary>
-    internal void Pressionar(int x, int y, nint donoEsperado, Func<string?>? outraCondicao = null)
+    /// <param name="esperarCliqueDuplo">
+    /// Falso só quando o ponto está longe do último clique (mais que o retângulo de clique duplo),
+    /// por exemplo para pegar o personagem no meio de uma queda: a espera o deixaria pousar antes.
+    /// </param>
+    internal void Pressionar(int x, int y, nint donoEsperado, Func<string?>? outraCondicao = null, bool esperarCliqueDuplo = true)
     {
         if (donoEsperado == 0) throw new ArgumentException("O dono esperado do ponto não pode ser nulo.", nameof(donoEsperado));
         if (BotaoEsquerdoAbaixado) throw new FalhaDeVerificacao("pressionar com o botão esquerdo já pressionado");
         ConferirCursor();
-        EsperarIntervaloDeCliqueDuplo();
+        if (esperarCliqueDuplo) EsperarIntervaloDeCliqueDuplo();
         ExigirDono(x, y, donoEsperado, outraCondicao, "esquerdo (pressionar)", "depois da espera de clique duplo");
         Enviar([Mouse(x, y, MOUSEEVENTF_MOVE)], "mover para pressionar");
         Posto(x, y);

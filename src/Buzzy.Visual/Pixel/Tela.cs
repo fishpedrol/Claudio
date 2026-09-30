@@ -108,6 +108,40 @@ public sealed class Tela
         return t;
     }
 
+    /// <summary>Margem livre, em pixels, que a deformação deixa até as bordas de cima e dos lados.</summary>
+    public const int MargemDaDeformacao = 3;
+
+    /// <summary>
+    /// Esticar e achatar de desenho animado (toon force, DEC-023): redimensiona o desenho por
+    /// vizinho mais próximo em torno do centro da base dos pixels opacos, que fica no mesmo lugar
+    /// (os pés não saem do chão). As escalas são reduzidas o necessário para o desenho ficar a
+    /// <see cref="MargemDaDeformacao"/> pixels das bordas de cima e dos lados, sem cortar o
+    /// contorno. Nenhuma cor nova aparece: pixels só se repetem ou somem.
+    /// </summary>
+    public Tela Deformada(double escalaX, double escalaY)
+    {
+        if (!(escalaX > 0) || !(escalaY > 0) || double.IsInfinity(escalaX) || double.IsInfinity(escalaY))
+            throw new ArgumentOutOfRangeException(nameof(escalaX), "As escalas precisam ser números positivos.");
+        var nova = new Tela(Largura, Altura);
+        if (Limites() is not { } l) return nova;
+
+        double centro = (l.Esquerda + l.Direita) / 2.0;
+        double baseY = l.Base;
+        const int m = MargemDaDeformacao;
+        double cabeX = Math.Min((centro - m) / (centro - l.Esquerda), (Largura - m - centro) / (l.Direita - centro));
+        double cabeY = (baseY - m) / (baseY - l.Topo);
+        // Nunca encolhe por falta de espaço: um desenho que já passa da margem fica como está.
+        escalaX = Math.Min(escalaX, Math.Max(1, cabeX));
+        escalaY = Math.Min(escalaY, Math.Max(1, cabeY));
+        for (int y = 0; y < Altura; y++)
+        {
+            int origemY = (int)Math.Floor(baseY - (baseY - (y + 0.5)) / escalaY);
+            for (int x = 0; x < Largura; x++)
+                nova[x, y] = this[(int)Math.Floor(centro + (x + 0.5 - centro) / escalaX), origemY];
+        }
+        return nova;
+    }
+
     /// <summary>Pixels em ARGB, linha a linha.</summary>
     public uint[] ParaArgb()
     {

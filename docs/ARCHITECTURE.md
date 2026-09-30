@@ -109,7 +109,9 @@ Proposta para o MVP: as superfícies são derivadas apenas das áreas úteis dos
 - limites laterais da âncora: o sprite inteiro fica dentro da área útil;
 - se cada lateral é parede ou passagem: é passagem quando outro monitor encosta nela com sobreposição vertical.
 
-As superfícies são recalculadas a cada passo, a partir da topologia em cache. Uma passagem ainda não é atravessada, porque a travessia é da Fase 5: o personagem dá meia-volta ali, e a agenda só escolhe escalar se houver parede no monitor.
+As superfícies são recalculadas a cada passo, a partir da topologia em cache. Uma passagem ainda não é atravessada, porque a travessia é da Fase 5.
+
+**Toon force (DEC-023):** a pedido do usuário, toda lateral da área útil é escalável, inclusive a passagem: a borda da tela vira parede para o macaquinho. Ao chegar numa passagem, ele para, vira ou sobe por ela, como numa parede.
 
 ### 2.6 Máquina de estados
 
@@ -176,6 +178,7 @@ STATUS: PLANNED. Estado de comportamento e expressão são dimensões independen
 | qualquer estado visível com painel aberto | `ENERGY_SELECTED(nivel)` | permanece | Atualiza a mesma preferência persistida; o novo nível afeta as próximas decisões autônomas. |
 | qualquer estado visível com painel aberto | `ENERGY_PANEL_CLOSE` | permanece | Fecha o painel e retoma a agenda após intervalo de acomodação. |
 | `FALLING`, `LANDING` | contato com o chão | `LANDING`, depois `IDLE` | O painel não altera a física; se estiver aberto, a autonomia continua pausada. |
+| `FALLING`, `JUMPING` | contato com o chão a 600 DIP/s ou mais, com a autonomia livre e menos de dois quiques seguidos | `JUMPING` (quique de borracha) | Toon force (DEC-023): volta a subir com metade da velocidade, rindo. Depois do segundo quique, ou com a autonomia pausada ou o painel aberto, vale a linha de contato com o chão. |
 | `IDLE` | `AUTONOMY_TIMER` | `WALKING`, `CLIMBING`, `JUMPING`, `RESTING` ou permanece com um gesto curto | Escolha ponderada pela personalidade e pelo nível de energia, com semente. Só acontece com o painel de energia fechado e a autonomia não pausada. |
 | `WALKING` | parede, passagem ou fim do chão | `IDLE`, `CLIMBING`, `FALLING` ou `WALKING` | Conforme a superfície (seção 2.5). |
 | `CLIMBING` | topo da área útil, fim da parede ou `AUTONOMY_TIMER` | `IDLE`, `WALKING`, `JUMPING` ou `FALLING` | Ao chegar ao topo, para, anda pela borda, salta ou se solta. Soltar-se leva a `FALLING`. |
@@ -327,6 +330,10 @@ STATUS: PLANNED. O modelo físico detalhado segue as superfícies escolhidas em 
 - **Pulo:** a velocidade inicial vem da altura do arco (`vy0 = −√(2gH)`), e a velocidade horizontal cobre a distância sorteada no tempo de voo. No ar, a área útil limita as laterais e o topo.
 - **Pausa ou painel aberto:** o movimento em curso termina num lugar estável. A caminhada para, a escalada desce, quem está pendurado se solta, e pulo, queda e pouso terminam.
 - **Energia:** distâncias, alturas, tempos na parede e tempos pendurado são faixas dos perfis de energia (seção 2.11).
+- **Toon force (DEC-023):**
+  - **Quique de borracha:** um impacto de pelo menos 600 DIP/s quica. Volta a subir com metade da velocidade vertical, fica com 70% da horizontal e dá no máximo dois quiques; a contagem fica em `EstadoDoMovimento.Quiques`.
+  - **Foguete de borracha:** parte das subidas a partir do chão (`EstadoDoMovimento.Foguete`) sobe a 1000 DIP/s até a borda superior. A chance é do perfil de energia (`ChanceDoFoguete`), e a velocidade é a mesma para todos.
+  - **Com a autonomia pausada ou o painel aberto:** nem quique nem foguete.
 
 ### 2.10 Apresentação, assets e expressões
 
@@ -335,7 +342,8 @@ STATUS: PLANNED.
 - O núcleo expõe um retrato do estado: estado de comportamento, direção, fase do movimento, expressão e sinais pontuais, como "pousou" ou "foi clicado".
 - Um **manifesto de assets** em arquivo de dados liga cada estado a um clipe de animação e cada expressão a uma camada ou variante. O manifesto também define a âncora da imagem, o tamanho lógico e a taxa de quadros de cada clipe.
 - **Trocar asset** significa trocar o manifesto e as imagens. O núcleo, o movimento, a arbitragem, o mundo do desktop e a segurança não mudam. Um teste automático roda a mesma suíte do núcleo com dois manifestos diferentes.
-- Até a Fase 6, o app mostra um quadro estático da pixel art (o "parado", com o chapéu de palha; DEC-018 e DEC-019).
+- Até a Fase 6, o app mostra quadros estáticos da pixel art, com o chapéu de palha (DEC-018 e DEC-019). Na Fase 4, `PoseDoPersonagem` escolhe uma pose provisória por estado: ciclo de caminhada e de escalada, pendurado, impulso, no ar, caindo, pousando, sentado ou dormindo, segurado, reagindo e os gestos, espelhada para a esquerda.
+- **Toon force (DEC-023):** a pose também pode vir achatada (impacto) ou esticada (velocidade), pela dinâmica do movimento (`Dinamica`: velocidade vertical, quiques e foguete). A deformação é da própria pixel art (`Tela.Deformada`, vizinho mais próximo, pés na mesma linha), então a janela, a âncora e a regra do alfa não mudam.
 - A apresentação só redesenha quando o quadro muda ou quando a posição exige. Um clipe de 10 quadros por segundo gera 10 redesenhos por segundo, não 60.
 - A máscara de clique sai do canal alfa do quadro atual.
 
@@ -476,3 +484,4 @@ As escolhas do usuário e as pendências ainda abertas estão numeradas (Q-01 em
 | 2026-09-30 | Fase 3: árbitro de gestos no núcleo puro (`Entrada/`) e captura do mouse no adaptador da janela do personagem, com as regras concretas da seção 2.7. | DEC-021 |
 | 2026-09-30 | Linha nova da tabela 2.6: desligar o modo de tela cheia desfaz o efeito temporário, inclusive no fim de um gesto que não escolheu posição. | DEC-020 |
 | 2026-09-30 | Fase 4: física de passo fixo no núcleo (andar, escalar, pendurar-se, pular, cair), superfícies do monitor da âncora, relógio pelos quadros do compositor e poses provisórias por estado (seções 2.5, 2.9 e 2.13.4). | DEC-022 |
+| 2026-09-30 | Toon force, a pedido do usuário: toda lateral é escalável, quique e foguete de borracha, esticar e achatar nas poses (seções 2.5, 2.6, 2.9 e 2.10). | DEC-023 |

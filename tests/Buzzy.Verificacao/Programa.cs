@@ -35,10 +35,10 @@ internal static class Programa
         arrasta o Buzzy pela tela e usa Alt+Tab e a tecla Windows no meio de um arraste.
 
         Uso:
-          Buzzy.Verificacao.exe --injetar-input-na-tela [--fase 1|3] [--ocioso S] [--espera-ocioso S]
+          Buzzy.Verificacao.exe --injetar-input-na-tela [--fase 1|3|4] [--ocioso S] [--espera-ocioso S]
 
           --injetar-input-na-tela  obrigatória: confirma que a ferramenta pode agir na tela.
-          --fase N                 1 (padrão): shell do desktop; 3: input e arraste.
+          --fase N                 1 (padrão): shell do desktop; 3: input e arraste; 4: movimento e superfícies.
           --ocioso S               segundos sem input do usuário antes de começar (padrão 20).
           --espera-ocioso S        quanto esperar por essa ociosidade antes de desistir (padrão 180).
 
@@ -72,9 +72,9 @@ internal static class Programa
                     injetar = true;
                     break;
                 case "--fase":
-                    if (i + 1 >= args.Length || args[i + 1] is not ("1" or "3"))
-                        return Uso("--fase precisa de 1 ou 3.");
-                    fase = args[++i] == "3" ? 3 : 1;
+                    if (i + 1 >= args.Length || args[i + 1] is not ("1" or "3" or "4"))
+                        return Uso("--fase precisa de 1, 3 ou 4.");
+                    fase = int.Parse(args[++i], CultureInfo.InvariantCulture);
                     break;
                 case "--ocioso" or "--espera-ocioso":
                     if (i + 1 >= args.Length || !int.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out int segundos) || segundos < 1)
@@ -163,7 +163,7 @@ internal static class Programa
         rel.Linha($"Sem input do usuário há {Nativo.OciosoMs() / 1000.0:0.0} s; começando.");
 
         var v = new Verificacao(exeBuzzy, exeProprio, resultados, rel, ultimoInputDoUsuario);
-        Sumario s = fase == 3 ? v.ExecutarFase3() : v.Executar();
+        Sumario s = fase switch { 3 => v.ExecutarFase3(), 4 => v.ExecutarFase4(), _ => v.Executar() };
         string simulados = s.Simulados.Count == 0 ? "nenhum" : string.Join(" | ", s.Simulados);
         string naoExercitados = s.NaoExercitados.Count == 0 ? "nenhum" : string.Join(" | ", s.NaoExercitados);
         rel.Linha($"==== Resultado: {(s.Falhas == 0 ? "sem falhas" : $"{s.Falhas} falha(s)")} — {s.Ok} OK, {s.NaoAplicavel} N/A, {s.Simulados.Count} SIMULADO " +

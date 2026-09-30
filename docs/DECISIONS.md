@@ -416,10 +416,10 @@ O usuário aceitou estas metas em 2026-09-27. A Fase 1 deve apenas estabelecer a
      - paredes: as laterais em que nenhum outro monitor encosta com sobreposição vertical;
      - borda superior: onde ele se pendura.
 
-     Uma lateral encostada em outro monitor é passagem. A travessia é da Fase 5, então na Fase 4 o personagem dá meia-volta ali.
+     Uma lateral encostada em outro monitor é passagem. A travessia é da Fase 5. *Substituído em parte pela DEC-023:* em vez de dar meia-volta na passagem, ele a trata como parede e pode escalá-la.
   3. **Ações e planos, com semente:**
      - andar: direção sorteada e distância do perfil de energia; se não houver espaço à frente, vira;
-     - escalar: se já está numa parede, sobe; senão, anda até a parede escalável mais próxima e sobe. Sem parede escalável no monitor, a agenda não escolhe escalar;
+     - escalar: se já está numa parede, sobe; senão, anda até a parede escalável mais próxima e sobe. Com a DEC-023, as duas laterais são escaláveis;
      - no topo, pendura-se e segue pela borda para dentro. No fim da borda, desce pela parede (se houver parede ali), volta pela borda ou se solta;
      - pular: arco balístico com distância e altura do perfil de energia, calculado para pousar no chão;
      - na parede, a agenda salta para longe dela ou se solta. Pendurado, continua pela borda, desce (só na quina), salta ou se solta;
@@ -464,6 +464,50 @@ O usuário aceitou estas metas em 2026-09-27. A Fase 1 deve apenas estabelecer a
 - **Motivo:** o núcleo continua sendo a única fonte de comportamento; o app só executa efeitos e desenha.
 - **Trade-offs:** o movimento fica limitado ao passo físico de 60 Hz. Em monitores de 120 Hz ou mais, o critério 5 da Fase 4 (um avanço a cada quadro apresentado) exige interpolação ou passo menor, a medir nas Fases 6 e 11.
 - **Consequências:** ARCHITECTURE.md 2.5, 2.9 e 2.13.4 descrevem o implementado; TODO.md registra as evidências e as pendências da Fase 4.
+
+## DEC-023 — Toon force: física de desenho animado, de borracha como o Luffy
+
+- **Data:** 2026-09-30
+- **Estado da decisão:** pedido do usuário, com a interpretação técnica de Claude sob DEC-015 e DEC-019. O usuário pode ajustar a interpretação a qualquer momento.
+- **STATUS:** PLANNED até o gate da Fase 4 ser registrado em TODO.md.
+- **Pedido do usuário (2026-09-30):** "quero que o bixinho suba pelas laterais do monitor também, tenha tipo toon force".
+- **Problema:**
+  - Na DEC-022, uma lateral encostada em outro monitor era passagem, e o personagem dava meia-volta nela. Na máquina do usuário, com dois monitores lado a lado, só uma lateral de cada monitor era escalável.
+  - "Toon force" é a física de desenho animado: o personagem dobra as regras físicas de um jeito cômico. É a marca do Gear 5 do Luffy, que DEC-019 já tomou como inspiração de personalidade.
+- **Decisão:**
+  1. **Toda lateral da área útil é escalável**, inclusive a que encosta em outro monitor: a borda da tela vira parede para o macaquinho. Na Fase 5, uma passagem poderá ser atravessada ou escalada; a escolha fica com a agenda.
+  2. **Quique de borracha:** uma queda ou um pulo que toca o chão a pelo menos 600 DIP/s quica rindo, em vez de pousar.
+     - devolve metade da velocidade para cima e perde 30% da horizontal;
+     - no máximo dois quiques seguidos, depois pousa;
+     - com a autonomia pausada ou o painel aberto, pousa sem quicar.
+  3. **Foguete de borracha:** parte das subidas a partir do chão dispara parede acima a 1000 DIP/s até a borda superior, onde ele se pendura.
+     - chance por nível de energia: Baixa 10%, Média 30%, Alta 50%. É frequência de uma ação; a velocidade é a mesma em todos os níveis (invariante 12);
+     - pausado, o foguete apaga e ele desce como numa escalada normal.
+  4. **Esticar e achatar nas poses provisórias:**
+     - o impacto (pouso e começo do quique) aparece achatado: 1,3 × mais largo e 0,7 × mais alto;
+     - a velocidade (foguete, subida rápida do quique e queda rápida, a partir de 700 DIP/s) aparece esticada: 0,8 × mais largo e até 1,25 × mais alto;
+     - a deformação é da pixel art, por vizinho mais próximo, com os pés na mesma linha e uma margem de 3 pixels até as bordas do quadro;
+     - a janela e a âncora não mudam, e o alfa continua só 0 ou 255;
+     - poses que já ocupam a altura do quadro só afinam.
+  5. **Limites preservados:**
+     - o usuário prevalece: pressionar segura na hora, inclusive no quique e no foguete;
+     - fora de `JUMPING` e `FALLING` sempre há apoio (chão, lateral ou borda superior), e o sprite fica na área útil;
+     - a física é a mesma em todos os níveis de energia;
+     - tudo é determinístico pela semente;
+     - não há relógio em repouso.
+- **Fica para as Fases 6 e 7:** membros de borracha que esticam além do quadro de 128 DIP (exige janela maior ou camada própria), inflar como balão, olhos saltando, rodopios e "flutuar um instante antes de cair". Nenhum desses entra sem medir o custo de desenho (Q-08).
+- **Alternativas consideradas:**
+  - manter a lateral encostada como passagem só para a Fase 5, que contraria o pedido;
+  - deformar o bitmap no WPF (`ScaleTransform`), que borraria a pixel art e mudaria o teste de clique por alfa;
+  - desenhar poses novas achatadas e esticadas à mão: melhor resultado final, mas é trabalho da Fase 6.
+- **Motivo:** atende ao pedido com mudanças pequenas na física, testáveis sem janela, sem mudar a tabela de estados além de uma linha (quique) e sem relaxar nenhum invariante.
+- **Trade-offs:**
+  - a deformação por vizinho mais próximo repete ou pula pixels e fica menos limpa que um desenho à mão; aparece só por instantes;
+  - o esticar vertical é pequeno nas poses altas.
+- **Consequências:**
+  - ARCHITECTURE.md 2.5, 2.6 (linha do quique), 2.9 e 2.10 foram atualizados;
+  - TODO.md inclui a toon force na Fase 4;
+  - os testes de movimento e de pose cobrem quique, foguete, laterais e deformação.
 
 ## Decisões de produto registradas pelo usuário
 

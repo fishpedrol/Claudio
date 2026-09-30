@@ -96,6 +96,7 @@ internal sealed class Aplicacao
     /// <summary>Quadro do sprite na janela e o estado em que ele começou a ser contado.</summary>
     private QuadroDoSprite? _quadroAtual;
     private Estado _estadoDoQuadro = Estado.Booting;
+    private int _quiquesDoQuadro;
     private long _passoDeEntradaNoEstado;
 
     internal Aplicacao(Application app, InstanciaUnica instancia, OpcoesDaAplicacao? opcoes = null)
@@ -158,10 +159,13 @@ internal sealed class Aplicacao
         Diagnostico.Evento("JANELA", ("hwnd", _personagem.Hwnd));
 
         ulong semente = _opcoes.Semente ?? unchecked((ulong)Environment.TickCount64);
+        // Fase 4 (DEC-022): física do movimento, queda animada e todas as ações autônomas.
         _nucleo = new Nucleo(new ConfiguracaoDoNucleo
         {
             Tamanho = SpriteProvisorio.TamanhoLogico,
-            Acoes = AcoesAutonomas.Descansar | AcoesAutonomas.TrocarExpressao,
+            Acoes = AcoesAutonomas.Todas,
+            QuedaFisica = true,
+            Movimento = true,
         }, semente);
         Diagnostico.Evento("NUCLEO", ("semente", semente), ("pausado", _opcoes.MovimentoPausado ? "sim" : "nao"));
         Enviar(new Loaded(topologia, PosicaoSalva: null, Preferencias.Padrao), "início");
@@ -561,17 +565,43 @@ internal sealed class Aplicacao
         if (_personagem is null || _nucleo is null || _encerrando || _posicionamento is null) return;
         Retrato retrato = _nucleo.Retrato;
         if (!retrato.Estado.Visivel()) return;
-        if (retrato.Estado != _estadoDoQuadro)
+        EstadoDoMovimento movimento = _nucleo.Estado.Movimento;
+        // A contagem da pose recomeça a cada troca de estado e a cada quique de borracha, que
+        // continua em JUMPING (toon force, DEC-023).
+        if (retrato.Estado != _estadoDoQuadro || movimento.Quiques != _quiquesDoQuadro)
         {
             _estadoDoQuadro = retrato.Estado;
+            _quiquesDoQuadro = movimento.Quiques;
             _passoDeEntradaNoEstado = _nucleo.Estado.Passos;
         }
-        QuadroDoSprite quadro = PoseDoPersonagem.Escolher(retrato, _nucleo.Estado.Passos - _passoDeEntradaNoEstado);
         int dpi = _posicionamento.Monitor.Dpi;
+        var dinamica = new Dinamica(movimento.VY * 96.0 / dpi, movimento.Quiques, movimento.Foguete);
+        QuadroDoSprite quadro = PoseDoPersonagem.Escolher(retrato, _nucleo.Estado.Passos - _passoDeEntradaNoEstado, dinamica);
         if (quadro == _quadroAtual && dpi == _dpiDoSprite && _personagem.Sprite is not null) return;
+        int quadrosAntes = SpriteProvisorio.QuadrosEmCache;
         _personagem.DefinirSprite(SpriteProvisorio.Renderizar(quadro, dpi));
+        if (SpriteProvisorio.QuadrosEmCache != quadrosAntes)
+            Diagnostico.Evento("SPRITE", ("quadrosEmCache", SpriteProvisorio.QuadrosEmCache), ("pose", quadro.Pose), ("expressao", quadro.Expressao ?? "-"), ("deformacao", quadro.Deformacao), ("dpi", dpi));
         _quadroAtual = quadro;
         _dpiDoSprite = dpi;
+    }
+
+    /// <summary>
+    /// Memória do processo no log de diagnóstico, só quando o movimento para (nunca por timer):
+    /// o heap gerenciado, o comprometido pelo GC, o conjunto de trabalho e os quadros em cache.
+    /// </summary>
+    private static void RegistrarMemoria(string quando)
+    {
+        if (!Diagnostico.Ligado) return;
+        GCMemoryInfo gc = GC.GetGCMemoryInfo();
+        const double MB = 1024 * 1024;
+        Diagnostico.Evento("MEMORIA",
+            ("quando", quando),
+            ("heapMB", Math.Round(gc.HeapSizeBytes / MB, 1)),
+            ("comprometidaGcMB", Math.Round(gc.TotalCommittedBytes / MB, 1)),
+            ("conjuntoMB", Math.Round(Environment.WorkingSet / MB, 1)),
+            ("quadrosEmCache", SpriteProvisorio.QuadrosEmCache),
+            ("gc0", GC.CollectionCount(0)), ("gc1", GC.CollectionCount(1)), ("gc2", GC.CollectionCount(2)));
     }
 
     private void ExecutarEfeito(Evento evento, Efeito efeito, string motivo)
@@ -606,7 +636,11 @@ internal sealed class Aplicacao
                 break;
 
             case DesligarRelogio:
-                if (_relogioLigado) Diagnostico.Evento("RELOGIO", ("ligado", "nao"), ("evento", evento.GetType().Name));
+                if (_relogioLigado)
+                {
+                    Diagnostico.Evento("RELOGIO", ("ligado", "nao"), ("evento", evento.GetType().Name));
+                    RegistrarMemoria("relógio desligado");
+                }
                 PararRelogio();
                 break;
 

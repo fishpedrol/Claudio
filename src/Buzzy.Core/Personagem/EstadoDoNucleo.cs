@@ -26,6 +26,12 @@ public sealed record EstadoDoNucleo
     /// <summary>Onde a janela está (ou vai aparecer). Nulo antes de carregar.</summary>
     public Posicionamento? Lugar { get; init; }
 
+    /// <summary>
+    /// Posição fina, velocidade e plano do movimento em curso (Fase 4, DEC-022). Vale nos estados
+    /// de movimento; ao entrar num deles, parte da âncora de <see cref="Lugar"/>.
+    /// </summary>
+    public EstadoDoMovimento Movimento { get; init; } = EstadoDoMovimento.Nenhum;
+
     /// <summary>A mesma posição, relativa à área útil do monitor; sobrevive a mudanças de topologia.</summary>
     public PosicaoDoPersonagem? Posicao { get; init; }
 

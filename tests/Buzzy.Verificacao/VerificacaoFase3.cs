@@ -202,7 +202,10 @@ internal sealed partial class Verificacao
             + $"(Q-08: p95 até 16,7 ms → {(m5p95 <= 16.7 ? "dentro" : "ACIMA")})");
     }
 
-    /// <summary>Critério 2: soltar no ar valida a posição, com os pés no chão da área útil.</summary>
+    /// <summary>
+    /// Critério 2: soltar no ar valida a posição, com os pés no chão da área útil. Desde a Fase 4, o
+    /// personagem sem apoio cai animado até o chão (pausado, sem quique; DEC-022 e DEC-023).
+    /// </summary>
     private void F3SoltarNoAr()
     {
         Nativo.POINT p = ExigirPontoOpaco("soltar no ar");
@@ -221,13 +224,15 @@ internal sealed partial class Verificacao
         Nativo.RECT noAr = SpriteEm(new Nativo.POINT(p.X - pegada.X, y - pegada.Y), inicio);
         bool subiu = EsperarRetangulo(noAr, 500) is not null;
         _inj.SoltarEsquerdo(p.X, y);
-        EventoBuzzy? fim = Nucleo(marca, "DragEnd", "Settling", "Idle", 3000);
+        // Fase 4: sem apoio, DRAG_END leva a SETTLING e FALLING; a queda termina em LANDING e IDLE.
+        EventoBuzzy? caiu = Nucleo(marca, "DragEnd", "Settling", "Falling", 3000);
+        EventoBuzzy? pousou = LogDoBuzzy.Esperar(marca, e => e.Chave == "NUCLEO" && e["de"] == "Landing" && e["para"] == "Idle", 5000);
         Nativo.RECT esperado = SpriteEm(new Nativo.POINT(p.X - pegada.X, _areaUtilPrincipal.Bottom), inicio);
-        bool noChao = EsperarRetangulo(esperado, 1000) is not null;
+        bool noChao = EsperarRetangulo(esperado, 3000) is not null;
         Nativo.RECT agora = Nativo.Retangulo(_hBuzzy);
-        Registrar("critério 2 — soltar no ar deixa a âncora na área útil, com os pés no chão (a queda animada é da Fase 4)",
-            subiu && fim is not null && noChao && _areaUtilPrincipal.Contem(agora),
-            $"subiu {p.Y - y} px com o cursor={subiu}; DRAG_END→Idle={fim is not null}; janela {agora} (esperado {esperado}); dentro da área útil {_areaUtilPrincipal}={_areaUtilPrincipal.Contem(agora)}");
+        Registrar("critério 2 — soltar no ar deixa a âncora na área útil, com os pés no chão (desde a Fase 4, depois de cair)",
+            subiu && caiu is not null && pousou is not null && noChao && _areaUtilPrincipal.Contem(agora),
+            $"subiu {p.Y - y} px com o cursor={subiu}; DRAG_END→Falling={caiu is not null}; Landing→Idle={pousou is not null}; janela {agora} (esperado {esperado}); dentro da área útil {_areaUtilPrincipal}={_areaUtilPrincipal.Contem(agora)}");
     }
 
     /// <summary>

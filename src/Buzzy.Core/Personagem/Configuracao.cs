@@ -30,6 +30,16 @@ public sealed record ConfiguracaoDoNucleo
     /// </summary>
     public bool QuedaFisica { get; init; }
 
+    /// <summary>
+    /// Se o passo do relógio move o personagem pelas superfícies (Fase 4, DEC-022): andar, escalar,
+    /// pendurar-se, pular e cair. Desligado, os estados de movimento só mudam pelos sinais de
+    /// movimento, como na Fase 2.
+    /// </summary>
+    public bool Movimento { get; init; }
+
+    /// <summary>Velocidades e gravidade do movimento (iguais em todos os níveis de energia).</summary>
+    public ParametrosDeMovimento Fisica { get; init; } = new();
+
     /// <summary>Se o painel de energia existe (Fase 8). Antes, o clique duplo só produz reação.</summary>
     public bool PainelDeEnergiaDisponivel { get; init; }
 
@@ -63,12 +73,56 @@ public sealed record PerfilDeEnergia(
     int PesoGesto,
     int PesoTrocarExpressao)
 {
+    /// <summary>Distância de uma caminhada autônoma, em DIP (Fase 4).</summary>
+    public int DistanciaAndandoMinima { get; init; } = 150;
+
+    public int DistanciaAndandoMaxima { get; init; } = 500;
+
+    /// <summary>Distância horizontal de um pulo, em DIP (Fase 4).</summary>
+    public int DistanciaDoPuloMinima { get; init; } = 80;
+
+    public int DistanciaDoPuloMaxima { get; init; } = 200;
+
+    /// <summary>Altura do arco de um pulo, em DIP (Fase 4).</summary>
+    public int AlturaDoPuloMinima { get; init; } = 50;
+
+    public int AlturaDoPuloMaxima { get; init; } = 100;
+
+    /// <summary>Tempo na parede até a agenda decidir saltar ou soltar (Fase 4).</summary>
+    public TimeSpan TempoNaParedeMinimo { get; init; } = TimeSpan.FromSeconds(15);
+
+    public TimeSpan TempoNaParedeMaximo { get; init; } = TimeSpan.FromSeconds(35);
+
+    /// <summary>Tempo pendurado até a próxima decisão: "por pouco tempo" (Fase 4).</summary>
+    public TimeSpan TempoPenduradoMinimo { get; init; } = TimeSpan.FromSeconds(3);
+
+    public TimeSpan TempoPenduradoMaximo { get; init; } = TimeSpan.FromSeconds(8);
+
+    /// <summary>
+    /// Em quantas subidas, de cada 100, ele dispara parede acima num foguete de borracha (toon
+    /// force, DEC-023). É frequência de uma ação; a velocidade do foguete é a mesma em todo nível.
+    /// </summary>
+    public int ChanceDoFoguete { get; init; } = 30;
+
     public static readonly PerfilDeEnergia Baixa = new(
         NivelDeEnergia.Baixa,
         TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(45),
         TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(180),
         60, 120,
-        PesoAndar: 2, PesoEscalar: 1, PesoPular: 0, PesoDescansar: 6, PesoGesto: 3, PesoTrocarExpressao: 3);
+        PesoAndar: 2, PesoEscalar: 1, PesoPular: 0, PesoDescansar: 6, PesoGesto: 3, PesoTrocarExpressao: 3)
+    {
+        DistanciaAndandoMinima = 80,
+        DistanciaAndandoMaxima = 250,
+        DistanciaDoPuloMinima = 60,
+        DistanciaDoPuloMaxima = 120,
+        AlturaDoPuloMinima = 30,
+        AlturaDoPuloMaxima = 60,
+        TempoNaParedeMinimo = TimeSpan.FromSeconds(10),
+        TempoNaParedeMaximo = TimeSpan.FromSeconds(20),
+        TempoPenduradoMinimo = TimeSpan.FromSeconds(2),
+        TempoPenduradoMaximo = TimeSpan.FromSeconds(5),
+        ChanceDoFoguete = 10,
+    };
 
     public static readonly PerfilDeEnergia Media = new(
         NivelDeEnergia.Media,
@@ -82,7 +136,20 @@ public sealed record PerfilDeEnergia(
         TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(10),
         TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(40),
         90, 180,
-        PesoAndar: 5, PesoEscalar: 3, PesoPular: 3, PesoDescansar: 1, PesoGesto: 4, PesoTrocarExpressao: 2);
+        PesoAndar: 5, PesoEscalar: 3, PesoPular: 3, PesoDescansar: 1, PesoGesto: 4, PesoTrocarExpressao: 2)
+    {
+        DistanciaAndandoMinima = 250,
+        DistanciaAndandoMaxima = 900,
+        DistanciaDoPuloMinima = 120,
+        DistanciaDoPuloMaxima = 320,
+        AlturaDoPuloMinima = 70,
+        AlturaDoPuloMaxima = 150,
+        TempoNaParedeMinimo = TimeSpan.FromSeconds(20),
+        TempoNaParedeMaximo = TimeSpan.FromSeconds(45),
+        TempoPenduradoMinimo = TimeSpan.FromSeconds(5),
+        TempoPenduradoMaximo = TimeSpan.FromSeconds(12),
+        ChanceDoFoguete = 50,
+    };
 
     public static PerfilDeEnergia Padrao(NivelDeEnergia nivel) => nivel switch
     {

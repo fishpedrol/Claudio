@@ -181,8 +181,11 @@ STATUS: PLANNED. A implementação está verificada por testes automáticos, int
 
 ### Fase 4 — Movimento e superfícies
 
+STATUS: PLANNED. A implementação (DEC-022 e a toon force pedida pelo usuário em DEC-023) está verificada por testes automáticos, integração e verificação de tela com input SINTÉTICO (2026-09-30). Pende o critério 5 com gravação de tela a 120 qps e em outra taxa de atualização [MANUAL].
+
 - **Objetivo:** dar ao mascote liberdade para circular e agir como um macaquinho, de forma determinística, em um monitor.
 - **Inclui:** superfícies aprovadas em Q-05; andar pelo chão e por bordas horizontais alcançáveis; subir e descer paredes laterais; ficar pendurado brevemente na borda superior; saltar, cair, pousar, descansar e executar pequenas ações autônomas; estados `WALKING`, `CLIMBING`, `HANGING`, `JUMPING`, `FALLING`, `LANDING` e `RESTING`; agenda ajustada pelo nível de energia; interrupção imediata por interação; poses provisórias por estado.
+- **Incluído a pedido do usuário em 2026-09-30 (DEC-023, toon force):** subir por qualquer lateral da área útil, inclusive a encostada em outro monitor; quique de borracha; foguete de borracha parede acima; achatar e esticar nas poses provisórias.
 - **Exclui:** passagem entre monitores e troca de escala em movimento (Fase 5); animações completas (Fase 6).
 - **Depende de:** Fase 3; Q-05.
 - **Critérios de aceitação:**
@@ -193,7 +196,46 @@ STATUS: PLANNED. A implementação está verificada por testes automáticos, int
   5. Gravando a tela a 120 quadros por segundo durante uma caminhada, a posição do personagem avança a cada quadro apresentado, sem quadro repetido nem salto maior que o passo esperado. Repetir em 60 Hz e em outra taxa de atualização disponível. [MANUAL, instrumentado]
   6. Em cada nível de energia, a sequência é determinística para a mesma semente; Baixa produz menos/menores ações que Média, e Alta produz mais/mais longas, sem invalidar nenhuma regra de apoio ou segurança. [AUTO]
   7. Escalar até a borda superior, ficar pendurado, percorrer a borda alcançável e voltar ou se soltar sem ficar preso nem atravessar uma janela de aplicativo. [AUTO e MANUAL]
+  8. Toon force (DEC-023):
+     - sobe por qualquer lateral da área útil, inclusive a que encosta em outro monitor, sem atravessar para ele;
+     - uma queda alta quica e depois pousa;
+     - às vezes sobe a parede num foguete, com a frequência seguindo a energia;
+     - as poses achatam no impacto e esticam na velocidade;
+     - nada disso quebra o apoio, a prioridade do usuário, o determinismo ou a mesma física em todos os níveis. [AUTO e MANUAL]
 - **Testes automatizados:** trajetórias de referência com passo fixo, colisões contra superfícies de exemplo, testes de propriedade de apoio. [AUTO]
+- **Evidências de 2026-09-30:**
+  - [AUTO] `MovimentoTestes`, 14 testes com relógio virtual:
+    - caminhada em passos fixos de 1 ou 2 px;
+    - passagem não atravessada, mas escalável (toon force);
+    - escalada, pendurar e volta em 40 sementes;
+    - pulo balístico que pousa;
+    - pressionar no meio do pulo ou da queda segura na hora (critério 3);
+    - mesma semente, mesma trajetória, em cada nível (critérios 1 e 6);
+    - pausa termina parado no chão;
+    - propriedade de apoio em 60 simulações longas, com o usuário pressionando e arrastando e com mudanças de topologia (critério 2);
+    - quique: duas vezes, cada uma mais baixa; nenhum em queda baixa ou pausado; pressionar no meio segura;
+    - foguete até pendurar;
+    - chance do foguete pela energia: 8%, 30% e 47%.
+  - [AUTO] Energia por 10 min simulados (critério 6), sempre com a mesma física:
+
+    | Nível | Ações | Tempo em movimento |
+    |---|---|---|
+    | Baixa | 6,4 | 18 s |
+    | Média | 16,3 | 82 s |
+    | Alta | 36,8 | 251 s |
+
+  - [AUTO] App:
+    - `PoseTestes`: pose por estado e dinâmica; achatar e esticar mantêm os pés, o alfa só 0 ou 255 e os cantos transparentes;
+    - `MovimentoIntegracaoTestes`: a janela anda dentro da área útil, e pressionar no meio do movimento segura.
+    - Contagens atuais em DEVELOPMENT_LOG.md.
+  - [MANUAL] com input SINTÉTICO (`Buzzy.Verificacao --fase 4`, `resultados/verificacao-fase4.log`): **22 OK, 0 falhas.**
+    - Critério 3: segurado no meio da queda, parado 600 ms, depois caiu e pousou.
+    - Critério 5, só como medição instrumentada: posição da janela amostrada de outro processo na caminhada; maior passo 3 px, intervalo entre mudanças com mediana de 15,8 ms, p95 de 31,2 ms e máximo de 41,8 ms.
+    - Critério 7: 177/177 amostras encostadas na lateral, 131 posições diferentes no teto, de volta ao chão em 16 s.
+    - Critério 4: 15 s em RESTING com 0,000% de CPU e relógio desligado.
+    - Critério 8: dois quiques e pouso; subida pela lateral esquerda do principal (encostada no secundário) com 29/29 amostras na lateral, sem sair do principal, terminando pendurado.
+    - Foco mantido no aplicativo em uso em todos os cenários.
+  - Pendente [MANUAL]: critério 5 com gravação de tela a 120 qps, em 60 Hz e em outra taxa disponível.
 
 ### Fase 5 — Multi-monitor completo e posição persistida
 

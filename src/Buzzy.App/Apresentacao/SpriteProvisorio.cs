@@ -21,10 +21,19 @@ internal static class SpriteProvisorio
     /// <summary>Tamanho lógico do personagem. A escala escolhida pelo usuário entra na Fase 8.</summary>
     internal static readonly TamanhoDip TamanhoLogico = new(128, 128);
 
+    /// <summary>Escalas horizontal e vertical do corpo achatado no impacto (toon force, DEC-023).</summary>
+    internal static readonly (double X, double Y) EscalaAchatada = (1.3, 0.7);
+
+    /// <summary>Escalas horizontal e vertical do corpo esticado pela velocidade (toon force, DEC-023).</summary>
+    internal static readonly (double X, double Y) EscalaEsticada = (0.8, 1.25);
+
     private static readonly Lazy<Tela> Parado = new(() => BonecoPixel.Desenhar(PosesPixel.Todas.First(p => p.Nome == "parado")));
 
     /// <summary>Quadros já renderizados por pose, espelho, expressão e DPI (só na thread da interface).</summary>
     private static readonly Dictionary<(QuadroDoSprite Quadro, int Dpi), BitmapSource> Cache = [];
+
+    /// <summary>Quantos quadros estão no cache (diagnóstico de memória).</summary>
+    internal static int QuadrosEmCache => Cache.Count;
 
     /// <summary>
     /// Renderiza o sprite no DPI do monitor (tamanho físico = <see cref="TamanhoLogico"/> no DPI
@@ -47,6 +56,12 @@ internal static class SpriteProvisorio
             ?? throw new ArgumentException($"Pose desconhecida: {quadro.Pose}.", nameof(quadro));
         Tela tela = BonecoPixel.Desenhar(pose, quadro.Expressao);
         if (quadro.Espelhado) tela = tela.Espelhada();
+        tela = quadro.Deformacao switch
+        {
+            Deformacao.Achatado => tela.Deformada(EscalaAchatada.X, EscalaAchatada.Y),
+            Deformacao.Esticado => tela.Deformada(EscalaEsticada.X, EscalaEsticada.Y),
+            _ => tela,
+        };
         TamanhoPx tamanho = TamanhoLogico.ParaPixels(dpi);
         BitmapSource bmp = Bitmap(tela, tamanho.Largura, tamanho.Altura, dpi);
         Cache[(quadro, dpi)] = bmp;

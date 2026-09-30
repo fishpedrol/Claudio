@@ -117,15 +117,20 @@ internal sealed class BuzzyEmTeste : IDisposable
     /// Com <paramref name="pausado"/>, o movimento autônomo começa pausado: o personagem fica no
     /// lugar inicial, como os testes de gesto e de janela esperam.
     /// </summary>
-    internal static Process IniciarProcesso(bool pausado = true)
+    internal static Process IniciarProcesso(bool pausado = true, ulong? semente = null)
     {
         var psi = new ProcessStartInfo(Caminhos.ExeDoBuzzy()) { UseShellExecute = false };
         psi.ArgumentList.Add("--diagnostico");
         if (pausado) psi.ArgumentList.Add("--pausado");
+        if (semente is { } s)
+        {
+            psi.ArgumentList.Add("--semente");
+            psi.ArgumentList.Add(s.ToString(CultureInfo.InvariantCulture));
+        }
         return Process.Start(psi) ?? throw new InvalidOperationException("Buzzy.exe não iniciou.");
     }
 
-    internal static BuzzyEmTeste Iniciar(bool pausado = true)
+    internal static BuzzyEmTeste Iniciar(bool pausado = true, ulong? semente = null)
     {
         ExigirTesteSemElevacao();
         string exe = Caminhos.ExeDoBuzzy();
@@ -136,7 +141,7 @@ internal sealed class BuzzyEmTeste : IDisposable
         // gravadas antes de o Process.Start voltar.
         long inicioDoLog = TamanhoDoLog();
         ExigirNenhumBuzzyAberto(); // repetida imediatamente antes de iniciar
-        var b = new BuzzyEmTeste(IniciarProcesso(pausado), inicioDoLog);
+        var b = new BuzzyEmTeste(IniciarProcesso(pausado, semente), inicioDoLog);
         try
         {
             b.Inicio = b.Processo.StartTime;

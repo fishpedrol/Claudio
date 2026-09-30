@@ -161,11 +161,21 @@ public static class Maquina
         /// <summary>
         /// Fim de um gesto do usuário (linha PRESSED, DRAGGING | FULLSCREEN_TARGETS_CHANGED): um
         /// arraste é sempre escolha de posição; um clique ou um cancelamento só descartam o retorno
-        /// temporário se a tela cheia mudou durante o gesto (o ponto do usuário vale).
+        /// temporário se a tela cheia mudou durante o gesto (o ponto do usuário vale). Se o modo foi
+        /// desligado durante o gesto, que não escolheu posição, o efeito temporário se desfaz agora:
+        /// o personagem volta à posição de antes da tela cheia (linha SETTINGS_CHANGED).
         /// </summary>
         private void FimDoGestoDoUsuario(bool escolheuPosicao)
         {
-            if (escolheuPosicao || _s.TelaCheiaMudouNoGesto) _s = _s with { RetornoDaTelaCheia = null };
+            if (escolheuPosicao || _s.TelaCheiaMudouNoGesto)
+            {
+                _s = _s with { RetornoDaTelaCheia = null };
+            }
+            else if (!_s.Preferencias.ModoTelaCheia && _s.RetornoDaTelaCheia is { } retorno && _s.Topologia is { } topologia)
+            {
+                (Posicionamento lugar, PosicaoDoPersonagem posicao) = Posicionador.Reacomodar(topologia, retorno, _cfg.Tamanho);
+                _s = _s with { Lugar = lugar, Posicao = posicao, RetornoDaTelaCheia = null };
+            }
             _s = _s with { TelaCheiaMudouNoGesto = false };
         }
 
@@ -315,6 +325,10 @@ public static class Maquina
             FecharPainelSeAberto();
             _s = _s with { Motivo = motivo, PassosRestantes = 0 };
             IrPara(Estado.Hidden, regra);
+            // Com o modo desligado, o retorno só sobra de um PRESSED interrompido: a posição de
+            // antes da tela cheia volta a valer, como no fim do gesto.
+            if (!_s.Preferencias.ModoTelaCheia && _s.RetornoDaTelaCheia is { } retorno)
+                _s = _s with { Posicao = retorno, RetornoDaTelaCheia = null };
             GravarPosicaoDoUsuario();
         }
 
@@ -394,6 +408,9 @@ public static class Maquina
             if (_s.AutonomiaPausada == pausar) return;
             _s = _s with { AutonomiaPausada = pausar };
             if (!pausar) _reagendar = true;
+            // Fase 4 (DEC-022): pausar para a caminhada na hora; na parede ele desce e pendurado se
+            // solta nos passos seguintes (PassoEscalando, PassoPendurado).
+            if (pausar && _cfg.Movimento && _s.Estado == Estado.Walking) IrPara(Estado.Idle, "CMD_PAUSE_AUTONOMY: para de andar");
         }
 
         private void AbrirConfiguracoes()
@@ -542,13 +559,29 @@ public static class Maquina
             _s = _s with { Preferencias = novas };
             if (!antes.ModoTelaCheia || novas.ModoTelaCheia) return;
 
-            // Desligar o modo desfaz o efeito temporário dele (Q-09).
+            // Desligar o modo desfaz o efeito temporário dele (Q-09): a posição temporária nunca vira
+            // a do usuário (invariante 16).
             if (_s.Estado == Estado.Hidden && _s.Motivo == MotivoDoOcultamento.PorTelaCheia)
+            {
                 RestaurarRetorno("SETTINGS_CHANGED: modo de tela cheia desligado");
-            else if (_s.Estado.Visivel() && _s.Estado is not (Estado.Pressed or Estado.Dragging) && _s.RetornoDaTelaCheia is not null)
+            }
+            else if (_s.Estado == Estado.Hidden)
+            {
+                // Escondido por outro motivo: não reaparece, mas a posição de antes volta a valer.
+                if (_s.RetornoDaTelaCheia is { } retorno) _s = _s with { Posicao = retorno, RetornoDaTelaCheia = null };
+            }
+            else if (_s.Estado is Estado.Pressed or Estado.Dragging)
+            {
+                // Invariante 14: o gesto não é interrompido; o fim dele decide (FimDoGestoDoUsuario).
+            }
+            else if (_s.Estado.Visivel() && _s.RetornoDaTelaCheia is not null)
+            {
                 RestaurarRetorno("SETTINGS_CHANGED: modo de tela cheia desligado");
+            }
             else
+            {
                 _s = _s with { RetornoDaTelaCheia = null };
+            }
         }
 
         // ---------------------------------------------------------------- relógio e movimento
@@ -572,7 +605,19 @@ public static class Maquina
                     _s = _s with { PassosDoGesto = _s.PassosDoGesto - 1 };
                     if (_s.PassosDoGesto <= 0) EncerrarGesto();
                     break;
-                // Walking, Climbing, Hanging, Jumping e Falling: o passo físico é da Fase 4.
+                // Fase 4 (DEC-022): o passo físico move o personagem pelas superfícies.
+                case Estado.Walking when _cfg.Movimento:
+                    PassoAndando();
+                    break;
+                case Estado.Climbing when _cfg.Movimento:
+                    PassoEscalando();
+                    break;
+                case Estado.Hanging when _cfg.Movimento:
+                    PassoPendurado();
+                    break;
+                case Estado.Jumping or Estado.Falling when _cfg.Movimento:
+                    PassoNoAr();
+                    break;
             }
         }
 
@@ -587,6 +632,7 @@ public static class Maquina
                         (Estado.Climbing, Permite(AcoesAutonomas.Escalar) ? Perfil.PesoEscalar : 0),
                         (Estado.Walking, 2));
                     if (_s.Estado == Estado.Walking) Virar();
+                    else if (_s.Estado == Estado.Climbing) TalvezFoguete();
                     break;
                 case (Estado.Walking, SinalDeMovimento.Passagem):
                     IrPara(Estado.Walking, "WALKING: passagem (atravessa)");
@@ -608,11 +654,14 @@ public static class Maquina
                     IrPara(Estado.Hanging, "CLIMBING: alcança borda superior apoiável");
                     break;
                 case (Estado.Hanging, SinalDeMovimento.FimDaBorda):
+                    // Com a toon force (DEC-023), toda lateral dá para descer, mesmo a passagem.
                     Escolher("HANGING: passagem compatível ou fim da borda", calmo,
                         (Estado.Climbing, 2),
                         (Estado.Hanging, 1),
                         (Estado.Falling, 1));
                     if (_s.Estado == Estado.Hanging) Virar();
+                    // Desce pela parede em que chegou (a direção continua virada para ela).
+                    else if (_s.Estado == Estado.Climbing) _s = _s with { Movimento = _s.Movimento with { SentidoVertical = 1 } };
                     break;
                 case (Estado.Jumping or Estado.Falling, SinalDeMovimento.ContatoComOChao):
                     _s = _s with { PassosRestantes = _cfg.PassosDoPouso, Sinal = Sinal.Pousou };
@@ -644,13 +693,17 @@ public static class Maquina
                     Escolher("CLIMBING + AUTONOMY_TIMER", calmo: false,
                         (Estado.Jumping, Permite(AcoesAutonomas.Pular) ? Perfil.PesoPular : 0),
                         (Estado.Falling, 1));
+                    if (_cfg.Movimento && _s.Estado == Estado.Jumping) SaltarDaParede();
                     break;
                 case Estado.Hanging:
+                    // Pendurado no meio da borda não há parede para descer; só na quina.
+                    bool naQuina = !_cfg.Movimento || (Mundo(out _, out Superficies sup, out _) && sup.NaLateral(_s.Movimento.X, out _));
                     Escolher("HANGING + AUTONOMY_TIMER", calmo: false,
                         (Estado.Hanging, 2),
-                        (Estado.Climbing, 2),
+                        (Estado.Climbing, naQuina ? 2 : 0),
                         (Estado.Jumping, Permite(AcoesAutonomas.Pular) ? Perfil.PesoPular : 0),
                         (Estado.Falling, 1));
+                    if (_cfg.Movimento) SairDoTeto();
                     break;
             }
         }
@@ -663,8 +716,11 @@ public static class Maquina
             {
                 if (Permite(acao) && peso > 0) opcoes.Add((acao, peso));
             }
+            // Com a física, escalar exige saber onde estão as laterais do monitor. Com a toon force
+            // (DEC-023), as duas são escaláveis, mesmo a que encosta em outro monitor.
+            bool temLateral = !_cfg.Movimento || Mundo(out _, out _, out _);
             Opcao(AcoesAutonomas.Andar, perfil.PesoAndar);
-            Opcao(AcoesAutonomas.Escalar, perfil.PesoEscalar);
+            Opcao(AcoesAutonomas.Escalar, temLateral ? perfil.PesoEscalar : 0);
             Opcao(AcoesAutonomas.Pular, perfil.PesoPular);
             Opcao(AcoesAutonomas.Descansar, perfil.PesoDescansar);
             Opcao(AcoesAutonomas.Gesto, perfil.PesoGesto);
@@ -679,12 +735,17 @@ public static class Maquina
                     (int lado, Aleatorio a2) = _s.Aleatorio.Entre(0, 1);
                     _s = _s with { Aleatorio = a2, Direcao = lado == 0 ? Direcao.Direita : Direcao.Esquerda };
                     IrPara(Estado.Walking, "IDLE + AUTONOMY_TIMER: andar");
+                    if (_cfg.Movimento) PlanejarCaminhada(perfil);
+                    break;
+                case AcoesAutonomas.Escalar when _cfg.Movimento:
+                    PlanejarEscalada();
                     break;
                 case AcoesAutonomas.Escalar:
                     IrPara(Estado.Climbing, "IDLE + AUTONOMY_TIMER: escalar");
                     break;
                 case AcoesAutonomas.Pular:
                     IrPara(Estado.Jumping, "IDLE + AUTONOMY_TIMER: pular");
+                    if (_cfg.Movimento) PlanejarPulo(perfil);
                     break;
                 case AcoesAutonomas.Descansar:
                     _s = _s with { Expressao = Expressao.Sonolento };
@@ -735,6 +796,275 @@ public static class Maquina
         {
             _s = _s with { Gesto = Gesto.Nenhum, PassosDoGesto = 0 };
             _reagendar = true;
+        }
+
+        // ---------------------------------------------------------------- movimento (Fase 4, DEC-022)
+
+        /// <summary>Com a autonomia pausada ou o painel aberto, o movimento em curso termina num lugar estável.</summary>
+        private bool Calmo => _s.AutonomiaPausada || _s.PainelAberto;
+
+        /// <summary>+1 para a direita, −1 para a esquerda.</summary>
+        private int Sentido => _s.Direcao == Direcao.Direita ? 1 : -1;
+
+        /// <summary>Monitor atual (da topologia em cache), superfícies para o sprite e escala; falso sem lugar ou topologia.</summary>
+        private bool Mundo(out MonitorDoDesktop monitor, out Superficies superficies, out double escala)
+        {
+            monitor = null!;
+            superficies = default;
+            escala = 1;
+            if (_s.Lugar is not { } lugar || _s.Topologia is not { } topologia) return false;
+            monitor = topologia.PorChave(lugar.Monitor.Chave) ?? lugar.Monitor;
+            superficies = Superficies.Do(topologia, monitor, _cfg.Tamanho.ParaPixels(monitor.Dpi));
+            escala = monitor.Dpi / 96.0;
+            return true;
+        }
+
+        /// <summary>Pixels físicos por passo fixo, a partir de DIPs por segundo.</summary>
+        private double PorPasso(double dipPorSegundo, double escala) => dipPorSegundo * escala / _cfg.PassosPorSegundo;
+
+        /// <summary>
+        /// Leva a âncora fina a (x, y): a janela usa a posição arredondada, e a posição relativa
+        /// acompanha, para sobreviver a uma mudança de topologia no meio do movimento.
+        /// </summary>
+        private void MoverPara(MonitorDoDesktop monitor, double x, double y)
+        {
+            var ancora = new PontoPx((int)Math.Round(x, MidpointRounding.AwayFromZero), (int)Math.Round(y, MidpointRounding.AwayFromZero));
+            TamanhoPx tamanho = _cfg.Tamanho.ParaPixels(monitor.Dpi);
+            var lugar = new Posicionamento(monitor, ancora, tamanho, Posicionador.RetanguloDoSprite(ancora, tamanho));
+            _s = _s with { Lugar = lugar, Posicao = Posicionador.Descrever(lugar), Movimento = _s.Movimento with { X = x, Y = y } };
+        }
+
+        private void PassoAndando()
+        {
+            if (!Mundo(out MonitorDoDesktop m, out Superficies sup, out double escala)) return;
+            if (Calmo)
+            {
+                IrPara(Estado.Idle, "WALKING: autonomia pausada ou painel aberto (para)");
+                return;
+            }
+            EstadoDoMovimento mv = _s.Movimento;
+            double passo = PorPasso(_cfg.Fisica.VelocidadeAndando, escala);
+            double x = mv.X + Sentido * passo;
+            int limite = Sentido > 0 ? sup.Direita : sup.Esquerda;
+            bool naBorda = Sentido > 0 ? x >= limite : x <= limite;
+            if (naBorda) x = limite;
+            _s = _s with { Movimento = mv with { Restante = mv.Restante - passo } };
+            MoverPara(m, x, sup.Chao);
+
+            if (naBorda)
+            {
+                // Toon force (DEC-023): a lateral é parede para ele mesmo quando outro monitor
+                // encosta nela; a travessia pelas passagens é da Fase 5.
+                if (mv.QuerEscalar)
+                {
+                    IrPara(Estado.Climbing, "WALKING: parede (andava até ela para escalar)");
+                    TalvezFoguete();
+                    return;
+                }
+                Sinalizar(SinalDeMovimento.Parede);
+                return;
+            }
+            if (!mv.QuerEscalar && _s.Movimento.Restante <= 0) IrPara(Estado.Idle, "WALKING: fim do percurso");
+        }
+
+        private void PassoEscalando()
+        {
+            if (!Mundo(out MonitorDoDesktop m, out Superficies sup, out double escala)) return;
+            EstadoDoMovimento mv = _s.Movimento;
+            // Pausado ou com o painel aberto, desce até o chão em vez de subir (e o foguete apaga).
+            int sentido = Calmo ? 1 : mv.SentidoVertical;
+            bool foguete = mv.Foguete && sentido < 0;
+            double velocidade = foguete ? _cfg.Fisica.VelocidadeDoFoguete : _cfg.Fisica.VelocidadeEscalando;
+            double y = mv.Y + sentido * PorPasso(velocidade, escala);
+            double x = Sentido > 0 ? sup.Direita : sup.Esquerda;
+            _s = _s with { Movimento = mv with { SentidoVertical = sentido, Foguete = foguete } };
+            if (sentido < 0 && y <= sup.Teto)
+            {
+                MoverPara(m, x, sup.Teto);
+                Sinalizar(SinalDeMovimento.BordaSuperior);
+                // Pendurado, segue pela borda para dentro, de costas para a parede.
+                if (_s.Estado == Estado.Hanging) Virar();
+                return;
+            }
+            if (sentido > 0 && y >= sup.Chao)
+            {
+                MoverPara(m, x, sup.Chao);
+                Sinalizar(SinalDeMovimento.FimDaParede);
+                return;
+            }
+            MoverPara(m, x, y);
+        }
+
+        private void PassoPendurado()
+        {
+            if (!Mundo(out MonitorDoDesktop m, out Superficies sup, out double escala)) return;
+            if (Calmo)
+            {
+                IrPara(Estado.Falling, "HANGING: autonomia pausada ou painel aberto (solta-se)");
+                return;
+            }
+            EstadoDoMovimento mv = _s.Movimento;
+            double x = mv.X + Sentido * PorPasso(_cfg.Fisica.VelocidadePendurado, escala);
+            int limite = Sentido > 0 ? sup.Direita : sup.Esquerda;
+            bool naBorda = Sentido > 0 ? x >= limite : x <= limite;
+            if (naBorda) x = limite;
+            MoverPara(m, x, sup.Teto);
+            if (naBorda) Sinalizar(SinalDeMovimento.FimDaBorda);
+        }
+
+        /// <summary>Pulo ou queda: gravidade com velocidade máxima, integração semi-implícita, até o chão.</summary>
+        private void PassoNoAr()
+        {
+            if (!Mundo(out MonitorDoDesktop m, out Superficies sup, out double escala)) return;
+            EstadoDoMovimento mv = _s.Movimento;
+            double dt = 1.0 / _cfg.PassosPorSegundo;
+            double vy = Math.Min(mv.VY + _cfg.Fisica.Gravidade * escala * dt, _cfg.Fisica.VelocidadeMaximaDeQueda * escala);
+            double vx = mv.VX;
+            double x = mv.X + vx * dt;
+            double y = mv.Y + vy * dt;
+            // O sprite nunca sai da área útil: as laterais e a borda de cima param o voo.
+            if (x < sup.Esquerda) { x = sup.Esquerda; vx = 0; }
+            else if (x > sup.Direita) { x = sup.Direita; vx = 0; }
+            if (y < sup.Teto) { y = sup.Teto; if (vy < 0) vy = 0; }
+            if (y >= sup.Chao)
+            {
+                if (Quicar(m, x, sup.Chao, vx, vy, escala)) return;
+                _s = _s with { Movimento = mv with { VX = 0, VY = 0, Quiques = 0 } };
+                MoverPara(m, x, sup.Chao);
+                Sinalizar(SinalDeMovimento.ContatoComOChao);
+                return;
+            }
+            _s = _s with { Movimento = mv with { VX = vx, VY = vy } };
+            MoverPara(m, x, y);
+        }
+
+        /// <summary>
+        /// Toon force (DEC-023): um impacto forte no chão quica como borracha, rindo, em vez de
+        /// pousar. A cada quique sobra uma fração da velocidade; depois de
+        /// <see cref="ParametrosDeMovimento.QuiquesMaximos"/>, ou com a autonomia pausada ou o
+        /// painel aberto, ele pousa. Devolve se quicou.
+        /// </summary>
+        private bool Quicar(MonitorDoDesktop m, double x, int chao, double vx, double vy, double escala)
+        {
+            ParametrosDeMovimento f = _cfg.Fisica;
+            int quiques = _s.Movimento.Quiques;
+            if (Calmo || f.RestituicaoDoQuique <= 0 || quiques >= f.QuiquesMaximos || vy < f.ImpactoMinimoDoQuique * escala) return false;
+
+            string de = _s.Estado.ToString().ToUpperInvariant();
+            _s = _s with { Expressao = Expressao.Rindo };
+            IrPara(Estado.Jumping, $"{de}: contato com o chão, quique de borracha (toon force)");
+            // IrPara recomeça o movimento parado quando o estado muda: a velocidade vem depois.
+            _s = _s with { Movimento = _s.Movimento with { VX = vx * f.AtritoDoQuique, VY = -vy * f.RestituicaoDoQuique, Quiques = quiques + 1 } };
+            MoverPara(m, x, chao);
+            return true;
+        }
+
+        /// <summary>
+        /// Toon force (DEC-023): ao começar a subir uma parede a partir do chão, às vezes dispara
+        /// parede acima num foguete de borracha, até a borda superior. A chance é do perfil de
+        /// energia (frequência de uma ação); a velocidade é a mesma em todo nível.
+        /// </summary>
+        private void TalvezFoguete()
+        {
+            if (!_cfg.Movimento || _s.Estado != Estado.Climbing || Calmo || _cfg.Fisica.VelocidadeDoFoguete <= 0) return;
+            (int sorteio, Aleatorio a) = _s.Aleatorio.Entre(1, 100);
+            _s = _s with { Aleatorio = a };
+            if (sorteio <= Perfil.ChanceDoFoguete)
+                _s = _s with { Movimento = _s.Movimento with { Foguete = true } };
+        }
+
+        /// <summary>Caminhada autônoma: distância do perfil de energia; sem espaço à frente, vira.</summary>
+        private void PlanejarCaminhada(PerfilDeEnergia perfil)
+        {
+            if (!Mundo(out _, out Superficies sup, out double escala)) return;
+            (int dip, Aleatorio a) = _s.Aleatorio.Entre(perfil.DistanciaAndandoMinima, perfil.DistanciaAndandoMaxima);
+            _s = _s with { Aleatorio = a };
+            double x = _s.Movimento.X;
+            double livre = Sentido > 0 ? sup.Direita - x : x - sup.Esquerda;
+            double atras = Sentido > 0 ? x - sup.Esquerda : sup.Direita - x;
+            if (livre < _cfg.Fisica.EspacoMinimo * escala && atras > livre) Virar();
+            _s = _s with { Movimento = _s.Movimento with { Restante = dip * escala } };
+        }
+
+        /// <summary>
+        /// Escalar a partir de IDLE: já encostado numa lateral, sobe; senão, anda até a lateral
+        /// mais próxima e sobe quando chegar. Com a toon force (DEC-023), as duas laterais servem,
+        /// mesmo a que encosta em outro monitor.
+        /// </summary>
+        private void PlanejarEscalada()
+        {
+            if (!Mundo(out _, out Superficies sup, out _) || _s.Lugar is null) return;
+            double x = _s.Lugar.Ancora.X;
+            if (sup.NaLateral(x, out int lado))
+            {
+                _s = _s with { Direcao = lado > 0 ? Direcao.Direita : Direcao.Esquerda };
+                IrPara(Estado.Climbing, "IDLE + AUTONOMY_TIMER: escalar");
+                TalvezFoguete();
+                return;
+            }
+            double ateDireita = sup.Direita - x;
+            double ateEsquerda = x - sup.Esquerda;
+            _s = _s with { Direcao = ateDireita <= ateEsquerda ? Direcao.Direita : Direcao.Esquerda };
+            IrPara(Estado.Walking, "IDLE + AUTONOMY_TIMER: escalar (anda até a parede)");
+            _s = _s with { Movimento = _s.Movimento with { QuerEscalar = true } };
+        }
+
+        /// <summary>
+        /// Pulo autônomo: arco balístico com distância e altura do perfil de energia, calculado
+        /// para pousar no chão; sem espaço à frente, pula para o outro lado.
+        /// </summary>
+        private void PlanejarPulo(PerfilDeEnergia perfil)
+        {
+            if (!Mundo(out _, out Superficies sup, out double escala)) return;
+            (int lado, Aleatorio a1) = _s.Aleatorio.Entre(0, 1);
+            (int distanciaDip, Aleatorio a2) = a1.Entre(perfil.DistanciaDoPuloMinima, perfil.DistanciaDoPuloMaxima);
+            (int alturaDip, Aleatorio a3) = a2.Entre(perfil.AlturaDoPuloMinima, perfil.AlturaDoPuloMaxima);
+            _s = _s with { Aleatorio = a3, Direcao = lado == 0 ? Direcao.Direita : Direcao.Esquerda };
+            double x = _s.Movimento.X;
+            double livre = Sentido > 0 ? sup.Direita - x : x - sup.Esquerda;
+            double atras = Sentido > 0 ? x - sup.Esquerda : sup.Direita - x;
+            if (livre < distanciaDip * escala && atras > livre)
+            {
+                Virar();
+                livre = atras;
+            }
+            double distancia = Math.Min(distanciaDip * escala, livre);
+            double g = _cfg.Fisica.Gravidade * escala;
+            double vy0 = -Math.Sqrt(2 * g * alturaDip * escala);
+            double voo = 2 * -vy0 / g;
+            double vx = voo > 0 ? Sentido * distancia / voo : 0;
+            _s = _s with { Movimento = _s.Movimento with { VX = vx, VY = vy0 } };
+        }
+
+        /// <summary>A agenda decidiu pular da parede: salta para longe dela, de costas para a parede.</summary>
+        private void SaltarDaParede()
+        {
+            if (!Mundo(out _, out _, out double escala)) return;
+            Virar();
+            double g = _cfg.Fisica.Gravidade * escala;
+            _s = _s with
+            {
+                Movimento = _s.Movimento with
+                {
+                    VX = Sentido * _cfg.Fisica.ImpulsoDaParede * escala,
+                    VY = -Math.Sqrt(2 * g * _cfg.Fisica.AlturaDoPuloDaParede * escala),
+                },
+            };
+        }
+
+        /// <summary>A agenda decidiu pendurado: continua pela borda, desce pela parede da quina, salta ou solta.</summary>
+        private void SairDoTeto()
+        {
+            if (!Mundo(out _, out Superficies sup, out double escala)) return;
+            switch (_s.Estado)
+            {
+                case Estado.Climbing when sup.NaLateral(_s.Movimento.X, out int lado):
+                    _s = _s with { Direcao = lado > 0 ? Direcao.Direita : Direcao.Esquerda, Movimento = _s.Movimento with { SentidoVertical = 1 } };
+                    break;
+                case Estado.Jumping:
+                    _s = _s with { Movimento = _s.Movimento with { VX = Sentido * _cfg.Fisica.ImpulsoDaParede * escala, VY = 0 } };
+                    break;
+            }
         }
 
         // ---------------------------------------------------------------- validação (SETTLING)
@@ -804,6 +1134,10 @@ public static class Maquina
             _transicoes.Add(new Transicao(de, novo, regra));
             _s = _s with { Estado = novo, Motivo = novo == Estado.Hidden ? _s.Motivo : MotivoDoOcultamento.Nenhum };
             if (novo != de && DecideNoEstado(novo)) _reagendar = true;
+            // Ao entrar num estado de movimento, a física parte da âncora atual, parada; quem
+            // chamou ajusta velocidade e plano depois (DEC-022).
+            if (novo != de && novo.EmMovimento() && _s.Lugar is { } lugar)
+                _s = _s with { Movimento = new EstadoDoMovimento(lugar.Ancora.X, lugar.Ancora.Y, 0, 0, double.PositiveInfinity, -1, false) };
         }
 
         // ---------------------------------------------------------------- efeitos
@@ -857,9 +1191,15 @@ public static class Maquina
         private TimeSpan SortearAtraso()
         {
             PerfilDeEnergia perfil = Perfil;
-            (TimeSpan atraso, Aleatorio a) = _s.Estado == Estado.Resting
-                ? _s.Aleatorio.Duracao(perfil.DescansoMinimo, perfil.DescansoMaximo)
-                : _s.Aleatorio.Duracao(perfil.DecisaoMinima, perfil.DecisaoMaxima);
+            (TimeSpan minimo, TimeSpan maximo) = _s.Estado switch
+            {
+                Estado.Resting => (perfil.DescansoMinimo, perfil.DescansoMaximo),
+                // Fase 4: tempo na parede e tempo pendurado ("por pouco tempo") do perfil de energia.
+                Estado.Climbing when _cfg.Movimento => (perfil.TempoNaParedeMinimo, perfil.TempoNaParedeMaximo),
+                Estado.Hanging when _cfg.Movimento => (perfil.TempoPenduradoMinimo, perfil.TempoPenduradoMaximo),
+                _ => (perfil.DecisaoMinima, perfil.DecisaoMaxima),
+            };
+            (TimeSpan atraso, Aleatorio a) = _s.Aleatorio.Duracao(minimo, maximo);
             _s = _s with { Aleatorio = a };
             // Depois de uma interação (soltar, fechar o painel, retomar a autonomia, em qualquer
             // estado que decide), a autonomia só volta após o intervalo de acomodação; é também o

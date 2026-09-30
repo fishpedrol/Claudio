@@ -7,9 +7,10 @@ namespace Buzzy.Core.Testes.Personagem;
 /// Complementos da tabela "Transições principais" de ARCHITECTURE.md 2.6 (revisão do gate da
 /// Fase 2, itens A a F e I a P): linhas que <see cref="TransicoesTestes"/> só exercita a partir de
 /// IDLE, asserções que o perfil padrão tornava sempre verdadeiras e comportamentos do núcleo que
-/// ainda não estavam fixados. Os comentários "Linha:" citam a tabela, "Item" cita a revisão e
-/// "Rn" cita as regras do núcleo já implementadas em Maquina.cs. Tempos e posições esperados são
-/// literais calculados à mão, como pede <see cref="TopologiasDeExemplo"/>.
+/// ainda não estavam fixados. Os comentários "Linha:" citam a tabela pelas colunas "De | Evento",
+/// porque a numeração do arquivo muda; "Item" cita a revisão e "Rn" cita as regras do núcleo já
+/// implementadas em Maquina.cs. Tempos e posições esperados são literais calculados à mão, como
+/// pede <see cref="TopologiasDeExemplo"/>.
 /// </summary>
 internal static class TransicoesComplementaresTestes
 {
@@ -26,6 +27,11 @@ internal static class TransicoesComplementaresTestes
     private static readonly ConfiguracaoDoNucleo Curto = new() { Perfil = PerfilCurto };
 
     private static readonly TimeSpan TresSegundos = TimeSpan.FromSeconds(3);
+
+    /// <summary>Faixas do perfil padrão Média (DEC-014): decisão de 8 a 20 s e descanso de 30 a 90 s, sem sobreposição.</summary>
+    private static readonly (TimeSpan Minimo, TimeSpan Maximo) DecisaoDeMedia = (TimeSpan.FromSeconds(8), TimeSpan.FromSeconds(20));
+
+    private static readonly (TimeSpan Minimo, TimeSpan Maximo) DescansoDeMedia = (TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(90));
 
     private static readonly Estado[] AutonomosEFisicos =
         [Estado.Idle, Estado.Walking, Estado.Climbing, Estado.Hanging, Estado.Jumping, Estado.Resting, Estado.Falling, Estado.Landing];
@@ -95,19 +101,24 @@ internal static class TransicoesComplementaresTestes
         Afirmar.Igual(TresSegundos, c.Efeito<AgendarDecisao>().Atraso, "HANGING");
     }
 
-    // Item A: o piso não encurta nem fixa um sorteio maior; com o perfil padrão (Média), vale o sorteio.
+    // Item A: o piso não encurta nem fixa um sorteio maior; com o perfil padrão (Média), vale o
+    // sorteio. A faixa sozinha aceitaria um atraso fixo (no mínimo do perfil, por exemplo): por isso
+    // as sementes também precisam dar atrasos diferentes.
     [Teste]
     public static void Acomodacao_PisoNaoSubstituiUmSorteioMaiorDoPerfil()
     {
+        var distintos = new HashSet<TimeSpan>();
         for (ulong semente = 1; semente <= 20; semente++)
         {
             Cenario c = Cenario.Parado(semente: semente).Aplicar(new Press(Cenario.PontoOpaco), new DragStart(), new DragEnd(new PontoPx(900, 1000)));
             TimeSpan atraso = c.Efeito<AgendarDecisao>().Atraso;
-            Afirmar.Verdadeiro(atraso >= TimeSpan.FromSeconds(8) && atraso <= TimeSpan.FromSeconds(20), $"semente {semente}: {atraso} na faixa de Média (8 a 20 s)");
+            NaFaixa(DecisaoDeMedia, atraso, $"semente {semente}: decisão de Média");
+            distintos.Add(atraso);
         }
+        Afirmar.Verdadeiro(distintos.Count >= 10, $"o atraso é sorteado na faixa: {distintos.Count} valores distintos em 20 sementes ({string.Join(", ", distintos.Order())})");
     }
 
-    // ---------------------------------------------------------------- B: clique duplo e menu "Energia" (linha 160)
+    // ---------------------------------------------------------------- B: clique duplo e menu "Energia" (linha PRESSED (segundo clique), IDLE, REACTING | DOUBLE_CLICK ou menu "Energia")
 
     // Item B. Linha: PRESSED (segundo clique), IDLE, REACTING | DOUBLE_CLICK ou menu "Energia" | SETTLING se vier de PRESSED; senão permanece | Antes da Fase 8, o segundo clique só produz reação não verbal.
     [Teste]
@@ -124,21 +135,24 @@ internal static class TransicoesComplementaresTestes
         Afirmar.Igual(0, c.Efeitos.Count, "nenhum efeito");
     }
 
-    // Item B. Linha 160, a partir de REACTING, com o painel (Fase 8): permanece e abre o painel, que pausa a autonomia.
+    // Item B. Linha: PRESSED (segundo clique), IDLE, REACTING | DOUBLE_CLICK ou menu "Energia", a partir de REACTING, com o painel (Fase 8): permanece e abre o painel, que pausa a autonomia.
     [Teste]
     public static void Reacting_DoubleClickComPainel_AbreOPainelESemAgendaNemDepoisDaReacao()
     {
         Cenario c = Cenario.Em(Estado.Reacting, ComPainel).Aplicar(new DoubleClick());
         c.Esta(Estado.Reacting).SemTransicao().Efeito<AbrirPainelDeEnergia>();
         Afirmar.Verdadeiro(c.Atual.PainelAberto);
-        Afirmar.Falso(c.Atual.DecisaoAgendada, "sem agenda com o painel aberto");
+        // REACTING nunca tem agenda: a pausa da autonomia só aparece no fim da reação, abaixo. Aqui,
+        // o clique duplo não encurta nem reinicia a reação.
+        Afirmar.Igual(ComPainel.PassosDaReacao, c.Atual.PassosRestantes, "a reação continua de onde estava");
 
-        c.Passos(ComPainel.PassosDaReacao).Percorreu(Estado.Reacting, Estado.Settling, Estado.Idle).SemEfeito<AgendarDecisao>();
+        c.Passos(ComPainel.PassosDaReacao - 1).Esta(Estado.Reacting, "a reação dura o mesmo com o painel aberto");
+        c.Passos(1).Percorreu(Estado.Reacting, Estado.Settling, Estado.Idle).SemEfeito<AgendarDecisao>();
         Afirmar.Verdadeiro(c.Atual.PainelAberto, "o fim da reação não fecha o painel");
         Afirmar.Falso(c.Atual.DecisaoAgendada, "a agenda continua cancelada enquanto o painel está aberto");
     }
 
-    // Item B. Linha 160, pelo menu "Energia" (ENERGY_PANEL_OPEN): abre em IDLE e REACTING; em PRESSED e DRAGGING é ignorado.
+    // Item B. Linha: PRESSED (segundo clique), IDLE, REACTING | DOUBLE_CLICK ou menu "Energia", pelo menu (ENERGY_PANEL_OPEN): abre em IDLE e REACTING; em PRESSED e DRAGGING é ignorado.
     [Teste]
     public static void EnergyPanelOpen_AbreEmIdleEReactingEEIgnoradoEmPressedEDragging()
     {
@@ -160,7 +174,7 @@ internal static class TransicoesComplementaresTestes
         Ignorado(Cenario.Parado(), new EnergyPanelOpen(), "IDLE sem painel disponível");
     }
 
-    // ---------------------------------------------------------------- C: RESTING e CLIMBING (linha 177)
+    // ---------------------------------------------------------------- C: RESTING e CLIMBING (linha RESTING, CLIMBING | PRESS, DOUBLE_CLICK, CMD_*)
 
     // Item C. Linha: RESTING, CLIMBING | PRESS, DOUBLE_CLICK, CMD_* | conforme a linha correspondente. DOUBLE_CLICK só vale em PRESSED, IDLE e REACTING; a arbitragem sempre emite PRESS antes dele.
     [Teste]
@@ -171,7 +185,7 @@ internal static class TransicoesComplementaresTestes
                 Ignorado(Cenario.Em(origem, cfg), new DoubleClick(), $"{origem} + DOUBLE_CLICK (painel disponível: {cfg.PainelDeEnergiaDisponivel})");
     }
 
-    // Item C. Linha 177 + linha HIDDEN(...) | CMD_SHOW: visível, CMD_SHOW não muda nada.
+    // Item C. Linha: RESTING, CLIMBING | PRESS, DOUBLE_CLICK, CMD_* + linha HIDDEN(...) | CMD_SHOW: visível, CMD_SHOW não muda nada.
     [Teste]
     public static void RestingEClimbing_CmdShowVisivel_NaoMudaNada()
     {
@@ -179,7 +193,7 @@ internal static class TransicoesComplementaresTestes
             Ignorado(Cenario.Em(origem), new CmdShow(), $"{origem} + CMD_SHOW");
     }
 
-    // Item C. Linha 177 + linha qualquer estado visível | CMD_PAUSE_AUTONOMY, CMD_RESUME_AUTONOMY | permanece.
+    // Item C. Linha: RESTING, CLIMBING | PRESS, DOUBLE_CLICK, CMD_* + linha qualquer estado visível | CMD_PAUSE_AUTONOMY, CMD_RESUME_AUTONOMY | permanece. O piso do intervalo de acomodação está fixado com o perfil curto (item A); aqui, com o perfil padrão, a faixa sorteada mostra qual agenda voltou: o descanso em RESTING, a decisão em CLIMBING.
     [Teste]
     public static void RestingEClimbing_PausarERetomar_PermanecemEReagendam()
     {
@@ -191,12 +205,13 @@ internal static class TransicoesComplementaresTestes
             Afirmar.Verdadeiro(c.Retrato.AutonomiaPausada, $"{origem}: pausada");
             c.Aplicar(new CmdResumeAutonomy()).Esta(origem).SemTransicao();
             Afirmar.Falso(c.Retrato.AutonomiaPausada, $"{origem}: retomada");
-            Afirmar.Verdadeiro(c.Efeito<AgendarDecisao>().Atraso >= TresSegundos, $"{origem}: agenda depois do intervalo de acomodação");
+            NaFaixa(origem == Estado.Resting ? DescansoDeMedia : DecisaoDeMedia, c.Efeito<AgendarDecisao>().Atraso,
+                $"{origem}: {(origem == Estado.Resting ? "descanso" : "decisão")} de Média");
             Afirmar.Verdadeiro(c.Atual.DecisaoAgendada, $"{origem}: volta a decidir");
         }
     }
 
-    // Item C. Linha 177 + CMD_OPEN_SETTINGS (Fase 8): só com a janela de configurações disponível, e sem mudar o estado.
+    // Item C. Linha: RESTING, CLIMBING | PRESS, DOUBLE_CLICK, CMD_* + CMD_OPEN_SETTINGS (Fase 8): só com a janela de configurações disponível, e sem mudar o estado.
     [Teste]
     public static void RestingEClimbing_CmdOpenSettings_SoComConfiguracoesDisponiveis()
     {
@@ -211,7 +226,7 @@ internal static class TransicoesComplementaresTestes
         }
     }
 
-    // Item C. Linha 177 + CMD_RESET_POSITION: volta à posição inicial por SETTLING e grava.
+    // Item C. Linha: RESTING, CLIMBING | PRESS, DOUBLE_CLICK, CMD_* + CMD_RESET_POSITION: volta à posição inicial por SETTLING e grava.
     [Teste]
     public static void RestingEClimbing_CmdResetPosition_VaiParaAPosicaoInicialPorSettlingEGrava()
     {
@@ -228,7 +243,7 @@ internal static class TransicoesComplementaresTestes
         }
     }
 
-    // ---------------------------------------------------------------- D: contato com o chão (linhas 163 e 178)
+    // ---------------------------------------------------------------- D: contato com o chão (linhas FALLING, LANDING | contato com o chão e JUMPING, FALLING | contato com o chão)
 
     // Item D. Linha: FALLING, LANDING | contato com o chão | LANDING, depois IDLE. Em LANDING um contato repetido não reinicia o pouso.
     [Teste]
@@ -262,9 +277,12 @@ internal static class TransicoesComplementaresTestes
         Afirmar.Falso(c.Atual.RelogioAtivo, "parado, sem relógio");
     }
 
-    // ---------------------------------------------------------------- E: escolha ponderada pela energia (linha 164)
+    // ---------------------------------------------------------------- E: escolha ponderada pela energia (linha IDLE | AUTONOMY_TIMER)
 
     // Item E. Linha: IDLE | AUTONOMY_TIMER | WALKING, CLIMBING, JUMPING, RESTING ou permanece com um gesto curto | Escolha ponderada pela personalidade e pelo nível de energia, com semente.
+    // Com 400 sementes por nível, as contagens de hoje são: descanso 156/70/21, andar 68/121/115,
+    // escalar 23/54/74 e pular 0/25/60 (Baixa/Média/Alta). Média e Alta ficam praticamente empatadas
+    // em andar, então andar só compara Baixa com as outras duas.
     [Teste]
     public static void Idle_AutonomyTimer_EscolhaPonderadaPeloNivelDeEnergia()
     {
@@ -275,6 +293,9 @@ internal static class TransicoesComplementaresTestes
             var porDestino = new Dictionary<string, int>(StringComparer.Ordinal);
             for (ulong semente = 1; semente <= Sementes; semente++)
             {
+                // A segunda execução só difere da primeira se a escolha usar uma fonte escondida de
+                // aleatoriedade (Random.Shared, relógio, estado estático): é o que "com semente"
+                // (invariante 7) exclui.
                 (string destino, string retrato) = PrimeiraDecisao(nivel, semente);
                 (string outroDestino, string outroRetrato) = PrimeiraDecisao(nivel, semente);
                 Afirmar.Igual(destino, outroDestino, $"{nivel}, semente {semente}: mesma semente e mesmo nível, mesmo destino");
@@ -291,25 +312,34 @@ internal static class TransicoesComplementaresTestes
 
         Afirmar.Igual(0, Quantos(NivelDeEnergia.Baixa, "Jumping"), $"Baixa nunca pula ({Resumo(NivelDeEnergia.Baixa)})");
         foreach (NivelDeEnergia nivel in Enum.GetValues<NivelDeEnergia>())
+        {
             foreach (string destino in new[] { "Walking", "Climbing", "Resting", "Gesto", "Expressao" })
                 Afirmar.Verdadeiro(Quantos(nivel, destino) > 0, $"{nivel} alcança {destino} ({Resumo(nivel)})");
+            // Toda decisão faz alguma coisa: a troca de expressão sorteia uma diferente da atual.
+            Afirmar.Igual(0, Quantos(nivel, "Nada"), $"{nivel}: nenhuma decisão sem efeito ({Resumo(nivel)})");
+        }
         Afirmar.Verdadeiro(Quantos(NivelDeEnergia.Media, "Jumping") > 0 && Quantos(NivelDeEnergia.Alta, "Jumping") > 0, "Média e Alta pulam");
 
         int descansoBaixa = Quantos(NivelDeEnergia.Baixa, "Resting"), descansoMedia = Quantos(NivelDeEnergia.Media, "Resting"), descansoAlta = Quantos(NivelDeEnergia.Alta, "Resting");
         Afirmar.Verdadeiro(descansoBaixa > descansoMedia && descansoMedia > descansoAlta, $"descanso cai com a energia: Baixa {descansoBaixa}, Média {descansoMedia}, Alta {descansoAlta}");
         int andarBaixa = Quantos(NivelDeEnergia.Baixa, "Walking"), andarMedia = Quantos(NivelDeEnergia.Media, "Walking"), andarAlta = Quantos(NivelDeEnergia.Alta, "Walking");
         Afirmar.Verdadeiro(andarBaixa < andarMedia && andarBaixa < andarAlta, $"andar sobe de Baixa para Média e Alta: Baixa {andarBaixa}, Média {andarMedia}, Alta {andarAlta}");
+        int escalarBaixa = Quantos(NivelDeEnergia.Baixa, "Climbing"), escalarMedia = Quantos(NivelDeEnergia.Media, "Climbing"), escalarAlta = Quantos(NivelDeEnergia.Alta, "Climbing");
+        Afirmar.Verdadeiro(escalarBaixa < escalarMedia && escalarMedia < escalarAlta, $"escalar sobe com a energia: Baixa {escalarBaixa}, Média {escalarMedia}, Alta {escalarAlta}");
+        int pularMedia = Quantos(NivelDeEnergia.Media, "Jumping"), pularAlta = Quantos(NivelDeEnergia.Alta, "Jumping");
+        Afirmar.Verdadeiro(pularMedia < pularAlta, $"pular sobe de Média para Alta: Média {pularMedia}, Alta {pularAlta}");
     }
 
-    // ---------------------------------------------------------------- F: painel e pausa em outros estados visíveis (linhas 161, 162 e 176)
+    // ---------------------------------------------------------------- F: painel e pausa em outros estados visíveis (linhas qualquer estado visível com painel aberto | ENERGY_SELECTED(nivel) e ENERGY_PANEL_CLOSE; qualquer estado visível | CMD_PAUSE_AUTONOMY, CMD_RESUME_AUTONOMY)
 
-    // Item F. Linha: qualquer estado visível com painel aberto | ENERGY_SELECTED(nivel) | permanece. Linha: ... | ENERGY_PANEL_CLOSE | permanece.
+    // Item F. Linha: qualquer estado visível com painel aberto | ENERGY_SELECTED(nivel) | permanece | "o novo nível afeta as próximas decisões autônomas". Linha: ... | ENERGY_PANEL_CLOSE | permanece | "retoma a agenda após intervalo de acomodação". Com os perfis marcados, o atraso agendado ao fechar mostra que a agenda já usa o perfil Alta: 4 s de decisão em CLIMBING e HANGING, 11 s de descanso em RESTING.
     [Teste]
     public static void VisiveisAlemDeIdle_AbrirEscolherEFecharOPainel_Permanecem()
     {
+        ConfiguracaoDoNucleo cfg = ComPainel with { Perfil = PerfilMarcado };
         foreach (Estado origem in VisiveisAlemDeIdle)
         {
-            Cenario c = Cenario.Em(origem, ComPainel);
+            Cenario c = Cenario.Em(origem, cfg);
             PontoPx ancora = c.Ancora;
             c.Aplicar(new EnergyPanelOpen()).Esta(origem).SemTransicao().Efeito<AbrirPainelDeEnergia>();
             Afirmar.Verdadeiro(c.Atual.PainelAberto, $"{origem}: painel aberto");
@@ -317,6 +347,8 @@ internal static class TransicoesComplementaresTestes
             c.Aplicar(new EnergySelected(NivelDeEnergia.Alta)).Esta(origem).SemTransicao();
             Afirmar.Igual(NivelDeEnergia.Alta, c.Efeito<GravarPreferencias>().Preferencias.Energia, $"{origem}: grava a preferência");
             Afirmar.Igual(NivelDeEnergia.Alta, c.Retrato.Energia, $"{origem}: nível novo");
+            // Escolher o nível que já está não muda nada nem grava de novo.
+            Ignorado(c, new EnergySelected(NivelDeEnergia.Alta), $"{origem}: o mesmo nível de novo");
 
             c.Aplicar(new EnergyPanelClose()).Esta(origem).SemTransicao();
             Afirmar.Falso(c.Atual.PainelAberto, $"{origem}: painel fechado");
@@ -324,11 +356,15 @@ internal static class TransicoesComplementaresTestes
             bool decide = Maquina.DecideNoEstado(origem);
             Afirmar.Igual(decide, c.Tem<AgendarDecisao>(), $"{origem}: fechar retoma a agenda só nos estados que decidem");
             Afirmar.Igual(decide, c.Atual.DecisaoAgendada, $"{origem}: agenda pendente");
-            if (decide) Afirmar.Verdadeiro(c.Efeito<AgendarDecisao>().Atraso >= TresSegundos, $"{origem}: depois do intervalo de acomodação");
+            if (decide)
+            {
+                TimeSpan esperado = origem == Estado.Resting ? MarcaDeDescanso(NivelDeEnergia.Alta) : MarcaDeDecisao(NivelDeEnergia.Alta);
+                Afirmar.Igual(esperado, c.Efeito<AgendarDecisao>().Atraso, $"{origem}: {(origem == Estado.Resting ? "descanso" : "decisão")} do perfil Alta, o nível novo");
+            }
         }
     }
 
-    // Item F. Linha: qualquer estado visível | CMD_PAUSE_AUTONOMY, CMD_RESUME_AUTONOMY | permanece.
+    // Item F. Linha: qualquer estado visível | CMD_PAUSE_AUTONOMY, CMD_RESUME_AUTONOMY | permanece. Com o perfil padrão (Média), a faixa do atraso mostra qual agenda voltou: descanso (30 a 90 s) em RESTING, decisão (8 a 20 s) em CLIMBING e HANGING; o piso está fixado no item A.
     [Teste]
     public static void VisiveisAlemDeIdle_PausarERetomar_Permanecem()
     {
@@ -347,13 +383,17 @@ internal static class TransicoesComplementaresTestes
             c.Aplicar(new CmdResumeAutonomy()).Esta(origem).SemTransicao();
             Afirmar.Falso(c.Retrato.AutonomiaPausada, $"{origem}: retomada");
             Afirmar.Igual(decide, c.Tem<AgendarDecisao>(), $"{origem}: retomar agenda só nos estados que decidem");
-            if (decide) Afirmar.Verdadeiro(c.Efeito<AgendarDecisao>().Atraso >= TresSegundos, $"{origem}: depois do intervalo de acomodação");
+            if (decide)
+            {
+                NaFaixa(origem == Estado.Resting ? DescansoDeMedia : DecisaoDeMedia, c.Efeito<AgendarDecisao>().Atraso,
+                    $"{origem}: {(origem == Estado.Resting ? "descanso" : "decisão")} de Média");
+            }
             Afirmar.Igual(relogio, c.Atual.RelogioAtivo, $"{origem}: pausar e retomar não mexem no relógio do movimento");
             Afirmar.Igual(ancora, c.Ancora, $"{origem}: nem na posição");
         }
     }
 
-    // Item F e R11. Linhas 161 e 162: o nível novo afeta as próximas decisões; fechar o painel agenda na faixa do perfil Alta, com o piso do intervalo de acomodação.
+    // Item F e R11. Linhas: qualquer estado visível com painel aberto | ENERGY_SELECTED(nivel) e ... | ENERGY_PANEL_CLOSE: o nível novo afeta as próximas decisões; fechar o painel agenda na faixa do perfil Alta, com o piso do intervalo de acomodação.
     [Teste]
     public static void Idle_EnergiaAltaEFecharOPainel_AgendaNaFaixaDoPerfilAltaComPiso()
     {
@@ -372,7 +412,7 @@ internal static class TransicoesComplementaresTestes
         Afirmar.Verdadeiro(viuAbaixoDeMedia, "algum atraso abaixo do mínimo de Média: o perfil usado é o de Alta");
     }
 
-    // ---------------------------------------------------------------- I: relógio em RESTING (linha 169)
+    // ---------------------------------------------------------------- I: relógio em RESTING (linha RESTING | AUTONOMY_TIMER)
 
     // Item I. Linha: RESTING | AUTONOMY_TIMER | IDLE | Acorda e volta a decidir. Em IDLE sem gesto não há animação: o relógio continua desligado (DEC-011).
     [Teste]
@@ -390,7 +430,7 @@ internal static class TransicoesComplementaresTestes
         Afirmar.Diferente(Gesto.Nenhum, c.Retrato.Gesto);
     }
 
-    // Item I. Linha 169: TICK e troca de expressão em RESTING não ligam o relógio.
+    // Item I. Linha: RESTING | AUTONOMY_TIMER ("o relógio só é religado neste momento"): TICK e troca de expressão em RESTING não ligam o relógio.
     [Teste]
     public static void Resting_TickEExpressionChange_NaoLigamORelogio()
     {
@@ -408,7 +448,7 @@ internal static class TransicoesComplementaresTestes
         Afirmar.Verdadeiro(c.Atual.DecisaoAgendada, "o temporizador de acordar continua pendente");
     }
 
-    // ---------------------------------------------------------------- J: TOPOLOGY_CHANGED sem estado visível (linha 181)
+    // ---------------------------------------------------------------- J: TOPOLOGY_CHANGED sem estado visível (linha BOOTING, HIDDEN, EXITING | TOPOLOGY_CHANGED)
 
     // Item J. Linha: BOOTING, HIDDEN, EXITING | TOPOLOGY_CHANGED | sem troca de estado | Só atualiza a topologia em cache. BOOTING valida ao terminar de carregar.
     [Teste]
@@ -425,7 +465,7 @@ internal static class TransicoesComplementaresTestes
         Afirmar.Igual(new PontoPx(1632, 1080), inverso.Ancora, "chão da BarraNoTopo (1080)");
     }
 
-    // Item J. Linha 181: HIDDEN por sessão, suspensão ou tela cheia só atualiza o cache; valida ao reaparecer.
+    // Item J. Linha: BOOTING, HIDDEN, EXITING | TOPOLOGY_CHANGED: HIDDEN por sessão, suspensão ou tela cheia só atualiza o cache; valida ao reaparecer.
     [Teste]
     public static void EscondidoPorSessaoSuspensaoOuTelaCheia_TopologyChanged_SoOCacheEValidaAoReaparecer()
     {
@@ -453,19 +493,28 @@ internal static class TransicoesComplementaresTestes
         }
     }
 
-    // ---------------------------------------------------------------- K: SESSION_LOCKED e SUSPENDING (linhas 182 a 184)
+    // ---------------------------------------------------------------- K: SESSION_LOCKED e SUSPENDING (linhas qualquer, exceto EXITING | CMD_HIDE, SESSION_LOCKED e SUSPENDING)
 
-    // Item K. Linha: qualquer, exceto EXITING | SESSION_LOCKED | HIDDEN(POR_SESSAO) | Idem. Linha: ... | SUSPENDING | HIDDEN(POR_SUSPENSAO) | Idem. "Idem" = fecha o painel, encerra captura e arraste, grava a posição (linha de CMD_HIDE).
+    // Item K. Linha: qualquer, exceto EXITING | SESSION_LOCKED | HIDDEN(POR_SESSAO) | Idem. Linha: ... | SUSPENDING | HIDDEN(POR_SUSPENSAO) | Idem. "Idem" = fecha o painel, encerra captura e arraste, grava a posição (linha de CMD_HIDE). Em DRAGGING, o cursor está fora da área útil: esconder encerra o arraste onde ele está, como um cancelamento (ARCHITECTURE.md 2.7), e grava o ponto validado, não o de antes do arraste nem o do cursor.
     [Teste]
     public static void Qualquer_SessionLockedESuspending_EscondemComOsEfeitosDoCmdHide()
     {
+        // Cursor em (2500,300), pegada (0,-32): âncora (2500,332), além da direita do único monitor.
+        // Validada sem queda física: x preso em 1920 − 64 = 1856 e os pés no chão (1032).
+        var cursorForaDaTela = new PontoPx(2500, 300);
+        var arrasteValidado = new PosicaoDoPersonagem(TopologiasDeExemplo.Display1, 1856 / 1920.0, 1.0, new PontoPx(1856, 1032));
         foreach ((Evento evento, MotivoDoOcultamento motivo) in EventosDoSistemaQueEscondem())
         {
             foreach (Estado origem in AutonomosEFisicos.Concat([Estado.Pressed, Estado.Dragging, Estado.Reacting, Estado.Booting]))
             {
                 string contexto = $"{origem} + {evento.GetType().Name}";
                 Cenario c = Cenario.Em(origem);
-                PosicaoDoPersonagem? posicao = c.Atual.Posicao;
+                if (origem == Estado.Dragging)
+                {
+                    c.Aplicar(new DragMove(cursorForaDaTela));
+                    Afirmar.Igual(new PontoPx(2500, 332), c.Ancora, $"{contexto}: preso ao cursor, sem validar");
+                }
+                PosicaoDoPersonagem? posicao = origem == Estado.Dragging ? arrasteValidado : c.Atual.Posicao;
                 c.Aplicar(evento).EstaEscondido(motivo).Percorreu(origem, Estado.Hidden);
                 Afirmar.Falso(c.Atual.RelogioAtivo, $"{contexto}: sem relógio escondido");
                 Afirmar.Falso(c.Atual.DecisaoAgendada, $"{contexto}: sem agenda escondido");
@@ -482,6 +531,13 @@ internal static class TransicoesComplementaresTestes
                 {
                     c.Efeito<EsconderJanela>();
                     MesmaPosicao(Afirmar.NaoNulo(posicao), c.Efeito<GravarPosicao>().Posicao, $"{contexto}: grava a posição");
+                    MesmaPosicao(Afirmar.NaoNulo(posicao), c.Atual.Posicao, $"{contexto}: a posição do personagem escondido é a gravada");
+                }
+                if (origem == Estado.Dragging)
+                {
+                    // Ao reaparecer, está onde o arraste parou, validado.
+                    c.Aplicar(motivo == MotivoDoOcultamento.PorSessao ? new SessionUnlocked() : new Resumed()).Percorreu(Estado.Hidden, Estado.Settling, Estado.Idle);
+                    Afirmar.Igual(new PontoPx(1856, 1032), c.Ancora, $"{contexto}: reaparece no ponto validado do arraste");
                 }
             }
 
@@ -499,7 +555,7 @@ internal static class TransicoesComplementaresTestes
         }
     }
 
-    // Item K e R2. Linhas 182 a 184 a partir de HIDDEN: um motivo de precedência maior (usuário 4 > sessão 3 > suspensão 2 > tela cheia 1) substitui o atual, com uma transição HIDDEN -> HIDDEN; um menor ou igual não.
+    // Item K e R2. Linhas: qualquer, exceto EXITING | CMD_HIDE, SESSION_LOCKED e SUSPENDING, a partir de HIDDEN: um motivo de precedência maior (usuário 4 > sessão 3 > suspensão 2 > tela cheia 1) substitui o atual, com uma transição HIDDEN -> HIDDEN; um menor ou igual não.
     [Teste]
     public static void Escondido_CadaMotivoContraCadaPedidoDeEsconder_SegueAPrecedencia()
     {
@@ -540,7 +596,7 @@ internal static class TransicoesComplementaresTestes
         }
     }
 
-    // Item K e R3. Linhas 182 a 184 sobre HIDDEN(POR_TELA_CHEIA): o motivo maior assume, a posição volta a ser a de antes da tela cheia, o retorno some e o personagem não reaparece.
+    // Item K e R3. Linhas: qualquer, exceto EXITING | CMD_HIDE, SESSION_LOCKED e SUSPENDING, e HIDDEN(POR_TELA_CHEIA) | CMD_HIDE, sobre HIDDEN(POR_TELA_CHEIA): o motivo maior assume, a posição volta a ser a de antes da tela cheia, o retorno some e o personagem não reaparece.
     [Teste]
     public static void EscondidoPorTelaCheia_SubstituidoPorMotivoMaior_VoltaAPosicaoDeAntesSemReaparecer()
     {
@@ -561,7 +617,7 @@ internal static class TransicoesComplementaresTestes
         }
     }
 
-    // ---------------------------------------------------------------- L: reaparecer contra a topologia nova (linhas 186 e 187)
+    // ---------------------------------------------------------------- L: reaparecer contra a topologia nova (linhas HIDDEN(POR_SESSAO) | SESSION_UNLOCKED ou CMD_SHOW e HIDDEN(POR_SUSPENSAO) | RESUMED ou CMD_SHOW)
 
     // Item L. Linha: HIDDEN(POR_SESSAO) | SESSION_UNLOCKED ou CMD_SHOW | SETTLING | Revalida a posição contra a topologia atual. Linha: HIDDEN(POR_SUSPENSAO) | RESUMED ou CMD_SHOW | SETTLING | Idem.
     [Teste]
@@ -584,9 +640,9 @@ internal static class TransicoesComplementaresTestes
                 // próximo da última âncora, na mesma posição relativa. No meio de três monitores, a
                 // 75%: o DISPLAY3 fica a 480 px e o DISPLAY1 (principal) a 1441 px.
                 var salva = new PosicaoDoPersonagem(TopologiasDeExemplo.Display2, 0.75, 1.0, new PontoPx(3360, 1032));
-                Cenario c = new Cenario().Aplicar(new Loaded(TresEmLinha, salva, Preferencias.Padrao));
+                Cenario c = new Cenario().Aplicar(new Loaded(Cenario.TresEmLinha, salva, Preferencias.Padrao));
                 Afirmar.Igual(new PontoPx(3360, 1032), c.Ancora, $"{contexto}: começa no DISPLAY2");
-                c.Aplicar(esconder, new TopologyChanged(TresEmLinhaSemODoMeio)).EstaEscondido(motivo).SemTransicao();
+                c.Aplicar(esconder, new TopologyChanged(Cenario.TresEmLinhaSemODoMeio)).EstaEscondido(motivo).SemTransicao();
                 c.Aplicar(mostrar).Percorreu(Estado.Hidden, Estado.Settling, Estado.Idle);
                 Afirmar.Igual(TopologiasDeExemplo.Display3, c.Retrato.ChaveMonitor, $"{contexto}: monitor mais próximo, não o principal");
                 Afirmar.Igual(new PontoPx(3840 + 1440, 1032), c.Ancora, $"{contexto}: 75% da área útil do DISPLAY3");
@@ -595,7 +651,7 @@ internal static class TransicoesComplementaresTestes
         }
     }
 
-    // ---------------------------------------------------------------- M: gravar antes de encerrar (linha 189)
+    // ---------------------------------------------------------------- M: gravar antes de encerrar (linha qualquer | CMD_EXIT, SESSION_ENDING)
 
     // Item M. Linha: qualquer | CMD_EXIT, SESSION_ENDING | EXITING | Grava configurações e encerra.
     [Teste]
@@ -621,7 +677,7 @@ internal static class TransicoesComplementaresTestes
         }
     }
 
-    // Item M. Linha 189 a partir de DRAGGING: o arraste interrompido vale como cancelamento; grava a posição validada (presa na área útil).
+    // Item M. Linha: qualquer | CMD_EXIT, SESSION_ENDING, a partir de DRAGGING: o arraste interrompido vale como cancelamento; grava a posição validada (presa na área útil).
     [Teste]
     public static void Dragging_CmdExitOuSessionEnding_GravaAPosicaoValidadaDoArraste()
     {
@@ -644,7 +700,7 @@ internal static class TransicoesComplementaresTestes
         }
     }
 
-    // Item M. Linha 189: EXITING é final; sair de novo não produz efeito.
+    // Item M. Linha: qualquer | CMD_EXIT, SESSION_ENDING: EXITING é final; sair de novo não produz efeito.
     [Teste]
     public static void Exiting_CmdExitESessionEnding_NaoProduzemEfeitos()
     {
@@ -656,17 +712,22 @@ internal static class TransicoesComplementaresTestes
         }
     }
 
-    // ---------------------------------------------------------------- N: arraste a partir de estados em movimento (linha 154)
+    // ---------------------------------------------------------------- N: arraste a partir de estados em movimento (linha qualquer autônomo ou físico | PRESS sobre pixel opaco)
 
-    // Item N. Linha: qualquer autônomo ou físico | PRESS | PRESSED. Linha: PRESSED | DRAG_START | DRAGGING | Plano autônomo descartado. Linha: DRAGGING | DRAG_END | SETTLING.
+    // Item N. Linha: qualquer autônomo ou físico | PRESS | PRESSED | "Movimento autônomo congela no quadro atual. Vale também no meio de um pulo ou queda." Linha: PRESSED | DRAG_START | DRAGGING | Plano autônomo descartado. Linha: DRAGGING | DRAG_END | SETTLING. Em CLIMBING e HANGING havia uma decisão pendente, que o PRESS cancela; nos outros, não havia agenda a cancelar. Passos e gesto pendentes que o PRESS descarta estão em PressEArraste_NaoHerdamPassosRestantesNemGesto, a partir de LANDING, REACTING e de um gesto em IDLE, os únicos estados que os têm.
     [Teste]
-    public static void WalkingJumpingFalling_PressArrastaESolta_AcomodaSemRelogioNemAgendaNoArraste()
+    public static void EmMovimento_PressArrastaESolta_AcomodaSemRelogioNemAgendaNoArraste()
     {
-        foreach (Estado origem in new[] { Estado.Walking, Estado.Jumping, Estado.Falling })
+        foreach (Estado origem in new[] { Estado.Walking, Estado.Climbing, Estado.Hanging, Estado.Jumping, Estado.Falling })
         {
             Cenario c = Cenario.Em(origem);
+            bool decidia = Maquina.DecideNoEstado(origem);
             Afirmar.Verdadeiro(c.Atual.RelogioAtivo, $"{origem}: em movimento, o relógio corre");
+            Afirmar.Igual(decidia, c.Atual.DecisaoAgendada, $"{origem}: decisão pendente só em CLIMBING e HANGING");
             c.Aplicar(new Press(Cenario.PontoOpaco)).Percorreu(origem, Estado.Pressed).Efeito<DesligarRelogio>();
+            Afirmar.Igual(decidia, c.Tem<CancelarDecisao>(), $"{origem}: o PRESS cancela a decisão pendente");
+            Afirmar.Falso(c.Atual.DecisaoAgendada, $"{origem}: nada agendado com o botão pressionado");
+            Afirmar.Igual(Cenario.AncoraInicial, c.Ancora, $"{origem}: congela no lugar");
             c.Aplicar(new DragStart()).Percorreu(Estado.Pressed, Estado.Dragging);
             c.Aplicar(new DragMove(new PontoPx(700, 1000))).Esta(Estado.Dragging).SemTransicao();
             Afirmar.Sequencia(["MoverJanela"], c.Efeitos.Select(e => e.GetType().Name), $"{origem}: arrastar só move a janela");
@@ -675,14 +736,12 @@ internal static class TransicoesComplementaresTestes
 
             c.Aplicar(new DragEnd(new PontoPx(700, 1000))).Percorreu(Estado.Dragging, Estado.Settling, Estado.Idle);
             Afirmar.Igual(new PontoPx(700, 1032), c.Ancora, $"{origem}: onde foi solto");
-            Afirmar.Igual(0, c.Atual.PassosRestantes, $"{origem}: nada herdado");
-            Afirmar.Igual(Gesto.Nenhum, c.Retrato.Gesto, $"{origem}: sem gesto herdado");
             Afirmar.Falso(c.Atual.RelogioAtivo, $"{origem}: parado, sem relógio");
             Afirmar.Verdadeiro(c.Atual.DecisaoAgendada, $"{origem}: volta a decidir");
         }
     }
 
-    // Item N. Linha 154 a partir de FALLING com queda física: solto no ar, volta a cair.
+    // Item N. Linha: qualquer autônomo ou físico | PRESS sobre pixel opaco, a partir de FALLING com queda física: solto no ar, volta a cair.
     [Teste]
     public static void Falling_ArrastadoESoltoNoAr_VoltaACairComQuedaFisica()
     {
@@ -702,7 +761,7 @@ internal static class TransicoesComplementaresTestes
         chao.Percorreu(Estado.Dragging, Estado.Settling, Estado.Idle);
     }
 
-    // Item N. Linha 153: PRESS descarta o resto do pouso, da reação e do gesto; o arraste não os herda.
+    // Item N. Linha: qualquer autônomo ou físico | PRESS sobre pixel opaco (e REACTING, DEC-004): PRESS descarta o resto do pouso, da reação e do gesto; o arraste não os herda.
     [Teste]
     public static void PressEArraste_NaoHerdamPassosRestantesNemGesto()
     {
@@ -727,13 +786,14 @@ internal static class TransicoesComplementaresTestes
         Afirmar.Falso(g.Atual.RelogioAtivo, "sem gesto, sem relógio");
     }
 
-    // ---------------------------------------------------------------- O: direção e ramo calmo (linhas 165, 166 e 168)
+    // ---------------------------------------------------------------- O: direção e ramo calmo (linhas WALKING | parede, passagem ou fim do chão; CLIMBING | topo da área útil...; HANGING | deslocamento autônomo...)
 
-    // Item O. Linha: WALKING | parede, passagem ou fim do chão | IDLE, CLIMBING, FALLING ou WALKING: voltar a andar na parede inverte a direção; os outros destinos não viram.
+    // Item O. Linha: WALKING | parede, passagem ou fim do chão | IDLE, CLIMBING, FALLING ou WALKING: voltar a andar na parede inverte a direção; os outros destinos não viram. Os dois ramos precisam acontecer, e a inversão, a partir das duas direções.
     [Teste]
     public static void Walking_Parede_VoltarAAndarInverteADirecao()
     {
         var inversoes = new HashSet<Direcao>();
+        var semVirar = new HashSet<Estado>();
         for (ulong semente = 1; semente <= 60; semente++)
         {
             Cenario c = AndandoComSemente(semente, Padrao);
@@ -748,39 +808,46 @@ internal static class TransicoesComplementaresTestes
             else
             {
                 Afirmar.Igual(antes, c.Retrato.Direcao, $"semente {semente}: {c.Atual.Estado} não vira");
+                semVirar.Add(c.Atual.Estado);
             }
         }
         Afirmar.Igual(2, inversoes.Count, "inverteu partindo das duas direções");
+        Afirmar.Sequencia([Estado.Idle, Estado.Climbing], semVirar.Order(), "parar e escalar aconteceram, sem virar");
     }
 
-    // Item O. Linha: HANGING | deslocamento autônomo, AUTONOMY_TIMER ou passagem compatível | HANGING, CLIMBING, JUMPING ou FALLING: continuar pendurado no fim da borda inverte a direção.
+    // Item O. Linha: HANGING | deslocamento autônomo, AUTONOMY_TIMER ou passagem compatível | HANGING, CLIMBING, JUMPING ou FALLING: continuar pendurado no fim da borda inverte a direção, cada vez que acontece. O personagem chega pendurado virado para a direita; a partir da esquerda, é a volta seguinte. Os dois ramos precisam acontecer.
     [Teste]
     public static void Hanging_FimDaBorda_ContinuarPenduradoInverteADirecao()
     {
-        bool viu = false;
-        for (ulong semente = 1; semente <= 60; semente++)
+        var partidas = new Dictionary<Direcao, int>();
+        var semVirar = new HashSet<Estado>();
+        for (ulong semente = 1; semente <= 120; semente++)
         {
             Cenario c = EscalandoComSemente(semente, Padrao).Aplicar(new MovementSignal(SinalDeMovimento.BordaSuperior)).Esta(Estado.Hanging);
-            Direcao antes = c.Retrato.Direcao;
-            c.Aplicar(new MovementSignal(SinalDeMovimento.FimDaBorda));
-            if (c.Atual.Estado == Estado.Hanging)
+            // Fim da borda até sair de HANGING (no máximo 10 vezes).
+            for (int volta = 1; volta <= 10 && c.Atual.Estado == Estado.Hanging; volta++)
             {
-                viu = true;
-                c.Percorreu(Estado.Hanging, Estado.Hanging);
-                Afirmar.Diferente(antes, c.Retrato.Direcao, $"semente {semente}: segue pela borda no outro sentido");
-                // Uma segunda volta desfaz a primeira.
-                if (c.Aplicar(new MovementSignal(SinalDeMovimento.FimDaBorda)).Atual.Estado == Estado.Hanging)
-                    Afirmar.Igual(antes, c.Retrato.Direcao, $"semente {semente}: duas voltas, sentido original");
-            }
-            else
-            {
-                Afirmar.Igual(antes, c.Retrato.Direcao, $"semente {semente}: {c.Atual.Estado} não vira");
+                Direcao antes = c.Retrato.Direcao;
+                c.Aplicar(new MovementSignal(SinalDeMovimento.FimDaBorda));
+                if (c.Atual.Estado == Estado.Hanging)
+                {
+                    c.Percorreu(Estado.Hanging, Estado.Hanging);
+                    Afirmar.Diferente(antes, c.Retrato.Direcao, $"semente {semente}, volta {volta}: segue pela borda no outro sentido");
+                    partidas[antes] = partidas.GetValueOrDefault(antes) + 1;
+                }
+                else
+                {
+                    Afirmar.Igual(antes, c.Retrato.Direcao, $"semente {semente}, volta {volta}: {c.Atual.Estado} não vira");
+                    semVirar.Add(c.Atual.Estado);
+                }
             }
         }
-        Afirmar.Verdadeiro(viu, "alguma semente continuou pendurada");
+        string resumo = string.Join(", ", partidas.Select(p => $"a partir de {p.Key}: {p.Value}"));
+        Afirmar.Verdadeiro(partidas.GetValueOrDefault(Direcao.Direita) > 0 && partidas.GetValueOrDefault(Direcao.Esquerda) > 0, $"inverteu partindo das duas direções ({resumo})");
+        Afirmar.Sequencia([Estado.Climbing, Estado.Falling], semVirar.Order(), "voltar à parede e cair aconteceram, sem virar");
     }
 
-    // Item O. Linhas 165, 166 e 168 com a autonomia pausada ou o painel aberto: o movimento termina no destino mais calmo (parede -> IDLE, topo -> IDLE, fim da borda -> CLIMBING), sem sortear.
+    // Item O. Linhas: WALKING | parede...; CLIMBING | topo da área útil...; HANGING | deslocamento autônomo... com a autonomia pausada ou o painel aberto: o movimento termina no destino mais calmo (parede -> IDLE, topo -> IDLE, fim da borda -> CLIMBING), sem sortear.
     [Teste]
     public static void SinaisDeMovimento_ComAutonomiaPausadaOuPainelAberto_FicamComODestinoCalmo()
     {
@@ -819,10 +886,10 @@ internal static class TransicoesComplementaresTestes
     public static void Pressed_MonitorRemovidoEClick_ValidaNaHoraNoMonitorMaisProximo()
     {
         var salva = new PosicaoDoPersonagem(TopologiasDeExemplo.Display2, 0.75, 1.0, new PontoPx(3360, 1032));
-        Cenario c = new Cenario().Aplicar(new Loaded(TresEmLinha, salva, Preferencias.Padrao));
+        Cenario c = new Cenario().Aplicar(new Loaded(Cenario.TresEmLinha, salva, Preferencias.Padrao));
         Afirmar.Igual(new PontoPx(3360, 1032), c.Ancora, "no DISPLAY2, o do meio");
         c.Aplicar(new Press(new PontoPx(3360, 1000))).Esta(Estado.Pressed);
-        c.Aplicar(new TopologyChanged(TresEmLinhaSemODoMeio)).Esta(Estado.Pressed).SemTransicao();
+        c.Aplicar(new TopologyChanged(Cenario.TresEmLinhaSemODoMeio)).Esta(Estado.Pressed).SemTransicao();
         Afirmar.Igual(0, c.Efeitos.Count, "com o botão pressionado, só o cache");
         Afirmar.Igual(TopologiasDeExemplo.Display2, c.Retrato.ChaveMonitor, "ainda não validou");
 
@@ -856,21 +923,6 @@ internal static class TransicoesComplementaresTestes
 
     // ---------------------------------------------------------------- auxiliares
 
-    /// <summary>
-    /// Três monitores 1920x1080 a 96 DPI em linha, com a barra de 48 px embaixo.
-    /// <code>
-    /// [ 1* ][ 2  ][ 3  ]
-    /// </code>
-    /// </summary>
-    private static Topologia TresEmLinha => new([
-        TopologiasDeExemplo.Principal(TopologiasDeExemplo.Display1, TopologiasDeExemplo.Ret(0, 0, 1920, 1080), TopologiasDeExemplo.Ret(0, 0, 1920, 1032), 96),
-        TopologiasDeExemplo.Secundario(TopologiasDeExemplo.Display2, TopologiasDeExemplo.Ret(1920, 0, 3840, 1080), TopologiasDeExemplo.Ret(1920, 0, 3840, 1032), 96),
-        TopologiasDeExemplo.Secundario(TopologiasDeExemplo.Display3, TopologiasDeExemplo.Ret(3840, 0, 5760, 1080), TopologiasDeExemplo.Ret(3840, 0, 5760, 1032), 96),
-    ]);
-
-    /// <summary><see cref="TresEmLinha"/> depois de desconectar o DISPLAY2: [ 1* ]      [ 3  ].</summary>
-    private static Topologia TresEmLinhaSemODoMeio => TopologiasDeExemplo.SemMonitor(TresEmLinha, TopologiasDeExemplo.Display2);
-
     private static PerfilDeEnergia PerfilCurto(NivelDeEnergia nivel) => PerfilDeEnergia.Padrao(nivel) with
     {
         DecisaoMinima = TimeSpan.FromMilliseconds(200),
@@ -878,6 +930,28 @@ internal static class TransicoesComplementaresTestes
         DescansoMinimo = TimeSpan.FromMilliseconds(300),
         DescansoMaximo = TimeSpan.FromMilliseconds(900),
     };
+
+    /// <summary>
+    /// Perfis com atrasos fixos, diferentes por nível e por faixa (decisão ou descanso), todos acima
+    /// do intervalo de acomodação: o atraso agendado diz qual perfil e qual faixa a agenda usou.
+    /// Pesos e gestos são os do perfil padrão.
+    /// </summary>
+    private static PerfilDeEnergia PerfilMarcado(NivelDeEnergia nivel) => PerfilDeEnergia.Padrao(nivel) with
+    {
+        DecisaoMinima = MarcaDeDecisao(nivel),
+        DecisaoMaxima = MarcaDeDecisao(nivel),
+        DescansoMinimo = MarcaDeDescanso(nivel),
+        DescansoMaximo = MarcaDeDescanso(nivel),
+    };
+
+    /// <summary>Decisão fixa de <see cref="PerfilMarcado"/>: 21 s em Baixa, 9 s em Média, 4 s em Alta.</summary>
+    private static TimeSpan MarcaDeDecisao(NivelDeEnergia nivel) => TimeSpan.FromSeconds(nivel switch { NivelDeEnergia.Baixa => 21, NivelDeEnergia.Media => 9, _ => 4 });
+
+    /// <summary>Descanso fixo de <see cref="PerfilMarcado"/>: 61 s em Baixa, 31 s em Média, 11 s em Alta.</summary>
+    private static TimeSpan MarcaDeDescanso(NivelDeEnergia nivel) => TimeSpan.FromSeconds(nivel switch { NivelDeEnergia.Baixa => 61, NivelDeEnergia.Media => 31, _ => 11 });
+
+    private static void NaFaixa((TimeSpan Minimo, TimeSpan Maximo) faixa, TimeSpan atraso, string contexto)
+        => Afirmar.Verdadeiro(atraso >= faixa.Minimo && atraso <= faixa.Maximo, $"{contexto}: {atraso} entre {faixa.Minimo} e {faixa.Maximo}");
 
     private static (Evento Evento, MotivoDoOcultamento Motivo)[] EventosDoSistemaQueEscondem() =>
     [

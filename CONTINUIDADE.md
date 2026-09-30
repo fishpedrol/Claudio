@@ -111,3 +111,35 @@ Mantenha aqui um resumo do estado atual e acrescente uma entrada curta por marco
   - Rodando em paralelo:
     - revisão do workflow de cobertura (`wf_3fd26000-099`);
     - desenho da Fase 5, só leitura (`wf_0c1129a6-6ad`).
+- **2026-09-30 15:45 — Claude:** o usuário pediu: "quero que o bixinho suba pelas laterais do monitor também, tenha tipo toon force". Foi registrado como DEC-023 e implementado **em `f4`**.
+  - Mudanças:
+    - toda lateral é escalável, inclusive a que encosta em outro monitor (`Superficies.NaLateral`; `ParedeX` virou `PassagemX`);
+    - quique de borracha (`Maquina.Quicar`, `EstadoDoMovimento.Quiques`);
+    - foguete de borracha (`TalvezFoguete`, `EstadoDoMovimento.Foguete`, `PerfilDeEnergia.ChanceDoFoguete` 10/30/50);
+    - achatar e esticar a pixel art (`Tela.Deformada` em Buzzy.Visual; `Deformacao`/`Dinamica` em `PoseDoPersonagem.cs`; `SpriteProvisorio`; `Aplicacao.AtualizarSprite`);
+    - testes novos: 5 em `MovimentoTestes`, mais `PoseTestes.cs` no app;
+    - harness: `F4QuiqueDeBorracha` e `F4SobePelaLateralInterna`.
+  - Resultados em `f4`:
+    - build 0/0; portão APROVADO; Core 243/243; App 23/23 + integração 34/34;
+    - `--fase 4`: **22 OK / 0 falhas**, com input SINTÉTICO. Houve 2 quiques antes de pousar; a subida pela lateral esquerda do principal, encostada no secundário, deu 26/26 amostras na lateral, sem sair do principal, e terminou pendurado.
+  - Documentos: DEC-023, ARCHITECTURE 2.5/2.6/2.9/2.10 e TODO Fase 4 (inclusão e critério 8).
+  - Pendente: mesclar `f4` na árvore principal (o workflow de cobertura ainda está nas correções) e depois rodar tudo de novo lá.
+- **2026-09-30 16:00 — Claude:** o workflow de cobertura terminou.
+  - Os testes finais estão na árvore principal: `TransicoesComplementaresTestes`, `TelaCheiaTestes`, `InvariantesTestes`, `ReproducaoTestes` e `Cenario`.
+  - O estado intermediário entrou no commit **`828c1f7`**, feito às 13:38 com a identidade git do usuário, durante a pausa por limite de uso. Claude estava parado nessa hora e não faz commit.
+  - **Fase 4 e toon force mesclados na árvore principal** a partir de `f4`, arquivo por arquivo, com diff conferido:
+    - `src/` inteiro de `f4`;
+    - testes novos (`Movimento/`, `MovimentoIntegracaoTestes`, `PoseTestes`);
+    - `BuzzyEmTeste`;
+    - harness (`Injetor`, `Programa`, `VerificacaoFase4`).
+  - Na árvore principal ficaram os testes finais do workflow, com o `movimento` recolocado no cabeçalho das reproduções. O teste do defeito virou regressão, e o teste de propriedade passou a conferir os ramos do defeito.
+  - O cenário de soltar no ar da Fase 3 foi atualizado para a queda animada.
+  - Resultados na árvore principal:
+    - `tools/testar.ps1` código 0: build 0/0, Core **255/255**, portão 73/73, App 23/23, portão de APIs APROVADO, 0 vulneráveis;
+    - integração **34/34**, M6 485 ms;
+    - `Buzzy.Verificacao` (input SINTÉTICO):
+      - `--fase 1`: 25 OK, 4 SIMULADO (bandeja), 0 falhas;
+      - `--fase 3`: 33 OK, 2 N/A, 0 falhas (CPU no arraste 8,4%, M5 p95 0,59 ms);
+      - `--fase 4`: **22 OK, 0 falhas**, com quique e subida pela lateral interna.
+  - `f4` não é mais a fonte; a árvore principal é.
+  - Próximo: medições de 10 min (`medir-desempenho.ps1 -Modo repouso` e `-Modo autonomia`), sincronizar PROJECT_CONTEXT, DEVELOPMENT_LOG e SECURITY 10, e depois a Fase 5. Os desenhos de 3 áreas estão em `scratchpad\fase5\`; o de travessia ainda está rodando.
