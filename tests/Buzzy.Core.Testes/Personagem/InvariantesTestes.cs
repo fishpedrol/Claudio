@@ -30,8 +30,9 @@ namespace Buzzy.Core.Testes.Personagem;
 /// de efeito, que são ignoradas). Os eventos da execução principal entram adaptados ao estado dela (a geração da agenda, o
 /// sinal coerente e o PRESS no corpo). Essa execução passa pelas conferências de sempre, com o relógio pelo invariante 29, a
 /// agenda pausada com o usuário segurando um item e o R11 pelo perfil efetivo da onda, e pelas do tamagotchi: os invariantes
-/// 22 a 29 (desenho do núcleo, 4.11), conferidos a cada evento contra regras escritas aqui à parte do núcleo. A execução
-/// principal repetida com a chave ligada e sem eventos dele dá o mesmo registro (invariantes 7 e 22).
+/// 22 a 29 (desenho do núcleo, 4.11), com o alívio e a paranoia, conferidos a cada evento contra regras escritas aqui à
+/// parte do núcleo. Em metade dessas sequências, pela semente, o gerador puxa a paranoia (substâncias seguidas no mesmo
+/// episódio). A execução principal repetida com a chave ligada e sem eventos dele dá o mesmo registro (invariantes 7 e 22).
 ///
 /// Cada conferência nova conta quantas vezes a situação dela apareceu (<see cref="CasosExigidos"/>):
 /// uma conferência que o gerador nunca exercita não protege nada. Duas conferências ficam fora da
@@ -72,6 +73,16 @@ internal static class InvariantesTestes
         "GRAVAR_POSICAO conferida (invariante 18)", "carga com a travessia desligada", "SETTINGS_CHANGED com a travessia desligada",
         // Cada um dos eventos que gravam a posição grava de fato (invariante 18).
         .. InvarianteDezoito.EventosQueGravam.Select(t => $"GRAVAR_POSICAO de {t.Name}"),
+        // TOPOLOGY_CHANGED em execução (Fase 5, passo P8; invariantes 19 e 20): cada classe do monitor do personagem, os
+        // estados que só guardam a posição e o CLICK que valida a partir dela.
+        "TOPOLOGY_CHANGED sem mudar o monitor do personagem (invariante 19)", "TOPOLOGY_CHANGED que só translada o monitor do personagem (invariante 19)",
+        "TOPOLOGY_CHANGED com o monitor do personagem mudado", "TOPOLOGY_CHANGED sem o monitor do personagem",
+        "TOPOLOGY_CHANGED no gesto: só o cache e as posições", "TOPOLOGY_CHANGED escondido: só o cache e as posições",
+        "TOPOLOGY_CHANGED com a mesma configuração", "retorno da tela cheia acompanhou a topologia", "invariante 20 conferido",
+        "CLICK depois de o monitor mudar no gesto",
+        // Revisão do bloco P6-P9 (achados 2, 3 e 6): as outras saídas de PRESSED partem do mesmo lugar que o CLICK, e o lugar do
+        // arraste anda com o monitor em que está.
+        "outra saída de PRESSED depois de o monitor mudar no gesto", "TOPOLOGY_CHANGED no arraste: o lugar anda com o monitor",
     ];
 
     /// <summary>Mínimo de atrasos distintos acima do piso: um atraso fixo (no mínimo do perfil, por exemplo) passaria na conferência de faixa.</summary>
@@ -105,6 +116,19 @@ internal static class InvariantesTestes
         "item na mão sobre monitor ocupado (L4)", "recolher com um item na mão (L6)", "pegar outro item com um na mão (L6)", "esconder ou sair com um item na mão",
         "onda absorvida", "onda acumulada", "onda foi para o fundo", "itens reacomodados pela topologia", "ITEM_PRESS ignorado",
         "AUTONOMY_TIMER com o usuário segurando um item", "item caindo com o personagem pressionado ou arrastado",
+        // Os itens seguem a regra do personagem numa mudança de topologia (Fase 5, passo P8), e USING é tratado como REACTING.
+        "item transladado com o monitor", "item reacomodado pela posição acompanhada", "USING continua com o monitor só transladado ou igual",
+        // O item na mão anda com o monitor em que está (revisão do bloco P6-P9, achado 6).
+        "item na mão andou com o monitor",
+        // O alívio (pedido do usuário de 2026-10-01): a comida e a bebida sem álcool com uma onda de substância na frente, e
+        // a água com qualquer onda; cada desfecho de um passo; e o item de alívio com uma onda leve na frente, que combina como
+        // sempre.
+        "alívio com onda de substância na frente", "alívio baixou o nível", "alívio levou à queda", "alívio acabou a onda",
+        "alívio acabou a onda e a de fundo voltou", "item de alívio com onda leve na frente",
+        // A paranoia (outro pedido do mesmo dia): ela começa na 4ª substância do episódio, sobe com mais uma, o alívio a
+        // acalma um passo, e a carga volta a 0 quando não sobra onda de substância; e o uso que a começou, até o fim, no
+        // chão, termina com o olhar pro teto.
+        "paranoia começou", "paranoia subiu de nível", "paranoia acalmada por alívio", "carga zerada", "olhou pro teto no começo da paranoia",
     ];
 
     /// <summary>Situações da execução com o tamagotchi e a emoção dominante (as da emoção, com itens e ondas).</summary>
@@ -127,11 +151,11 @@ internal static class InvariantesTestes
         ConfiguracaoDoNucleo Config, ulong SementeDoNucleo, List<List<Evento>> Lotes, bool EmLotes, bool AntesDaCarga, bool PerfilCurto,
         List<List<Evento>> LotesComEmocao,
         ConfiguracaoDoNucleo ConfigDoTamagotchi, List<(int Lote, EstadoDoNucleo Antes, Evento Evento, Resultado Resultado)> AplicadosDoTamagotchi,
-        long DescartadosDoTamagotchi, List<List<Evento>> LotesDoTamagotchiComEmocao, bool UsoCurto, bool ComTamagotchi)
+        long DescartadosDoTamagotchi, List<List<Evento>> LotesDoTamagotchiComEmocao, bool UsoCurto, bool ComTamagotchi, bool PuxaAParanoia)
     {
         public string Opcoes => $"lotes {(EmLotes ? "de 1 a 4" : "de 1")}, {(AntesDaCarga ? "com" : "sem")} eventos antes da carga, perfil {(PerfilCurto ? "curto" : "padrão")}";
 
-        public string OpcoesDoTamagotchi => $"{Opcoes}, uso {(UsoCurto ? "curto" : "da tabela")}";
+        public string OpcoesDoTamagotchi => $"{Opcoes}, uso {(UsoCurto ? "curto" : "da tabela")}{(PuxaAParanoia ? ", puxa a paranoia" : "")}";
     }
 
     /// <summary>
@@ -158,6 +182,12 @@ internal static class InvariantesTestes
         public int DisparosNoEpisodio { get; set; }
 
         public int LimiteDoEpisodio { get; set; }
+
+        /// <summary>A carga da paranoia esperada, contada aqui à parte do núcleo: as substâncias usadas desde o último zero.</summary>
+        public int Carga { get; set; }
+
+        /// <summary>Se o uso em curso começou a paranoia, pela conta daqui.</summary>
+        public bool UsoComecouAParanoia { get; set; }
     }
 
     /// <summary>O que as conferências acumulam entre eventos: quantas vezes cada situação apareceu e os atrasos sorteados.</summary>
@@ -445,6 +475,43 @@ internal static class InvariantesTestes
         // Linhas de FULLSCREEN_TARGETS_CHANGED, com R12 e a marca de R9 (invariante 14 incluído).
         if (evento is FullscreenTargetsChanged f)
             ConferirTelaCheia(antes, f, r, onde, contagens);
+
+        // TOPOLOGY_CHANGED em execução (Fase 5, passo P8): as posições acompanham a topologia, e os invariantes 19 e 20.
+        if (evento is TopologyChanged mudanca)
+            ConferirTopologia(antes, mudanca, r, onde, contagens, cfg.Tamanho);
+
+        // Toda saída de PRESSED (CLICK, DOUBLE_CLICK, DRAG_CANCEL e DRAG_START) depois de o monitor mudar com o botão
+        // pressionado (P8, R14; revisão do bloco P6-P9, achados 2 e 3) parte de onde ele estaria parado: a posição que
+        // acompanhou a topologia, na mesma posição relativa, no monitor da chave dela ou, sem ele, no mais próximo do pixel dos
+        // pés da âncora acompanhada. Toda saída fica nesse monitor; o CLICK fica exatamente nesse lugar, e as frações continuam
+        // descrevendo o lugar validado: a partida seguinte o restaura ali. Com um retorno da tela cheia guardado, o fim do
+        // gesto pode levá-lo de volta à posição anterior (regra R9 acima); fica de fora.
+        if (evento is Click or DoubleClick or DragCancel or DragStart && antes.Estado == Estado.Pressed && antes.Lugar is { } noGesto
+            && antes.Topologia is { } topologiaDaSaida && !Equals(topologiaDaSaida.PorChave(noGesto.Monitor.Chave), noGesto.Monitor)
+            && antes.RetornoDaTelaCheia is null && antes.Posicao is { } acompanhou)
+        {
+            PontoPx acompanhada = acompanhou.AncoraAbsoluta;
+            MonitorDoDesktop alvo = topologiaDaSaida.PorChave(acompanhou.ChaveMonitor) ?? topologiaDaSaida.MonitorMaisProximo(new PontoPx(acompanhada.X, acompanhada.Y - 1));
+            Verificar(depois.Lugar?.Monitor.Chave == alvo.Chave,
+                () => $"R14: {onde()}: a saída de PRESSED devia partir de {Descrever(acompanhou)} em {alvo.Chave}; ficou em {depois.Lugar?.Monitor.Chave} {depois.Lugar?.Ancora}");
+            if (evento is Click)
+            {
+                Contar("CLICK depois de o monitor mudar no gesto");
+                PontoPx validada = Posicionador.NoMonitor(alvo, acompanhou.FracaoX, acompanhou.FracaoY, cfg.Tamanho).Ancora;
+                if (!cfg.QuedaFisica) validada = validada with { Y = alvo.AreaUtil.Base };
+                Verificar(depois.Lugar is { } validado && validado.Monitor == alvo && validado.Ancora == validada,
+                    () => $"R14: {onde()}: o CLICK devia validar {Descrever(acompanhou)} em {alvo.Chave} {validada}; ficou em {depois.Lugar?.Monitor.Chave} {depois.Lugar?.Ancora}");
+                PosicaoDoPersonagem? descrita = depois.Posicao;
+                MonitorDoDesktop? daPosicao = descrita is null ? null : topologiaDaSaida.PorChave(descrita.ChaveMonitor);
+                Verificar(descrita is not null && daPosicao is not null && descrita.TelaDoMonitor == daPosicao.Tela && depois.Lugar is { } lugarDoClique
+                        && Posicionador.NoMonitor(daPosicao, descrita.FracaoX, descrita.FracaoY, cfg.Tamanho).Ancora == lugarDoClique.Ancora,
+                    () => $"R14: {onde()}: as frações de {Descrever(descrita)} (tela {descrita?.TelaDoMonitor}) não descrevem o lugar validado {depois.Lugar?.Ancora}");
+            }
+            else
+            {
+                Contar("outra saída de PRESSED depois de o monitor mudar no gesto");
+            }
+        }
         if (evento is DragEnd && antes.Estado == Estado.Dragging)
             Verificar(depois.RetornoDaTelaCheia is null, () => $"invariante 14: {onde()}: retorno temporário sobreviveu ao arraste");
 
@@ -640,6 +707,10 @@ internal static class InvariantesTestes
 
         ConferirGravacaoAoEsconderOuSair(antes, evento, r, onde, contagens);
         ConferirGravacaoDaPosicao(evento, r, onde, contagens);
+
+        // Com o tamagotchi desligado, não há carga da paranoia (invariante 22).
+        if (!cfg.Tamagotchi)
+            Verificar(depois.Carga == 0, () => $"invariante 22: {onde()}: carga {depois.Carga} com o tamagotchi desligado");
     }
 
     /// <summary>
@@ -780,8 +851,17 @@ internal static class InvariantesTestes
     /// para o mesmo apoio (o chão ou o esconderijo, sem a física), mantendo o preso e o esconderijo; interrompido, só o uso
     /// acaba, e a onda continua;</item>
     /// <item>25: com onda (fora de EXITING), exatamente um disparo pendente, de 1 s ou mais; sem onda, nenhum; níveis de 1 a
-    /// 3, a queda no nível 1, no máximo uma onda de fundo, de outro tipo; a combinação (4.5) e o avanço seguem a tabela; e a
-    /// onda da frente acaba em no máximo 2 + nível disparos sem item novo;</item>
+    /// 3, a queda no nível 1, no máximo uma onda de fundo, de outro tipo; a combinação (4.5), com o alívio, e o avanço seguem
+    /// a tabela; e a onda da frente acaba em no máximo 2 + nível disparos sem item novo;</item>
+    /// <item>o alívio (pedido do usuário de 2026-10-01): a água, e a comida e a bebida sem álcool com uma onda de substância
+    /// na frente, nunca sobem o nível, nunca alongam a fase em curso (só o nível caiu: o mesmo disparo pendente; a queda que
+    /// começa: a duração cheia dela), nunca tocam a onda de fundo (que só volta, se a da frente acabou), nunca começam a
+    /// onda do item e nunca sorteiam (o gerador fica o mesmo);</item>
+    /// <item>a paranoia (outro pedido do mesmo dia): a carga, contada aqui (as substâncias desde o último zero; volta a 0
+    /// no fim de todo evento sem onda de substância), é a do núcleo; na 4ª substância em diante, depois da combinação, a
+    /// paranoia começa na frente (a frente vai para o fundo) ou sobe um nível, sem sorteio; ela só existe com a carga em 4
+    /// ou mais e nunca fica no fundo; e o uso que a começou, até o fim, com ele de volta a IDLE e ela na frente, termina
+    /// com o olhar pro teto de 90 passos, sem sorteio (nenhum outro fim de uso traz gesto);</item>
     /// <item>26: a física em vigor só muda as três velocidades, entre 50% e 200%;</item>
     /// <item>28: no máximo <see cref="ConfiguracaoDoNucleo.MaximoDeItens"/> itens; fora da mão, o sprite inteiro na área útil
     /// do monitor dele, presente, e os pés no chão quando parado; a janela de cada item (pelos efeitos) aparece se e
@@ -1000,7 +1080,47 @@ internal static class InvariantesTestes
                 Contar("item assentado por ficar invisível (L5)");
         }
         if (evento is TopologyChanged mudanca && antes.Itens.Todos.Any(i => !i.NaMao) && antes.Topologia is { } velha && !velha.MesmaConfiguracao(mudanca.Topologia))
+        {
             Contar("itens reacomodados pela topologia");
+            // A mesma regra do personagem (Fase 5, passo P8): no monitor que não mudou de geometria, no máximo transladado, o
+            // item anda junto e continua como estava, caindo ou no chão; senão, a posição dele acompanha a topologia e é
+            // reacomodada pela posição relativa, parada. Um item que deixou de aparecer pode ter ido ao chão (L5): fica de fora.
+            Topologia topologiaNova = mudanca.Topologia;
+            foreach (ItemNoMundo item in antes.Itens.Todos.Where(i => !i.NaMao))
+            {
+                if (depois.Itens.PorId(item.Id) is not { } movido || !VeOItem(depois, movido)) continue;
+                MonitorDoDesktop m = item.Lugar.Monitor;
+                MonitorDoDesktop? n = topologiaNova.PorChave(m.Chave) ?? topologiaNova.Monitores.FirstOrDefault(x => x.Tela == m.Tela && velha.PorChave(x.Chave) is null);
+                int dx = n is null ? 0 : n.Tela.Esquerda - m.Tela.Esquerda, dy = n is null ? 0 : n.Tela.Topo - m.Tela.Topo;
+                if (n is not null && n.Tela == m.Tela.Deslocado(dx, dy) && n.AreaUtil == m.AreaUtil.Deslocado(dx, dy) && n.Dpi == m.Dpi)
+                {
+                    Contar("item transladado com o monitor");
+                    var lugar = new Posicionamento(n, new PontoPx(item.Lugar.Ancora.X + dx, item.Lugar.Ancora.Y + dy), item.Lugar.Tamanho, item.Lugar.Retangulo.Deslocado(dx, dy));
+                    Verificar(movido.Lugar == lugar && movido.Situacao == item.Situacao && movido.VY == item.VY && movido.Y == item.Y + dy && movido.Quiques == item.Quiques,
+                        () => $"P8, itens: {onde()}: o item {item.Id} devia andar ({dx},{dy}) e continuar {item.Situacao}; ficou {movido.Situacao} em {movido.Lugar.Ancora}, VY {item.VY}→{movido.VY}");
+                }
+                else
+                {
+                    Contar("item reacomodado pela posição acompanhada");
+                    (Posicionamento esperado, _) = Posicionador.Reacomodar(topologiaNova, Acompanhada(velha, topologiaNova, item.Posicao, cfg.TamanhoDoItem)!, cfg.TamanhoDoItem);
+                    Verificar(movido.Lugar == esperado && movido.VY == 0 && movido.Quiques == 0,
+                        () => $"P8, itens: {onde()}: o item {item.Id} devia ir a {esperado.Monitor.Chave} {esperado.Ancora}, parado; ficou em {movido.Lugar.Monitor.Chave} {movido.Lugar.Ancora}, VY {movido.VY}");
+                }
+            }
+        }
+        // O item na mão (revisão do bloco P6-P9, achado 6) anda com o monitor em que está, sem validar, como o arraste do
+        // personagem: o Windows leva a janela e o cursor com o monitor físico.
+        if (evento is TopologyChanged mudancaNaMao && antes.Itens.NaMao is { } naMao && antes.Topologia is { } antiga && !antiga.MesmaConfiguracao(mudancaNaMao.Topologia))
+        {
+            Contar("item na mão andou com o monitor");
+            PontoPx ancora = PontoAcompanhado(antiga, mudancaNaMao.Topologia, naMao.Lugar.Ancora);
+            MonitorDoDesktop m = mudancaNaMao.Topologia.MonitorMaisProximo(new PontoPx(ancora.X, ancora.Y - 1));
+            TamanhoPx t = cfg.TamanhoDoItem.ParaPixels(m.Dpi);
+            var esperado = new Posicionamento(m, ancora, t, new RetanguloPx(ancora.X - t.Largura / 2, ancora.Y - t.Altura, ancora.X - t.Largura / 2 + t.Largura, ancora.Y));
+            ItemNoMundo? continua = depois.Itens.PorId(naMao.Id);
+            Verificar(continua is { NaMao: true } && continua.Lugar == esperado && continua.Situacao == naMao.Situacao && continua.Y == naMao.Y + ancora.Y - naMao.Lugar.Ancora.Y,
+                () => $"P6-P9, item na mão: {onde()}: o item {naMao.Id} devia ir de {naMao.Lugar.Ancora} a {esperado.Monitor.Chave} {ancora}; ficou {continua?.Situacao} em {continua?.Lugar.Monitor.Chave} {continua?.Lugar.Ancora}");
+        }
 
         // ------------------------------------------------ 24: o uso
         Verificar((depois.Uso is not null) == (depois.Estado == Estado.Using), () => $"invariante 24: {onde()}: uso {depois.Uso} em {depois.Estado}");
@@ -1026,6 +1146,11 @@ internal static class InvariantesTestes
         if (antes.Estado == Estado.Using && depois.Estado == Estado.Using)
             Verificar(depois.Uso == antes.Uso && depois.PassosRestantes == rastro.PassosEsperados - rastro.PassosNoUso,
                 () => $"invariante 24: {onde()}: o uso mudou para {depois.Uso}, {depois.PassosRestantes} passos restantes depois de {rastro.PassosNoUso}");
+        // Uma mudança de topologia que mantém o uso (o monitor dele só foi transladado, ou não mudou) leva a âncora junto
+        // (invariante 19, conferido em ConferirTopologia): o "mesmo lugar" do fim do uso passa a ser o transladado. Sem isso,
+        // a conferência do fim do uso no chão reprovava uma translação certa (lacuna achada na correção do alívio).
+        if (evento is TopologyChanged && antes.Estado == Estado.Using && depois.Estado == Estado.Using && depois.Lugar is { } transladado)
+            rastro.AncoraNoUso = transladado.Ancora;
         if (antes.Estado == Estado.Using && depois.Estado != Estado.Using)
         {
             Verificar(depois.Onda == antes.Onda && depois.OndaDeFundo == antes.OndaDeFundo, () => $"C16: {onde()}: o uso acabou e a onda mudou ({antes.Onda} → {depois.Onda})");
@@ -1041,11 +1166,19 @@ internal static class InvariantesTestes
                     Verificar(depois.Estado == Estado.Idle && depois.Lugar!.Ancora == rastro.AncoraNoUso, () => $"invariante 24: {onde()}: no chão, voltou a {depois.Estado} em {depois.Lugar?.Ancora}");
                 if (depois.Estado is Estado.Climbing or Estado.Hanging)
                     Verificar(depois.PresoPeloUsuario == rastro.PresoNoUso, () => $"invariante 24: {onde()}: preso antes {rastro.PresoNoUso}, depois {depois.PresoPeloUsuario}");
+                // A paranoia (pedido do usuário de 2026-10-01): o uso que a começou, até o fim, com ele de volta a IDLE e ela
+                // ainda na frente, termina com o olhar pro teto, na hora, por 90 passos e sem sorteio (o gerador não muda: nem
+                // o gesto nem a agenda sorteiam); em qualquer outro caso, o fim do uso não traz gesto nenhum.
+                bool olha = rastro.UsoComecouAParanoia && depois.Estado == Estado.Idle && depois.Onda?.Tipo == Onda.Paranoico;
+                if (olha) Contar("olhou pro teto no começo da paranoia");
+                Verificar(olha ? depois.Gesto == Gesto.OlharProTeto && depois.PassosDoGesto == 90 && depois.Aleatorio == antes.Aleatorio : depois.Gesto == Gesto.Nenhum,
+                    () => $"paranoia: {onde()}: no fim do uso (começou a paranoia: {rastro.UsoComecouAParanoia}), em {depois.Estado} com a onda {depois.Onda}, ficou o gesto {depois.Gesto} ({depois.PassosDoGesto} passos; gerador {(depois.Aleatorio == antes.Aleatorio ? "igual" : "mudou")})");
             }
             else
             {
                 if (evento is not Press) Contar("uso interrompido sem PRESS");
                 Verificar(evento is not Tick, () => $"invariante 24: {onde()}: um TICK interrompeu o uso antes do fim");
+                Verificar(depois.Gesto == Gesto.Nenhum, () => $"paranoia: {onde()}: o uso interrompido trouxe o gesto {depois.Gesto}");
             }
         }
 
@@ -1072,8 +1205,28 @@ internal static class InvariantesTestes
             DadosDoItem dados = cfg.TabelaDeItens(depois.Uso!.Item);
             (EstadoDaOnda? frente, EstadoDaOnda? fundo, string caso) = OndaDepoisDoUso(antes.Onda, antes.OndaDeFundo, dados, cfg);
             Contar(caso);
+            // A paranoia, depois da combinação: a carga do episódio (as substâncias desde o último zero) e, da 4ª em diante,
+            // a paranoia na frente (começa, ou sobe um nível).
+            bool deSubstancia = !ItensDeAlivio.Contains(dados.Item);
+            if (deSubstancia) rastro.Carga++;
+            (frente, fundo, string? paranoia) = ComAParanoia(frente, fundo, deSubstancia, rastro.Carga);
+            if (paranoia is not null) Contar(paranoia);
+            rastro.UsoComecouAParanoia = paranoia == "paranoia começou";
             Verificar(depois.Onda == frente && depois.OndaDeFundo == fundo,
-                () => $"4.5: {onde()}: {dados.Item} com a onda {antes.Onda} (fundo {antes.OndaDeFundo}) deu {depois.Onda} (fundo {depois.OndaDeFundo}); esperado {frente} (fundo {fundo})");
+                () => $"4.5: {onde()}: {dados.Item} com a onda {antes.Onda} (fundo {antes.OndaDeFundo}, carga {rastro.Carga}) deu {depois.Onda} (fundo {depois.OndaDeFundo}); esperado {frente} (fundo {fundo})");
+            Verificar(depois.Uso.ComecouAParanoia == rastro.UsoComecouAParanoia, () => $"paranoia: {onde()}: o uso devia {(rastro.UsoComecouAParanoia ? "" : "não ")}ter começado a paranoia");
+            if (paranoia is not null)
+            {
+                // Sem sorteio, e com a fase recomeçada: um disparo novo, com a duração cheia da fase da paranoia (a subida,
+                // 1 s; o pico, um nível inteiro).
+                Verificar(depois.Aleatorio == antes.Aleatorio, () => $"paranoia: {onde()}: a paranoia sorteou: o gerador mudou");
+                AgendarOnda[] daParanoia = [.. r.Efeitos.OfType<AgendarOnda>()];
+                EstadoDaOnda novaParanoia = frente!;
+                Verificar(daParanoia.Length == 1 && daParanoia[0].Atraso == DuracaoCheia(cfg, novaParanoia) && daParanoia[0].Geracao == antes.GeracaoDaOnda + 1,
+                    () => $"paranoia: {onde()}: {paranoia} ({novaParanoia}), e o temporizador não recomeçou com {DuracaoCheia(cfg, novaParanoia)}: [{string.Join(", ", r.Efeitos.Where(e => e is AgendarOnda or CancelarOnda).Select(Gravacao.DescreverEfeito))}]");
+            }
+            ConferirAlivio(cfg, antes, dados, r, onde, contagens);
+            if (Alivia(dados, antes.Onda) && antes.Onda!.Tipo == Onda.Paranoico) Contar("paranoia acalmada por alívio");
         }
         if (evento is ItemEffectTimer disparo)
         {
@@ -1099,6 +1252,20 @@ internal static class InvariantesTestes
             rastro.DisparosNoEpisodio = 0;
             rastro.LimiteDoEpisodio = 2 + nova.Nivel;
         }
+
+        // A carga da paranoia (pedido do usuário de 2026-10-01), escrita aqui à parte: volta a 0 no fim de todo evento em que
+        // nem a onda da frente nem a de fundo é de substância (pela transcrição; a paranoia é de substância). A paranoia só
+        // existe com a carga em 4 ou mais desde o último zero, e nunca no fundo: a precedência dela é a maior.
+        bool comSubstancia = (depois.Onda is { } daFrente && OndasDeSubstancia.Contains(daFrente.Tipo))
+            || (depois.OndaDeFundo is { } doFundo && OndasDeSubstancia.Contains(doFundo.Tipo));
+        if (!comSubstancia && rastro.Carga > 0)
+        {
+            Contar("carga zerada");
+            rastro.Carga = 0;
+        }
+        Verificar(depois.Carga == rastro.Carga, () => $"paranoia: {onde()}: carga {depois.Carga}, esperada {rastro.Carga} (onda {depois.Onda}, fundo {depois.OndaDeFundo})");
+        Verificar(depois.Onda?.Tipo != Onda.Paranoico || rastro.Carga >= 4, () => $"paranoia: {onde()}: a paranoia na frente com a carga {rastro.Carga} desde o último zero");
+        Verificar(depois.OndaDeFundo?.Tipo != Onda.Paranoico, () => $"paranoia: {onde()}: a paranoia no fundo, atrás de {depois.Onda}");
 
         // ------------------------------------------------ 26: a física em vigor
         ParametrosDeMovimento f = Maquina.FisicaEfetiva(depois, cfg);
@@ -1147,18 +1314,47 @@ internal static class InvariantesTestes
     }
 
     /// <summary>
-    /// A combinação (4.5), escrita aqui à parte: a onda da frente e a de fundo depois de usar o item, e o caso. A água baixa a
-    /// da frente (<see cref="Refrescada"/>); sem onda, a do item começa na subida; do mesmo tipo da da frente ou da de fundo,
-    /// soma níveis até 3 (a queda volta ao pico); de precedência maior ou igual, vai para a frente e a da frente vai para o
-    /// fundo; de precedência menor, é absorvida.
+    /// A classe do alívio (pedido do usuário de 2026-10-01), lida da transcrição das tabelas do desenho
+    /// (<see cref="Tamagotchi.TabelasDoDesenho"/>), à parte do núcleo: os itens de alívio, a comida e a bebida sem álcool (a
+    /// banana, a bala, a água, o café e o energético). Os outros, inclusive o cogumelo, que também se come, são de substância.
+    /// </summary>
+    private static readonly Item[] ItensDeAlivio = [.. Tamagotchi.TabelasDoDesenho.ItensEsperados().Where(i => i.Alivio).Select(i => i.Item)];
+
+    /// <summary>
+    /// Os itens de substância, pela mesma transcrição: os outros oito, que somam 1 à carga da paranoia (pedido do usuário de
+    /// 2026-10-01).
+    /// </summary>
+    private static readonly Item[] ItensDeSubstancia = [.. Tamagotchi.TabelasDoDesenho.ItensEsperados().Where(i => !i.Alivio).Select(i => i.Item)];
+
+    /// <summary>
+    /// As ondas de substância, pela mesma transcrição: as que a comida e a bebida sem álcool acalmam (as leves, só a água),
+    /// inclusive a paranoia.
+    /// </summary>
+    private static readonly Onda[] OndasDeSubstancia = [.. Tamagotchi.TabelasDoDesenho.OndasEsperadas().Where(o => o.DeSubstancia).Select(o => o.Onda)];
+
+    /// <summary>
+    /// Se o item alivia a onda da frente, pela classe da transcrição: só um item de alívio e só com onda na frente; sem onda
+    /// própria (a água), qualquer onda; com onda própria, só uma de substância.
+    /// </summary>
+    private static bool Alivia(DadosDoItem dados, EstadoDaOnda? frente)
+        => ItensDeAlivio.Contains(dados.Item) && frente is not null && (dados.Onda is null || OndasDeSubstancia.Contains(frente.Tipo));
+
+    /// <summary>
+    /// A combinação (4.5), escrita aqui à parte: a onda da frente e a de fundo depois de usar o item, e o caso. Primeiro, o
+    /// alívio (pedido do usuário de 2026-10-01; <see cref="Alivia"/>): a água, com qualquer onda na frente, e a comida e a
+    /// bebida sem álcool, com uma onda de substância na frente, a aliviam um passo (<see cref="Aliviada"/>); a água sem onda
+    /// não faz nada. Senão: sem onda, a do item começa na subida; do mesmo tipo da da frente ou da de fundo, soma níveis até 3
+    /// (a queda volta ao pico); de precedência maior ou igual, vai para a frente e a da frente vai para o fundo; de
+    /// precedência menor, é absorvida.
     /// </summary>
     private static (EstadoDaOnda? Frente, EstadoDaOnda? Fundo, string Caso) OndaDepoisDoUso(EstadoDaOnda? frente, EstadoDaOnda? fundo, DadosDoItem dados, ConfiguracaoDoNucleo cfg)
     {
-        if (dados.Onda is not { } tipo)
+        if (Alivia(dados, frente))
         {
-            (EstadoDaOnda? f, EstadoDaOnda? b) = Refrescada(frente, fundo, cfg);
-            return (f, b, frente is null ? "água sem onda" : "água baixou a onda");
+            (EstadoDaOnda? f, EstadoDaOnda? b) = Aliviada(frente!, fundo, cfg);
+            return (f, b, dados.Onda is null ? "água baixou a onda" : "alívio com onda de substância na frente");
         }
+        if (dados.Onda is not { } tipo) return (frente, fundo, "água sem onda");
         int n = Math.Clamp(dados.Intensidade, 1, 3);
         EstadoDaOnda Somada(EstadoDaOnda o)
         {
@@ -1172,15 +1368,108 @@ internal static class InvariantesTestes
         return (frente, fundo, "onda absorvida");
     }
 
-    /// <summary>A água (4.5): na queda, ou na subida do nível 1, a da frente acaba (e a de fundo volta); no pico do nível 1, a queda (sem queda, acaba); senão, um nível abaixo.</summary>
-    private static (EstadoDaOnda? Frente, EstadoDaOnda? Fundo) Refrescada(EstadoDaOnda? frente, EstadoDaOnda? fundo, ConfiguracaoDoNucleo cfg)
+    /// <summary>
+    /// A paranoia (pedido do usuário de 2026-10-01), escrita aqui à parte, depois da combinação: com um item de substância e
+    /// a carga do episódio em 4 ou mais, sem a paranoia na frente, ela começa na frente, na subida do nível 1, e a frente vai
+    /// para o fundo (a de fundo anterior sai); com ela na frente, sobe um nível (até 3), o pior acompanha, e a queda volta
+    /// ao pico (a subida continua subida). Devolve as ondas e o caso; sem paranoia, as mesmas ondas e nulo.
+    /// </summary>
+    private static (EstadoDaOnda? Frente, EstadoDaOnda? Fundo, string? Caso) ComAParanoia(EstadoDaOnda? frente, EstadoDaOnda? fundo, bool deSubstancia, int carga)
     {
-        if (frente is null) return (null, fundo);
-        bool temQueda = cfg.TabelaDeOndas(frente.Tipo).Queda is not null;
-        if (frente.Fase == FaseDaOnda.Queda || (frente.Fase == FaseDaOnda.Subida && frente.Nivel <= 1) || (frente.Fase == FaseDaOnda.Pico && frente.Nivel <= 1 && !temQueda))
-            return (fundo, null);
-        if (frente.Fase == FaseDaOnda.Pico && frente.Nivel <= 1) return (frente with { Fase = FaseDaOnda.Queda, Nivel = 1 }, fundo);
-        return (frente with { Nivel = frente.Nivel - 1 }, fundo);
+        if (!deSubstancia || carga < 4) return (frente, fundo, null);
+        if (frente is { Tipo: Onda.Paranoico })
+        {
+            int nivel = Math.Min(3, frente.Nivel + 1);
+            var subiu = new EstadoDaOnda(Onda.Paranoico, frente.Fase == FaseDaOnda.Subida ? FaseDaOnda.Subida : FaseDaOnda.Pico, nivel, Math.Max(frente.Pior, nivel));
+            return (subiu, fundo, "paranoia subiu de nível");
+        }
+        return (new EstadoDaOnda(Onda.Paranoico, FaseDaOnda.Subida, 1, 1), frente, "paranoia começou");
+    }
+
+    /// <summary>
+    /// Um passo do alívio, pela decisão: na queda, a da frente acaba (e a de fundo volta); na subida ou no pico acima do
+    /// nível 1, um nível abaixo, na mesma fase; no nível 1, da subida ou do pico, a queda (sem queda, acaba).
+    /// </summary>
+    private static (EstadoDaOnda? Frente, EstadoDaOnda? Fundo) Aliviada(EstadoDaOnda frente, EstadoDaOnda? fundo, ConfiguracaoDoNucleo cfg)
+    {
+        if (frente.Fase == FaseDaOnda.Queda) return (fundo, null);
+        if (frente.Nivel > 1) return (frente with { Nivel = frente.Nivel - 1 }, fundo);
+        return cfg.TabelaDeOndas(frente.Tipo).Queda is null ? (fundo, null) : (frente with { Fase = FaseDaOnda.Queda, Nivel = 1 }, fundo);
+    }
+
+    /// <summary>
+    /// O alívio (pedido do usuário de 2026-10-01), conferido por propriedades, além do resultado exato de
+    /// <see cref="OndaDepoisDoUso"/>. Com um item de alívio e uma onda que ele alivia na frente (a água, qualquer onda; a
+    /// comida e a bebida sem álcool, uma de substância): o nível nunca sobe, e o pior não muda; a fase em curso nunca se
+    /// alonga (só o nível caiu: nenhum efeito do temporizador e o mesmo disparo pendente; a queda que começa, ou a de fundo
+    /// que volta: um disparo novo com a duração cheia da fase); a onda de fundo nunca é tocada (só volta à frente, se a da
+    /// frente acabou); e a onda do item nunca começa nem soma. Com uma onda leve na frente, a comida e a bebida combinam como
+    /// sempre (conferido por <see cref="OndaDepoisDoUso"/>), e aqui só se conta o caso. Nos dois casos, nenhum sorteio: o
+    /// gerador logo depois do soltar é o de logo antes.
+    /// </summary>
+    private static void ConferirAlivio(ConfiguracaoDoNucleo cfg, EstadoDoNucleo antes, DadosDoItem dados, Resultado r, Func<string> onde, Contagens contagens)
+    {
+        if (!ItensDeAlivio.Contains(dados.Item) || antes.Onda is not { } frente) return;
+        EstadoDoNucleo depois = r.Estado;
+        // Nenhum sorteio novo: o item de alívio, aliviando ou combinando como sempre, não mexe no gerador.
+        Verificar(depois.Aleatorio == antes.Aleatorio, () => $"alívio: {onde()}: {dados.Item} com {frente} na frente sorteou: o gerador mudou");
+        if (!Alivia(dados, frente))
+        {
+            contagens.Contar("item de alívio com onda leve na frente");
+            return;
+        }
+        AgendarOnda[] agendas = [.. r.Efeitos.OfType<AgendarOnda>()];
+        bool cancelou = r.Efeitos.OfType<CancelarOnda>().Any();
+        string Efeitos() => string.Join(", ", r.Efeitos.Where(e => e is AgendarOnda or CancelarOnda).Select(Gravacao.DescreverEfeito));
+        if (dados.Onda is { } propria)
+        {
+            Verificar(!(depois.Onda?.Tipo == propria && depois.Onda != antes.OndaDeFundo) && !(depois.OndaDeFundo?.Tipo == propria && depois.OndaDeFundo != antes.OndaDeFundo),
+                () => $"alívio: {onde()}: {dados.Item} com {frente} na frente começou ou somou a onda dele ({propria}): ficou {depois.Onda} (fundo {depois.OndaDeFundo})");
+        }
+
+        if (depois.Onda is not { } nova || nova.Tipo != frente.Tipo)
+        {
+            contagens.Contar(antes.OndaDeFundo is null ? "alívio acabou a onda" : "alívio acabou a onda e a de fundo voltou");
+            Verificar(depois.Onda == antes.OndaDeFundo && depois.OndaDeFundo is null,
+                () => $"alívio: {onde()}: a frente {frente} acabou, e a de fundo {antes.OndaDeFundo} devia voltar intacta; ficou {depois.Onda} (fundo {depois.OndaDeFundo})");
+            if (depois.Onda is { } voltou)
+                Verificar(agendas.Length == 1 && agendas[0].Atraso == DuracaoCheia(cfg, voltou) && agendas[0].Geracao == antes.GeracaoDaOnda + 1 && !cancelou,
+                    () => $"alívio: {onde()}: a de fundo {voltou} voltou sem um disparo novo com a duração cheia ({DuracaoCheia(cfg, voltou)}): [{Efeitos()}]");
+            else
+                Verificar(agendas.Length == 0 && cancelou && !depois.OndaAgendada, () => $"alívio: {onde()}: sem onda, o temporizador devia ser cancelado: [{Efeitos()}]");
+            return;
+        }
+
+        Verificar(nova.Nivel <= frente.Nivel && nova.Pior == frente.Pior, () => $"alívio: {onde()}: {frente} foi a {nova}: o nível subiu ou o pior mudou");
+        Verificar(depois.OndaDeFundo == antes.OndaDeFundo, () => $"alívio: {onde()}: a onda de fundo mudou de {antes.OndaDeFundo} para {depois.OndaDeFundo}");
+        if (nova.Fase == frente.Fase)
+        {
+            contagens.Contar("alívio baixou o nível");
+            Verificar(agendas.Length == 0 && !cancelou && depois.OndaAgendada && depois.GeracaoDaOnda == antes.GeracaoDaOnda,
+                () => $"alívio: {onde()}: só o nível caiu ({frente} → {nova}), e o temporizador em curso mudou: [{Efeitos()}], geração {antes.GeracaoDaOnda} → {depois.GeracaoDaOnda}");
+        }
+        else
+        {
+            contagens.Contar("alívio levou à queda");
+            Verificar(nova.Fase == FaseDaOnda.Queda && agendas.Length == 1 && agendas[0].Atraso == DuracaoCheia(cfg, nova) && agendas[0].Geracao == antes.GeracaoDaOnda + 1 && !cancelou,
+                () => $"alívio: {onde()}: {frente} foi a {nova}, que devia ser a queda com um disparo novo de {DuracaoCheia(cfg, nova)}: [{Efeitos()}]");
+        }
+    }
+
+    /// <summary>
+    /// A duração cheia de uma fase, pelos dados da tabela (4.2), escrita aqui: a subida, um nível do pico, ou a queda pelo
+    /// pior nível (a base × 100, 125 ou 150%); nunca menos de 1 s.
+    /// </summary>
+    private static TimeSpan DuracaoCheia(ConfiguracaoDoNucleo cfg, EstadoDaOnda onda)
+    {
+        DadosDaOnda d = cfg.TabelaDeOndas(onda.Tipo);
+        TimeSpan t = onda.Fase switch
+        {
+            FaseDaOnda.Subida => d.Subida,
+            FaseDaOnda.Pico => d.NivelDoPico,
+            _ => TimeSpan.FromTicks(d.QuedaBase.Ticks * (100 + 25 * (onda.Pior - 1)) / 100),
+        };
+        return t < TimeSpan.FromSeconds(1) ? TimeSpan.FromSeconds(1) : t;
     }
 
     /// <summary>O disparo da onda (4.5): subida → pico; pico acima do 1 → um nível abaixo; pico no 1 → queda (sem queda, o fim); queda → o fim; no fim, a de fundo volta.</summary>
@@ -1350,6 +1639,185 @@ internal static class InvariantesTestes
         if (livres.Length > 1) contagens.Contar("tela cheia transfere com mais de um monitor livre");
         NoLivreMaisProximo("transfere para o monitor livre", ancora);
         Verificar(Equals(depois.RetornoDaTelaCheia, guardada), () => $"tela cheia: {onde()}: transferido com retorno {Descrever(depois.RetornoDaTelaCheia)}, esperado {Descrever(guardada)} (\"se ainda não houver uma guardada\")");
+    }
+
+    /// <summary>
+    /// TOPOLOGY_CHANGED com o app aberto (Fase 5, passo P8; DEC-030), contra regras escritas aqui, à parte do núcleo:
+    /// <list type="bullet">
+    /// <item>com a mesma configuração, nada além do cache;</item>
+    /// <item>o retorno da tela cheia, em qualquer estado, e a posição, nos estados que não revalidam (PRESSED, DRAGGING, BOOTING
+    /// e HIDDEN), acompanham a topologia (<see cref="Acompanhada"/>), sem transição e sem mover a janela;</item>
+    /// <item>invariante 19: nos estados que revalidam, se a geometria do monitor do personagem não mudou (no máximo transladado,
+    /// ou com a chave nova e a mesma tela), o estado continua, com uma transição para ele mesmo; a âncora, o retângulo e a
+    /// posição fina andam exatamente pela translação; a posição descreve o lugar novo; o que estava em curso continua; e a
+    /// agenda e o relógio não mudam (salvo o fim de um gesto curto, invariante 15, e os itens);</item>
+    /// <item>senão, SETTLING: no monitor da mesma chave, ou, sem ele, no mais próximo do pixel dos pés da posição acompanhada,
+    /// com a regra que diz que ele foi desconectado;</item>
+    /// <item>invariante 20: depois, visível e fora de PRESSED e DRAGGING, o monitor do personagem é da topologia nova e, quando
+    /// o sprite cabe nele, a âncora está na área útil dele.</item>
+    /// </list>
+    /// </summary>
+    private static void ConferirTopologia(EstadoDoNucleo antes, TopologyChanged mudanca, Resultado r, Func<string> onde, Contagens contagens, TamanhoDip tamanho)
+    {
+        if (antes.Estado == Estado.Exiting) return;
+        EstadoDoNucleo depois = r.Estado;
+        Topologia nova = mudanca.Topologia;
+        Verificar(ReferenceEquals(depois.Topologia, nova), () => $"topologia: {onde()}: o cache não é a topologia nova");
+        if (antes.Topologia is not { } velha) return;
+        if (velha.MesmaConfiguracao(nova))
+        {
+            contagens.Contar("TOPOLOGY_CHANGED com a mesma configuração");
+            Verificar(r.Transicoes.Count == 0 && depois.Estado == antes.Estado && Equals(depois.Lugar, antes.Lugar) && Equals(depois.Posicao, antes.Posicao)
+                    && Equals(depois.RetornoDaTelaCheia, antes.RetornoDaTelaCheia) && !r.Efeitos.Any(e => e is MoverJanela or MoverItem),
+                () => $"topologia: {onde()}: com a mesma configuração, devia só atualizar o cache ({Descrever(r.Transicoes)})");
+            return;
+        }
+
+        PosicaoDoPersonagem? retorno = Acompanhada(velha, nova, antes.RetornoDaTelaCheia, tamanho);
+        if (retorno is not null) contagens.Contar("retorno da tela cheia acompanhou a topologia");
+        Verificar(Equals(depois.RetornoDaTelaCheia, retorno),
+            () => $"topologia: {onde()}: retorno {Descrever(depois.RetornoDaTelaCheia)} (tela {depois.RetornoDaTelaCheia?.TelaDoMonitor}), esperado {Descrever(retorno)} (tela {retorno?.TelaDoMonitor})");
+
+        bool revalida = antes.Estado is Estado.Idle or Estado.Walking or Estado.Climbing or Estado.Hanging or Estado.Jumping or Estado.Falling
+            or Estado.Landing or Estado.Resting or Estado.Peeking or Estado.Reacting or Estado.Using;
+        if (!revalida || antes.Lugar is null || antes.Posicao is null)
+        {
+            contagens.Contar(antes.Estado is Estado.Pressed or Estado.Dragging ? "TOPOLOGY_CHANGED no gesto: só o cache e as posições" : "TOPOLOGY_CHANGED escondido: só o cache e as posições");
+            PosicaoDoPersonagem? posicao = Acompanhada(velha, nova, antes.Posicao, tamanho);
+            // No arraste (revisão do bloco P6-P9, achado 2), o lugar anda com o monitor em que está, sem validar, e a janela vai
+            // junto; nos outros, o lugar fica.
+            Posicionamento? lugarEsperado = antes.Lugar;
+            if (antes.Estado == Estado.Dragging && antes.Lugar is { } arrastado)
+            {
+                contagens.Contar("TOPOLOGY_CHANGED no arraste: o lugar anda com o monitor");
+                PontoPx ancora = PontoAcompanhado(velha, nova, arrastado.Ancora);
+                MonitorDoDesktop doArraste = nova.MonitorMaisProximo(new PontoPx(ancora.X, ancora.Y - 1));
+                TamanhoPx t = tamanho.ParaPixels(doArraste.Dpi);
+                lugarEsperado = new Posicionamento(doArraste, ancora, t, new RetanguloPx(ancora.X - t.Largura / 2, ancora.Y - t.Altura, ancora.X - t.Largura / 2 + t.Largura, ancora.Y));
+            }
+            Verificar(r.Transicoes.Count == 0 && depois.Estado == antes.Estado && Equals(depois.Lugar, lugarEsperado) && Equals(depois.Posicao, posicao)
+                    && r.Efeitos.Count(e => e is MoverJanela) == (Equals(lugarEsperado, antes.Lugar) ? 0 : 1),
+                () => $"topologia: {onde()}: em {antes.Estado}, devia só acompanhar as posições; {Descrever(r.Transicoes)}, lugar {antes.Lugar?.Ancora}→{depois.Lugar?.Ancora} (esperado {lugarEsperado?.Ancora}), posição {Descrever(depois.Posicao)}, esperada {Descrever(posicao)}");
+            return;
+        }
+
+        // O monitor correspondente: o da mesma chave; com chave nova, o de mesma tela cuja chave não existia antes.
+        Posicionamento lugar = antes.Lugar;
+        MonitorDoDesktop m = lugar.Monitor;
+        MonitorDoDesktop? n = nova.PorChave(m.Chave) ?? nova.Monitores.FirstOrDefault(x => x.Tela == m.Tela && velha.PorChave(x.Chave) is null);
+        int dx = n is null ? 0 : n.Tela.Esquerda - m.Tela.Esquerda, dy = n is null ? 0 : n.Tela.Topo - m.Tela.Topo;
+        bool mesmaGeometria = n is not null && n.Tela == m.Tela.Deslocado(dx, dy) && n.AreaUtil == m.AreaUtil.Deslocado(dx, dy) && n.Dpi == m.Dpi;
+        if (mesmaGeometria)
+        {
+            contagens.Contar(dx != 0 || dy != 0 ? "TOPOLOGY_CHANGED que só translada o monitor do personagem (invariante 19)"
+                : n!.Chave == m.Chave ? "TOPOLOGY_CHANGED sem mudar o monitor do personagem (invariante 19)"
+                : "TOPOLOGY_CHANGED que só troca a chave do monitor do personagem (invariante 19)");
+            if (antes.Estado == Estado.Using) contagens.Contar("USING continua com o monitor só transladado ou igual");
+            var ancora = new PontoPx(lugar.Ancora.X + dx, lugar.Ancora.Y + dy);
+            Verificar(depois.Estado == antes.Estado && r.Transicoes.Count == 1 && r.Transicoes[0].De == antes.Estado && r.Transicoes[0].Para == antes.Estado,
+                () => $"invariante 19: {onde()}: o monitor do personagem só andou ({dx},{dy}), e o estado foi de {antes.Estado} a {depois.Estado} ({Descrever(r.Transicoes)})");
+            Verificar(depois.Lugar is { } l && l.Monitor == n && l.Ancora == ancora && l.Tamanho == lugar.Tamanho && l.Retangulo == lugar.Retangulo.Deslocado(dx, dy),
+                () => $"invariante 19: {onde()}: lugar {depois.Lugar?.Monitor.Chave} {depois.Lugar?.Ancora} {depois.Lugar?.Retangulo}; esperado {n!.Chave} {ancora} {lugar.Retangulo.Deslocado(dx, dy)}");
+            RetanguloPx area = n!.AreaUtil;
+            Verificar(depois.Posicao is { } p && p.ChaveMonitor == n.Chave && p.TelaDoMonitor == n.Tela && p.AncoraAbsoluta == ancora
+                    && p.FracaoX == (ancora.X - area.Esquerda) / (double)area.Largura && p.FracaoY == (ancora.Y - area.Topo) / (double)area.Altura,
+                () => $"invariante 19: {onde()}: a posição {Descrever(depois.Posicao)} (tela {depois.Posicao?.TelaDoMonitor}) não descreve o lugar novo {n.Chave} {ancora}");
+            Verificar(depois.Esconderijo == antes.Esconderijo && depois.PresoPeloUsuario == antes.PresoPeloUsuario && depois.Uso == antes.Uso
+                    && depois.PassosRestantes == antes.PassosRestantes && depois.Direcao == antes.Direcao && depois.Expressao == antes.Expressao
+                    && depois.Movimento == (antes.Estado.EmMovimento() ? antes.Movimento with { X = antes.Movimento.X + dx, Y = antes.Movimento.Y + dy } : antes.Movimento),
+                () => $"invariante 19: {onde()}: o que estava em curso não continuou igual (esconderijo {antes.Esconderijo}→{depois.Esconderijo}, preso {antes.PresoPeloUsuario}→{depois.PresoPeloUsuario}, uso {antes.Uso}→{depois.Uso}, movimento {antes.Movimento}→{depois.Movimento})");
+            Verificar(r.Efeitos.Count(e => e is MoverJanela) == (Equals(depois.Lugar, antes.Lugar) ? 0 : 1),
+                () => $"invariante 19: {onde()}: a janela {(Equals(depois.Lugar, antes.Lugar) ? "não devia se mover" : "devia acompanhar")} ({r.Efeitos.Count(e => e is MoverJanela)} MoverJanela)");
+            // Um gesto curto acaba com qualquer evento do sistema (invariante 15), e com ele o relógio e a agenda mudam; um item
+            // pode passar a cair ou a aparecer.
+            if (antes.Gesto == Gesto.Nenhum)
+                Verificar(depois.Geracao == antes.Geracao && depois.DecisaoAgendada == antes.DecisaoAgendada && !r.Efeitos.Any(e => e is AgendarDecisao or CancelarDecisao),
+                    () => $"invariante 19: {onde()}: a agenda mudou (geração {antes.Geracao}→{depois.Geracao})");
+            if (antes.Gesto == Gesto.Nenhum && antes.Itens.Quantidade == 0)
+                Verificar(depois.RelogioAtivo == antes.RelogioAtivo && !r.Efeitos.Any(e => e is LigarRelogio or DesligarRelogio), () => $"invariante 19: {onde()}: o relógio mudou");
+        }
+        else
+        {
+            contagens.Contar(n is null ? "TOPOLOGY_CHANGED sem o monitor do personagem" : "TOPOLOGY_CHANGED com o monitor do personagem mudado");
+            string regra = n is null ? "TOPOLOGY_CHANGED: o monitor do personagem foi desconectado" : "TOPOLOGY_CHANGED";
+            Verificar(r.Transicoes.Count > 0 && r.Transicoes[0].De == antes.Estado && r.Transicoes[0].Para == Estado.Settling && r.Transicoes[0].Regra == regra,
+                () => $"topologia: {onde()}: devia revalidar com \"{regra}\" ({Descrever(r.Transicoes)}, {r.Transicoes.FirstOrDefault()?.Regra})");
+            // Na mesma chave, ou no mais próximo do pixel dos pés da posição que acompanhou a topologia.
+            PosicaoDoPersonagem acompanhada = Acompanhada(velha, nova, antes.Posicao, tamanho)!;
+            MonitorDoDesktop esperado = n ?? nova.MonitorMaisProximo(new PontoPx(acompanhada.AncoraAbsoluta.X, acompanhada.AncoraAbsoluta.Y - 1));
+            Verificar(depois.Lugar?.Monitor.Chave == esperado.Chave,
+                () => $"topologia: {onde()}: revalidado em {depois.Lugar?.Monitor.Chave}, esperado {esperado.Chave} (posição acompanhada {Descrever(acompanhada)})");
+        }
+
+        // Invariante 20.
+        if (depois.Estado.Visivel() && depois.Estado is not (Estado.Pressed or Estado.Dragging) && depois.Lugar is { } final)
+        {
+            contagens.Contar("invariante 20 conferido");
+            RetanguloPx areaFinal = final.Monitor.AreaUtil;
+            bool cabe = final.Tamanho.Largura <= areaFinal.Largura && final.Tamanho.Altura <= areaFinal.Altura;
+            Verificar(nova.Monitores.Contains(final.Monitor) && (!cabe || (final.Ancora.X >= areaFinal.Esquerda && final.Ancora.X < areaFinal.Direita
+                    && final.Ancora.Y > areaFinal.Topo && final.Ancora.Y <= areaFinal.Base)),
+                () => $"invariante 20: {onde()}: {depois.Estado} em {final.Monitor} com a âncora {final.Ancora}, fora da topologia nova ou da área útil");
+        }
+    }
+
+    /// <summary>
+    /// A posição guardada depois de uma mudança de topologia (DEC-030), escrita aqui à parte do núcleo (Posicionador.Rebasear): no
+    /// monitor correspondente (a mesma chave; com chave nova, a mesma tela), a fração na área útil atual dele, com a chave e a tela
+    /// dele; sem ele, a chave, as frações e a tela ficam, e a âncora anda com o sobrevivente mais próximo do pixel dos pés, medido
+    /// nas coordenadas antigas (no empate, o principal, depois a ordem da topologia nova).
+    /// </summary>
+    private static PosicaoDoPersonagem? Acompanhada(Topologia velha, Topologia nova, PosicaoDoPersonagem? p, TamanhoDip tamanho)
+    {
+        if (p is null) return null;
+        MonitorDoDesktop? n = nova.PorChave(p.ChaveMonitor)
+            ?? (p.TelaDoMonitor is { } tela ? nova.Monitores.FirstOrDefault(x => x.Tela == tela && velha.PorChave(x.Chave) is null) : null);
+        if (n is not null)
+            return p with { ChaveMonitor = n.Chave, AncoraAbsoluta = Posicionador.NoMonitor(n, p.FracaoX, p.FracaoY, tamanho).Ancora, TelaDoMonitor = n.Tela };
+
+        var pes = new PontoPx(p.AncoraAbsoluta.X, p.AncoraAbsoluta.Y - 1);
+        (MonitorDoDesktop Novo, MonitorDoDesktop Velho)? melhor = null;
+        long menor = long.MaxValue;
+        foreach (MonitorDoDesktop x in nova.Monitores)
+        {
+            if (velha.PorChave(x.Chave) is not { } v) continue;
+            long d = v.Tela.DistanciaAoQuadrado(pes);
+            if (d < menor || (d == menor && x.Principal && !melhor!.Value.Novo.Principal))
+            {
+                melhor = (x, v);
+                menor = d;
+            }
+        }
+        return melhor is { } s
+            ? p with { AncoraAbsoluta = new PontoPx(p.AncoraAbsoluta.X + s.Novo.Tela.Esquerda - s.Velho.Tela.Esquerda, p.AncoraAbsoluta.Y + s.Novo.Tela.Topo - s.Velho.Tela.Topo) }
+            : p;
+    }
+
+    /// <summary>
+    /// Um ponto livre (a âncora do arraste ou do item na mão) depois de uma mudança de topologia (revisão do bloco P6-P9,
+    /// achados 2 e 6), escrito aqui à parte do núcleo (Posicionador.AcompanharPonto): anda com a tela do monitor do pixel dos
+    /// pés na topologia antiga, se ele continua (a mesma chave; com chave nova, a mesma tela); senão, com a do sobrevivente
+    /// mais próximo do pixel dos pés, medido nas coordenadas antigas; sem nenhum, fica.
+    /// </summary>
+    private static PontoPx PontoAcompanhado(Topologia velha, Topologia nova, PontoPx ponto)
+    {
+        var pes = new PontoPx(ponto.X, ponto.Y - 1);
+        MonitorDoDesktop daqui = velha.MonitorMaisProximo(pes);
+        MonitorDoDesktop? n = nova.PorChave(daqui.Chave) ?? nova.Monitores.FirstOrDefault(x => x.Tela == daqui.Tela && velha.PorChave(x.Chave) is null);
+        if (n is not null) return new PontoPx(ponto.X + n.Tela.Esquerda - daqui.Tela.Esquerda, ponto.Y + n.Tela.Topo - daqui.Tela.Topo);
+        (MonitorDoDesktop Novo, MonitorDoDesktop Velho)? melhor = null;
+        long menor = long.MaxValue;
+        foreach (MonitorDoDesktop x in nova.Monitores)
+        {
+            if (velha.PorChave(x.Chave) is not { } v) continue;
+            long d = v.Tela.DistanciaAoQuadrado(pes);
+            if (d < menor || (d == menor && x.Principal && !melhor!.Value.Novo.Principal))
+            {
+                melhor = (x, v);
+                menor = d;
+            }
+        }
+        return melhor is { } s ? new PontoPx(ponto.X + s.Novo.Tela.Esquerda - s.Velho.Tela.Esquerda, ponto.Y + s.Novo.Tela.Topo - s.Velho.Tela.Topo) : ponto;
     }
 
     /// <summary>
@@ -1547,6 +2015,10 @@ internal static class InvariantesTestes
         // move os itens; a queda com os parâmetros do aplicativo fica em ItensTestes).
         var doTamagotchi = new Random(unchecked(semente * 37 + 11));
         bool usoCurto = doTamagotchi.Next(4) != 0;
+        // A paranoia (pedido do usuário de 2026-10-01) pede quatro substâncias no mesmo episódio, o que o gerador quase nunca
+        // faz sozinho. Em metade das sequências, escolhida pela semente (sem sorteio a mais, para a outra metade continuar
+        // exatamente como antes), ele a puxa: veja ItemAInvocar e PegarUmItem.
+        bool puxaAParanoia = (uint)semente % 2 == 1;
         ConfiguracaoDoNucleo cfgDoTamagotchi = cfg with { Tamagotchi = true, Fisica = cfg.Fisica with { Gravidade = cfg.Fisica.Gravidade * 4 } };
         if (usoCurto) cfgDoTamagotchi = cfgDoTamagotchi with { TabelaDeItens = ItemDeUsoCurto };
         var sombraDoTamagotchi = new Nucleo(cfgDoTamagotchi, (ulong)semente);
@@ -1584,7 +2056,7 @@ internal static class InvariantesTestes
             // execução com emoção) um comando de emoção, fora de um gesto curto; e o lote, adaptado ao estado dela.
             if (comTamagotchi)
             {
-                for (int i = 0; i < 4 && SortearDoTamagotchi(doTamagotchi, sombraDoTamagotchi.Estado, cfgDoTamagotchi) is { } doItem; i++)
+                for (int i = 0; i < 4 && SortearDoTamagotchi(doTamagotchi, sombraDoTamagotchi.Estado, cfgDoTamagotchi, puxaAParanoia) is { } doItem; i++)
                     EntregarAoTamagotchi(doItem);
                 if (sombraDoTamagotchi.Estado.Gesto == Gesto.Nenhum && doTamagotchi.Next(15) == 0)
                     lotesDoTamagotchiComEmocao.Add([new CmdSetDominantEmotion(EsquemaDeConfiguracoesTestes.EmocaoAleatoria(doTamagotchi))]);
@@ -1612,7 +2084,7 @@ internal static class InvariantesTestes
             Entregar(lote);
         }
         return new Sequencia(cfg, (ulong)semente, lotes, emLotes, antesDaCarga, perfilCurto, lotesComEmocao,
-            cfgDoTamagotchi, aplicadosDoTamagotchi, sombraDoTamagotchi.Descartados, lotesDoTamagotchiComEmocao, usoCurto, comTamagotchi);
+            cfgDoTamagotchi, aplicadosDoTamagotchi, sombraDoTamagotchi.Descartados, lotesDoTamagotchiComEmocao, usoCurto, comTamagotchi, puxaAParanoia);
     }
 
     /// <summary>Os itens com o uso de 1 a 6 passos: o fim do uso acontece sem rajadas longas de TICK.</summary>
@@ -1641,9 +2113,10 @@ internal static class InvariantesTestes
     /// Um lote de eventos do tamagotchi, ou nulo para parar: rajadas de TICK com um item caindo ou um uso em curso (às vezes
     /// até o fim exato do uso), o gesto sobre o item da mão (arrastar até ele ou para longe, soltar, largar), invocar (às
     /// vezes fora do enum), pegar um item (às vezes um Id que não existe), recolher e disparos da onda (o atual, um velho
-    /// ou sem onda). Escondido ou antes da carga, eventos que devem ser ignorados.
+    /// ou sem onda). Escondido ou antes da carga, eventos que devem ser ignorados. Com <paramref name="puxaAParanoia"/>, o
+    /// invocar e o pegar puxam a paranoia (<see cref="ItemAInvocar"/> e <see cref="PegarUmItem"/>).
     /// </summary>
-    private static List<Evento>? SortearDoTamagotchi(Random rnd, EstadoDoNucleo s, ConfiguracaoDoNucleo cfg)
+    private static List<Evento>? SortearDoTamagotchi(Random rnd, EstadoDoNucleo s, ConfiguracaoDoNucleo cfg, bool puxaAParanoia)
     {
         if (rnd.Next(5) < 2 || s.Estado == Estado.Exiting) return null;
         if (!s.Carregado || !s.Estado.Visivel())
@@ -1664,8 +2137,8 @@ internal static class InvariantesTestes
         int sorteio = rnd.Next(100);
         return sorteio switch
         {
-            < 22 => [new CmdSummonItem(ItemAleatorio(rnd))],
-            < 50 when s.Itens.Quantidade > 0 => PegarUmItem(rnd, s, cfg),
+            < 22 => [new CmdSummonItem(ItemAInvocar(rnd, s, puxaAParanoia))],
+            < 50 when s.Itens.Quantidade > 0 => PegarUmItem(rnd, s, cfg, puxaAParanoia),
             < 52 => [new CmdClearItems()],
             < 72 when s.Onda is not null => [new ItemEffectTimer(rnd.Next(6) == 0 ? s.GeracaoDaOnda - 1 - rnd.Next(3) : s.GeracaoDaOnda)],
             < 74 => [new ItemEffectTimer(s.GeracaoDaOnda)],
@@ -1679,11 +2152,36 @@ internal static class InvariantesTestes
     private static Item ItemAleatorio(Random rnd) => rnd.Next(15) == 0 ? (Item)rnd.Next(13, 40) : (Item)rnd.Next(13);
 
     /// <summary>
-    /// Pega um item (às vezes um Id que não existe): só pega, e o gesto segue nos lotes seguintes, com outros eventos no
-    /// meio; ou clica nele (pega e larga); ou o gesto inteiro, até ele ou para longe.
+    /// O item a invocar: com uma onda de fundo, metade das vezes um item de alívio (a comida e a bebida sem álcool), para o
+    /// alívio que acaba a onda da frente e traz a de fundo de volta acontecer muitas vezes, e não por sorte; senão,
+    /// qualquer um (<see cref="ItemAleatorio"/>). Puxando a paranoia (pedido do usuário de 2026-10-01), no meio de um
+    /// episódio (com carga), dois terços das vezes uma substância ou, com a paranoia na frente, metade delas um item de
+    /// alívio, para ela subir de nível e ser acalmada; sem carga, ou sem puxar, nenhum sorteio a mais.
     /// </summary>
-    private static List<Evento> PegarUmItem(Random rnd, EstadoDoNucleo s, ConfiguracaoDoNucleo cfg)
+    private static Item ItemAInvocar(Random rnd, EstadoDoNucleo s, bool puxaAParanoia)
     {
+        if (puxaAParanoia && s.Carga > 0 && rnd.Next(3) != 0)
+            return s.Onda?.Tipo == Onda.Paranoico && rnd.Next(2) == 0 ? ItensDeAlivio[rnd.Next(ItensDeAlivio.Length)] : ItensDeSubstancia[rnd.Next(ItensDeSubstancia.Length)];
+        return s.OndaDeFundo is not null && rnd.Next(2) == 0 ? ItensDeAlivio[rnd.Next(ItensDeAlivio.Length)] : ItemAleatorio(rnd);
+    }
+
+    /// <summary>
+    /// Pega um item (às vezes um Id que não existe): só pega, e o gesto segue nos lotes seguintes, com outros eventos no
+    /// meio; ou clica nele (pega e larga); ou o gesto inteiro, até ele ou para longe. Com uma onda de fundo e um item de
+    /// alívio no mundo, o gesto inteiro de um deles até ele: um passo do alívio por vez, até a onda da frente acabar e a de
+    /// fundo voltar (o alívio, pedido do usuário de 2026-10-01; sem isso, o caso saía por sorte, de nenhuma a três vezes).
+    /// Puxando a paranoia, no meio de um episódio (com carga), metade das vezes antes disso o gesto inteiro de uma
+    /// substância até ele (com a paranoia na frente, de qualquer item): sem isso, a 4ª substância do episódio saía de
+    /// nenhuma a duas vezes.
+    /// </summary>
+    private static List<Evento> PegarUmItem(Random rnd, EstadoDoNucleo s, ConfiguracaoDoNucleo cfg, bool puxaAParanoia)
+    {
+        bool paranoica = s.Onda?.Tipo == Onda.Paranoico;
+        if (puxaAParanoia && s.Carga > 0 && s.Itens.Todos.Where(i => paranoica || !ItensDeAlivio.Contains(i.Item)).ToArray() is { Length: > 0 } paraUsar
+            && rnd.Next(2) == 0)
+            return GestoAteEle(rnd, s, cfg, paraUsar[rnd.Next(paraUsar.Length)]);
+        if (s.OndaDeFundo is not null && s.Itens.Todos.Where(i => ItensDeAlivio.Contains(i.Item)).ToArray() is { Length: > 0 } deAlivio)
+            return GestoAteEle(rnd, s, cfg, deAlivio[rnd.Next(deAlivio.Length)]);
         ItemNoMundo item = s.Itens.Todos[rnd.Next(s.Itens.Quantidade)];
         int id = rnd.Next(15) == 0 ? s.ProximoIdDeItem + rnd.Next(3) : item.Id;
         var press = new ItemPress(id, new PontoPx(item.Lugar.Ancora.X + rnd.Next(-20, 21), item.Lugar.Ancora.Y - rnd.Next(2, 44)));
@@ -1695,6 +2193,14 @@ internal static class InvariantesTestes
             1 => [press, new ItemRelease(id)],
             _ => [press, new ItemDragStart(id), new ItemDragMove(id, cursor), new ItemDragEnd(id, cursor)],
         };
+    }
+
+    /// <summary>O gesto inteiro do item até ele: pega 10 px acima da âncora, arrasta e solta perto do meio dele.</summary>
+    private static List<Evento> GestoAteEle(Random rnd, EstadoDoNucleo s, ConfiguracaoDoNucleo cfg, ItemNoMundo item)
+    {
+        var pegou = new ItemPress(item.Id, new PontoPx(item.Lugar.Ancora.X, item.Lugar.Ancora.Y - 10));
+        PontoPx sobre = Mais(Alvo(rnd, s, cfg, sobreEle: true), new PontoPx(0, -10));
+        return [pegou, new ItemDragStart(item.Id), new ItemDragMove(item.Id, sobre), new ItemDragEnd(item.Id, sobre)];
     }
 
     /// <summary>O gesto sobre o item da mão continua (ou espera, para outros eventos passarem com o item seguro).</summary>

@@ -7,10 +7,11 @@
 > do "tamagotchi adulto", que ele usa quando você os arrasta até ele (seção 5). Essa parte já passou
 > por testes automáticos e por uma verificação na tela, com cliques e teclas injetados por uma
 > ferramenta de teste, não por uma pessoa; falta você conferir os desenhos, as animações e o tom.
-> Por enquanto fica no monitor em que está e, a cada abertura, começa no canto inferior direito, com
-> a emoção automática: atravessar para outro monitor e lembrar a posição e a emoção chegam com a
-> Fase 5, em andamento. As poses ainda são quadros fixos por estado; as animações completas chegam na
-> Fase 6.
+> Ao abrir de novo, ele volta onde estava quando você o fechou, escondido ou preso do mesmo jeito e
+> com a mesma emoção dominante (seção 5). Isso passou por testes automáticos, que abrem o Buzzy de
+> verdade com um perfil de teste, mas ainda não pela verificação na tela nem por você. Sozinho, ele
+> ainda fica no monitor em que está: atravessar para o outro monitor chega com a Fase 5, em
+> andamento. As poses ainda são quadros fixos por estado; as animações completas chegam na Fase 6.
 
 ## 1. Antes da primeira vez
 
@@ -53,8 +54,8 @@ Não use "Executar como administrador": o Buzzy recusa rodar assim e mostra um a
 
 ## 4. O que você vai ver
 
-- O personagem aparece no canto inferior direito do monitor principal, com os pés logo acima da barra
-  de tarefas.
+- Na primeira vez, o personagem aparece no canto inferior direito do monitor principal, com os pés
+  logo acima da barra de tarefas. Nas outras, aparece onde estava quando você o fechou (seção 5).
 - Ele fica sempre por cima das outras janelas e não aparece na barra de tarefas nem no Alt+Tab.
 - Clicar nele não tira o foco do programa que você está usando. Clicar nas partes transparentes em
   volta dele atinge o que está embaixo.
@@ -87,15 +88,31 @@ mostra os sublinhados. Por exemplo, **D** e depois **F** escolhem a emoção **F
 depois **B** invocam a **Banana**. Com o Buzzy
 escondido, **Itens** fica indisponível; a emoção pode ser escolhida e aparece quando ele voltar.
 
-Os itens somem quando você fecha o Buzzy. A emoção escolhida também ainda não é lembrada: ao abrir de
-novo, ele volta à automática. Lembrar a emoção depende da persistência da Fase 5 (passo P7).
+Ao abrir de novo, o Buzzy lembra:
+
+- o lugar onde estava, no mesmo monitor. Se aquele monitor não estiver ligado, ele aparece na mesma
+  posição relativa de um monitor no mesmo lugar e com o mesmo tamanho ou, sem nenhum, do principal;
+- se estava escondido na borda, volta escondido no mesmo lado; se você o deixou preso na parede ou no
+  cipó, continua preso lá;
+- a emoção dominante escolhida.
+
+Os itens somem quando você fecha o Buzzy, de propósito. Escondido pelo menu (**Esconder Buzzy**), ele
+reaparece ao abrir de novo.
+
+Ele guarda isso sozinho, pouco depois de você soltá-lo, escondê-lo ou escolher uma emoção, e na hora
+ao sair ou quando o Windows encerra a sessão. Se o programa for fechado à força, vale o que já estava
+guardado.
 
 Abrir o `Buzzy.exe` com ele já aberto não cria um segundo Buzzy: só traz de volta o que já está
 rodando.
 
-O Buzzy não usa a internet e não lê outros programas. Por enquanto, sem a opção `--diagnostico`
-(abaixo), ele não grava nenhum arquivo. Quando passar a lembrar a posição e a emoção, ainda na Fase 5,
-vai guardá-las em `%LOCALAPPDATA%\Buzzy\settings.json`.
+O Buzzy não usa a internet e não lê outros programas. Ele guarda a posição, o esconderijo, o "preso"
+e as preferências em `%LOCALAPPDATA%\Buzzy\settings.json`, com a versão anterior do arquivo em
+`settings.json.bak`. Para abrir essa pasta, digite `%LOCALAPPDATA%\Buzzy` na barra de endereços do
+Explorador de Arquivos. Se o `settings.json` estiver estragado, ele usa a cópia `.bak` ou, sem ela,
+começa do jeito padrão; na próxima vez que gravar, guarda o arquivo estragado como
+`settings.corrupt.json`. Fora isso, só grava o log de diagnóstico, com a opção `--diagnostico`
+(abaixo).
 
 ## 6. Se algo der errado
 
@@ -106,17 +123,20 @@ vai guardá-las em `%LOCALAPPDATA%\Buzzy\settings.json`.
 | O personagem sumiu | Clique no ícone da bandeja ou abra o `Buzzy.exe` de novo |
 | Nada aparece, ou para relatar um problema | Abra com `Buzzy.exe --diagnostico`. Ele registra só eventos do próprio Buzzy em `%LOCALAPPDATA%\Buzzy\diagnostico.log` (até 1 MB) |
 | O build falha com o arquivo em uso | Feche o Buzzy (menu → **Sair**) e compile de novo |
-| Ele volta sempre a um lugar ruim e você quer a posição inicial (quando ele já lembrar a posição) | Feche o Buzzy (menu → **Sair**) e apague `settings.json` e `settings.json.bak` em `%LOCALAPPDATA%\Buzzy`. Apague os dois: sem o primeiro, ele usaria a cópia `.bak` |
+| Ele volta sempre a um lugar ruim e você quer a posição inicial | Feche o Buzzy (menu → **Sair**) e só então apague `settings.json` e `settings.json.bak` em `%LOCALAPPDATA%\Buzzy`. Apague os dois: sem o primeiro, ele usaria a cópia `.bak`. Com o Buzzy aberto não adianta, porque ele grava de novo ao sair. Ele volta ao canto inferior direito do principal e à emoção automática |
 
 ## 7. Para quem desenvolve
 
 - Testes sem abrir janelas: `powershell -NoProfile -File tools\testar.ps1`.
 - Testes que abrem janelas ou movem o cursor, e a medição de desempenho: consulte os comandos e limites em
   `docs/PROJECT_CONTEXT.md`. Avise quem estiver usando o computador antes de rodá-los.
+- Sem opção nenhuma, o Buzzy lê e grava as suas configurações reais, em `%LOCALAPPDATA%\Buzzy`.
 - Para testar sem mexer nas suas configurações, abra o Buzzy com `--perfil-de-teste NOME`, por exemplo
   `Buzzy.exe --perfil-de-teste meu-teste`. Os dados dele ficam em `%LOCALAPPDATA%\Buzzy\testes\NOME`.
   O nome tem até 32 caracteres: letras minúsculas sem acento, algarismos e hífen, que não pode vir no
   começo. Escreva a opção exatamente assim, separada do nome por um espaço: com outra grafia
   (`--perfil-de-teste=NOME`, maiúsculas, `/perfil-de-teste`) ou com um nome inválido, o Buzzy não lê
   nem guarda configuração nenhuma naquela vez. Os testes e as ferramentas do projeto já fazem isso
-  sozinhos.
+  sozinhos e conferem, antes e depois, que os seus arquivos reais não mudaram, olhando só a existência,
+  o tamanho e as datas, nunca o conteúdo. Se você abrir o seu Buzzy enquanto eles rodam, essa
+  conferência pode falhar.

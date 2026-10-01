@@ -265,6 +265,40 @@ internal sealed class GerenteDosItensTestes
     }
 
     [Teste]
+    public void ReafirmarLugares_AJanelaMovidaPorForaVoltaAoLugarDoNucleo_SemMexerNaOrdemZ()
+    {
+        // Fase 5, passo P9 (D14 do desenho dos monitores): depois da releitura, o Windows pode levar uma janela de volta a um
+        // monitor reconectado; quem decide o lugar é o núcleo. A ordem Z não é tocada: ela só muda quando o item aparece, no
+        // gesto sobre ele e quando o personagem reaparece (DEC-028, item 22; SECURITY.md 2), e a conferência tardia é um
+        // temporizador (revisão do bloco P6-P9: segurança, achado 1; correção, achado 4). A janela é movida sem mudar a
+        // ordem Z (SWP_NOZORDER).
+        var c = new Cenario();
+        Posicionamento l1 = Lugar(M96, 100, 1040), l2 = Lugar(M96, 300, 1040), l3 = Lugar(M96, 500, 1040), l4 = Lugar(M96, 700, 900);
+        c.Gerente.Executar(new MostrarItem(1, Item.Banana, l1));
+        c.Gerente.Executar(new MostrarItem(2, Item.Cafe, l2));
+        c.Gerente.Executar(new MostrarItem(3, Item.Agua, l3));
+        c.Gerente.Executar(new MostrarItem(4, Item.Vodka, l4));
+        c.Gerente.Executar(new EsconderItem(3));
+        c.Gerente.ComecarGesto(4);
+        c.Janela(1).MovidaPorFora = l1.Retangulo.Deslocado(-1920, 0); // levada a outro monitor
+        c.Janela(3).MovidaPorFora = l3.Retangulo.Deslocado(50, 0);    // escondida: fica como está
+        c.Janela(4).MovidaPorFora = l4.Retangulo.Deslocado(10, 10);   // no gesto: segue o cursor, e o lugar fica
+        c.Limpar();
+
+        IReadOnlyList<int> reaplicados = c.Gerente.ReafirmarLugares("WM_DISPLAYCHANGE");
+        Afirmar.Sequencia([1], reaplicados, "só a janela à vista, fora do gesto, que saiu do lugar");
+        Afirmar.Sequencia([$"retangulo {l1.Retangulo}"], c.Janela(1).Chamadas, "de volta ao lugar do núcleo, sem mexer na ordem Z");
+        Afirmar.Sequencia([], c.Janela(2).Chamadas, "no lugar: nada");
+        Afirmar.Sequencia([], c.Janela(3).Chamadas, "a escondida fica como está");
+        Afirmar.Sequencia([], c.Janela(4).Chamadas, "a do gesto fica onde o cursor a pôs, e na ordem Z em que está");
+
+        c.Limpar();
+        Afirmar.Sequencia([], c.Gerente.ReafirmarLugares("reafirmação tardia"), "de volta ao lugar: nada a reaplicar");
+        Afirmar.Verdadeiro(Enumerable.Range(1, 4).All(i => c.Janela(i).Chamadas.Count == 0), "nem lugar nem ordem Z na conferência tardia");
+        Afirmar.Sequencia([], new Cenario().Gerente.ReafirmarLugares("WM_DISPLAYCHANGE"), "sem janelas, nada");
+    }
+
+    [Teste]
     public void FecharTodas_NoEncerramento_CadaJanelaUmaVez()
     {
         var c = new Cenario();

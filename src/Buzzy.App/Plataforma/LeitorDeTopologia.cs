@@ -15,7 +15,8 @@ internal sealed class LeituraDaTopologia
 {
     private readonly Dictionary<string, string> _nomeGdiPorChave;
 
-    internal LeituraDaTopologia(Topologia topologia, IReadOnlyList<ChaveAtribuida> chaves, string? erroDaConsulta, int caminhosSemNome)
+    internal LeituraDaTopologia(Topologia topologia, IReadOnlyList<ChaveAtribuida> chaves, string? erroDaConsulta, int caminhosSemNome,
+        int monitoresIgnorados = 0, string? motivoDoIgnorado = null)
     {
         ArgumentNullException.ThrowIfNull(topologia);
         ArgumentNullException.ThrowIfNull(chaves);
@@ -23,8 +24,19 @@ internal sealed class LeituraDaTopologia
         Chaves = chaves;
         ErroDaConsulta = erroDaConsulta;
         CaminhosSemNome = caminhosSemNome;
+        MonitoresIgnorados = monitoresIgnorados;
+        MotivoDoIgnorado = monitoresIgnorados > 0 ? motivoDoIgnorado : null;
         _nomeGdiPorChave = chaves.ToDictionary(c => c.Chave, c => c.NomeGdi, StringComparer.Ordinal);
     }
+
+    /// <summary>
+    /// Monitores enumerados que não puderam ser lidos por inteiro e ficaram de fora: só numa leitura parcial, o último
+    /// recurso (<see cref="LeitorDeTopologia.LerDetalhado"/>); 0 na leitura de sempre.
+    /// </summary>
+    internal int MonitoresIgnorados { get; }
+
+    /// <summary>A falha do primeiro monitor que ficou de fora (função e código, nunca um nome); nulo sem nenhum.</summary>
+    internal string? MotivoDoIgnorado { get; }
 
     internal Topologia Topologia { get; }
 
@@ -55,9 +67,9 @@ internal static class LeitorDeTopologia
     private static readonly object Trava = new();
 
     /// <summary>
-    /// Nome GDI → chave lida do caminho e tela, da última leitura coerente com a consulta boa. Segura a chave de um
-    /// monitor quando a consulta falha (sessão remota ou sem acesso ao console), enquanto o nome GDI e a tela forem os
-    /// mesmos. Só vive nesta execução.
+    /// Nome GDI → chave e tela, da última leitura coerente com a consulta boa (<see cref="ChavesDeMonitor.NovoCache"/>).
+    /// Segura a chave de um monitor quando a consulta falha (sessão remota, bloqueada ou sem acesso ao console), enquanto
+    /// o nome GDI for o mesmo e a tela tiver o mesmo tamanho, mesmo transladada. Só vive nesta execução.
     /// </summary>
     private static IReadOnlyDictionary<string, ChaveConhecida> _cache = new Dictionary<string, ChaveConhecida>(StringComparer.OrdinalIgnoreCase);
 
@@ -73,23 +85,61 @@ internal static class LeitorDeTopologia
     /// enumeração falhou, um monitor não pôde ser lido por inteiro (informação ou DPI) ou a topologia não fecha. Uma
     /// falha só da consulta da configuração de vídeo nunca torna a leitura nula: as chaves vêm do cache ou da reserva.
     /// </summary>
-    internal static LeituraDaTopologia? LerDetalhado(out string? erro)
+    /// <param name="erro">O motivo de uma leitura incoerente; nulo se ela saiu.</param>
+    /// <param name="parcial">
+    /// O último recurso, depois das novas tentativas (na partida e na última releitura de uma rajada): um monitor que não
+    /// pôde ser lido por inteiro fica de fora e é contado (<see cref="LeituraDaTopologia.MonitoresIgnorados"/>), em vez de
+    /// tornar a leitura inteira incoerente. Com uma falha persistente, o Buzzy não partia e, em execução, nenhuma releitura
+    /// saía: com o monitor do personagem desconectado, ele ficava fora da tela (revisão de correção do bloco P6-P9, achado
+    /// 7). Uma falha passageira continua só adiando a releitura (L3 da crítica).
+    /// </param>
+    internal static LeituraDaTopologia? LerDetalhado(out string? erro, bool parcial = false)
     {
         ConsultaDeVideo consulta = ConfiguracaoDeVideo.Consultar();
-        List<MonitorEnumerado>? enumerados = Enumerar(out erro);
+        List<MonitorEnumerado>? enumerados = Enumerar(parcial, out int ignorados, out string? motivoDoIgnorado, out erro);
         if (enumerados is null) return null;
         lock (Trava)
         {
-            LeituraDaTopologia? leitura = Montar(enumerados, consulta, _cache, out IReadOnlyDictionary<string, ChaveConhecida> cacheDepois, out erro);
+            LeituraDaTopologia? leitura = Montar(enumerados, consulta, _cache, out IReadOnlyDictionary<string, ChaveConhecida> cacheDepois, out erro, ignorados, motivoDoIgnorado);
             _cache = cacheDepois;
             return leitura;
         }
     }
 
     /// <summary>
+    /// Junta o que cada monitor enumerado deu (<see cref="Descrever"/>), na ordem do Windows. Sem falha, todos. Com uma falha,
+    /// a leitura é incoerente (nula, com o motivo da primeira, L3), a não ser na leitura <paramref name="parcial"/>, em que os
+    /// monitores que falharam ficam de fora e são contados em <paramref name="ignorados"/>, com o motivo do primeiro.
+    /// </summary>
+    internal static List<MonitorEnumerado>? Juntar(IReadOnlyList<(MonitorEnumerado? Monitor, string? Falha)> lidos, bool parcial, out int ignorados, out string? erro)
+    {
+        ArgumentNullException.ThrowIfNull(lidos);
+        var monitores = new List<MonitorEnumerado>(lidos.Count);
+        ignorados = 0;
+        erro = null;
+        foreach ((MonitorEnumerado? monitor, string? falha) in lidos)
+        {
+            if (monitor is { } lido)
+            {
+                monitores.Add(lido);
+                continue;
+            }
+            erro ??= falha ?? "monitor ilegível";
+            if (!parcial)
+            {
+                ignorados = 0;
+                return null;
+            }
+            ignorados++;
+        }
+        return monitores;
+    }
+
+    /// <summary>
     /// Converte o que o Windows informou de um monitor. Uma falha ao ler a informação ou o DPI, ou um monitor sem nome
     /// GDI, devolve nulo com o motivo, e a leitura inteira passa a ser incoerente: a topologia nunca sai sem um monitor
-    /// nem com uma escala inventada (crítica da Fase 5, L3). Quem lê tenta de novo, e a anterior continua valendo.
+    /// nem com uma escala inventada (crítica da Fase 5, L3). Quem lê tenta de novo, e a anterior continua valendo; só a
+    /// leitura parcial, o último recurso, deixa o monitor de fora (<see cref="Juntar"/>).
     /// </summary>
     internal static MonitorEnumerado? Descrever(bool infoLida, int erroDaInfo, Win32.MONITORINFOEX info, int resultadoDoDpi, uint dpi, out string? falha)
     {
@@ -114,16 +164,19 @@ internal static class LeitorDeTopologia
 
     /// <summary>
     /// Monta a leitura com as chaves (<see cref="ChavesDeMonitor.Atribuir"/>), sem tocar no Windows. O cache só é
-    /// trocado, em <paramref name="cacheDepois"/>, por uma leitura coerente com a consulta boa, e passa a ter só as
-    /// chaves lidas do caminho; senão, volta o mesmo <paramref name="cache"/>. Nome GDI repetido torna a leitura
-    /// incoerente, como antes, quando o nome era a chave.
+    /// trocado, em <paramref name="cacheDepois"/>, por uma leitura coerente e inteira com a consulta boa
+    /// (<see cref="ChavesDeMonitor.NovoCache"/>); senão, volta o mesmo <paramref name="cache"/>: numa leitura parcial
+    /// (<paramref name="ignorados"/> maior que zero), a chave do monitor que ficou de fora continua lá para quando ele
+    /// voltar a ser lido. Nome GDI repetido torna a leitura incoerente, como antes, quando o nome era a chave.
     /// </summary>
     internal static LeituraDaTopologia? Montar(
         IReadOnlyList<MonitorEnumerado> enumerados,
         ConsultaDeVideo consulta,
         IReadOnlyDictionary<string, ChaveConhecida> cache,
         out IReadOnlyDictionary<string, ChaveConhecida> cacheDepois,
-        out string? erro)
+        out string? erro,
+        int ignorados = 0,
+        string? motivoDoIgnorado = null)
     {
         ArgumentNullException.ThrowIfNull(enumerados);
         ArgumentNullException.ThrowIfNull(consulta);
@@ -151,28 +204,30 @@ internal static class LeitorDeTopologia
             return null;
         }
 
-        if (consulta.Erro is null) cacheDepois = ChavesDeMonitor.NovoCache(nomesETelas, chaves);
+        if (consulta.Erro is null && ignorados == 0) cacheDepois = ChavesDeMonitor.NovoCache(nomesETelas, chaves);
         erro = null;
-        return new LeituraDaTopologia(topologia, chaves, consulta.Erro, consulta.CaminhosSemNome);
+        return new LeituraDaTopologia(topologia, chaves, consulta.Erro, consulta.CaminhosSemNome, ignorados, motivoDoIgnorado);
     }
 
     internal static RetanguloPx Retangulo(Win32.RECT r) => new(r.Left, r.Top, r.Right, r.Bottom);
 
-    /// <summary>Os monitores na ordem do Windows; nulo, com o motivo, se a enumeração ou um monitor falhou.</summary>
-    private static List<MonitorEnumerado>? Enumerar(out string? erro)
+    /// <summary>
+    /// Os monitores na ordem do Windows; nulo, com o motivo, se a enumeração falhou ou se um monitor falhou fora da leitura
+    /// <paramref name="parcial"/> (<see cref="Juntar"/>).
+    /// </summary>
+    private static List<MonitorEnumerado>? Enumerar(bool parcial, out int ignorados, out string? motivoDoIgnorado, out string? erro)
     {
-        var monitores = new List<MonitorEnumerado>();
-        string? falha = null;
+        var lidos = new List<(MonitorEnumerado? Monitor, string? Falha)>();
 
         bool Visitar(nint hMonitor, nint hdc, nint lprc, nint dado)
         {
-            if (falha is not null) return true;
             var mi = new Win32.MONITORINFOEX { cbSize = Marshal.SizeOf<Win32.MONITORINFOEX>() };
             bool infoLida = Win32.GetMonitorInfo(hMonitor, ref mi);
             int erroDaInfo = infoLida ? 0 : Marshal.GetLastWin32Error();
             uint dpi = 0;
             int resultadoDoDpi = infoLida ? Win32.GetDpiForMonitor(hMonitor, Win32.MDT_EFFECTIVE_DPI, out dpi, out _) : 0;
-            if (Descrever(infoLida, erroDaInfo, mi, resultadoDoDpi, dpi, out falha) is { } monitor) monitores.Add(monitor);
+            MonitorEnumerado? monitor = Descrever(infoLida, erroDaInfo, mi, resultadoDoDpi, dpi, out string? falha);
+            lidos.Add((monitor, falha));
             return true;
         }
 
@@ -180,12 +235,21 @@ internal static class LeitorDeTopologia
         bool ok = Win32.EnumDisplayMonitors(0, 0, callback, 0);
         GC.KeepAlive(callback);
 
+        motivoDoIgnorado = null;
         if (!ok)
         {
+            ignorados = 0;
             erro = "EnumDisplayMonitors falhou";
             return null;
         }
-        erro = falha;
-        return falha is null ? monitores : null;
+        List<MonitorEnumerado>? monitores = Juntar(lidos, parcial, out ignorados, out string? falhaDoPrimeiro);
+        if (monitores is null)
+        {
+            erro = falhaDoPrimeiro;
+            return null;
+        }
+        motivoDoIgnorado = falhaDoPrimeiro;
+        erro = null;
+        return monitores;
     }
 }

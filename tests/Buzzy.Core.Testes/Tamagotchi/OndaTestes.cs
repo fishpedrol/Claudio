@@ -758,7 +758,7 @@ internal static class OndaTestes
         PerfilDaOnda bebado = TabelaDoTamagotchi.DaOnda(Onda.Bebado).Perfil(FaseDaOnda.Pico, 1);
         var neutro = new PerfilDaOnda(100, 100, 100, 100, 100, 100, 100, 100, 100, 0, null, 100, bebado.Gestos, bebado.Caras);
         TimeSpan duasHoras = TimeSpan.FromHours(2);
-        return new DadosDaOnda(onda, 3, duasHoras, duasHoras, duasHoras, Expressao.Feliz, Expressao.Bebado, Expressao.Enjoado, [neutro, neutro, neutro], neutro);
+        return new DadosDaOnda(onda, 3, duasHoras, duasHoras, duasHoras, Expressao.Feliz, Expressao.Bebado, Expressao.Enjoado, [neutro, neutro, neutro], neutro, DeSubstancia: true);
     }
 
     /// <summary>O estado sem a cara, o nome do gesto e a onda: o que a onda neutra não pode mudar.</summary>
@@ -1074,7 +1074,9 @@ internal static class OndaTestes
     }
 
     // 4.5: o mesmo tipo acumula, até o nível 3. Cerveja (bêbado 1) e depois vodka (+2): nível 3, pior 3, e a subida
-    // recomeça; o pico dura três níveis e a queda, 150% (135 s). Na queda, outra cerveja volta ao pico, no nível 2.
+    // recomeça; o pico dura três níveis e a queda, 150% (135 s). Na queda, outra cerveja volta ao pico, no nível 2, e mais
+    // uma vodka o deixa no nível 3, sem passar dele. Essa vodka é a 4ª substância do episódio: depois da combinação, a
+    // paranoia começa na frente (pedido do usuário de 2026-10-01; ParanoiaTestes), e o bêbado, já somado, vai para o fundo.
     [Teste]
     public static void MesmoTipo_AcumulaAteONivel3()
     {
@@ -1093,7 +1095,8 @@ internal static class OndaTestes
         Afirmar.Igual(new EstadoDaOnda(Onda.Bebado, FaseDaOnda.Pico, 2, 3), outra.Estado.Onda, "outra cerveja na queda: de volta ao pico, no nível 2");
         Afirmar.Sequencia([TimeSpan.FromSeconds(100)], outra.Efeitos.OfType<AgendarOnda>().Select(a => a.Atraso), "o pico recomeça");
         Usar(c, Item.Vodka);
-        Afirmar.Igual(new EstadoDaOnda(Onda.Bebado, FaseDaOnda.Pico, 3, 3), c.Atual.Onda, "e nunca passa do nível 3");
+        Afirmar.Igual(new EstadoDaOnda(Onda.Bebado, FaseDaOnda.Pico, 3, 3), c.Atual.OndaDeFundo, "e nunca passa do nível 3 (no fundo: a 4ª substância começou a paranoia)");
+        Afirmar.Igual(new EstadoDaOnda(Onda.Paranoico, FaseDaOnda.Subida, 1, 1), c.Atual.Onda, "a paranoia na frente");
     }
 
     // 4.5: uma onda de precedência maior ou igual vai para a frente, e a anterior fica atrás, congelada: o bêbado no pico do
@@ -1129,20 +1132,24 @@ internal static class OndaTestes
         Afirmar.Igual((Onda.Alegre, Onda.Satisfeito), (iguais.Atual.Onda!.Tipo, iguais.Atual.OndaDeFundo!.Tipo), "a de precedência igual vai para a frente");
     }
 
-    // 4.5: uma onda de precedência menor é absorvida: nem a onda nem o temporizador mudam, e nenhuma vai para o fundo.
+    // 4.5: uma onda de precedência menor é absorvida: nem a onda nem o temporizador mudam, e nenhuma vai para o fundo. O
+    // cigarro (relaxado) por cima do elétrico e, entre as ondas leves, a banana e a bala (satisfeito e alegre) por cima do
+    // ligado do café e do energético. Com o alívio (pedido do usuário de 2026-10-01), a comida e a bebida sem álcool não são
+    // mais absorvidas por uma onda de substância: elas a aliviam um passo (AlivioTestes).
     [Teste]
     public static void MaisFraca_EhAbsorvida()
     {
-        foreach (Item fraco in new[] { Item.Banana, Item.Cigarro, Item.Cafe, Item.Bala, Item.Energetico })
+        foreach ((Item forte, Item fraco) in new[] { (Item.Cocaina, Item.Cigarro), (Item.Cafe, Item.Banana), (Item.Cafe, Item.Bala), (Item.Energetico, Item.Banana), (Item.Energetico, Item.Bala) })
         {
             Cenario c = Cenario.Parado(ApoioDosItens.SemFisica()).Aplicar(new CmdPauseAutonomy());
-            Usar(c, Item.Cocaina);
+            Usar(c, forte);
             EstadoDoNucleo antes = c.Atual;
             Resultado absorvido = Usar(c, fraco);
-            Afirmar.Igual(antes.Onda, absorvido.Estado.Onda, $"{fraco}: a onda elétrica não muda");
-            Afirmar.Nulo(absorvido.Estado.OndaDeFundo, $"{fraco}: nada vai para o fundo");
-            Afirmar.Falso(absorvido.Efeitos.Any(e => e is AgendarOnda or CancelarOnda), $"{fraco}: o temporizador não muda");
-            Afirmar.Igual(antes.GeracaoDaOnda, c.Atual.GeracaoDaOnda, $"{fraco}: nem a geração");
+            string caso = $"{fraco} por cima de {forte}";
+            Afirmar.Igual(antes.Onda, absorvido.Estado.Onda, $"{caso}: a onda da frente não muda");
+            Afirmar.Nulo(absorvido.Estado.OndaDeFundo, $"{caso}: nada vai para o fundo");
+            Afirmar.Falso(absorvido.Efeitos.Any(e => e is AgendarOnda or CancelarOnda), $"{caso}: o temporizador não muda");
+            Afirmar.Igual(antes.GeracaoDaOnda, c.Atual.GeracaoDaOnda, $"{caso}: nem a geração");
         }
     }
 
@@ -1205,9 +1212,10 @@ internal static class OndaTestes
         Afirmar.Igual(TimeSpan.FromSeconds(100), volta, "com a duração cheia de um nível do pico");
     }
 
-    // 4.5, a água: sem onda, nada; na subida acima do nível 1 e no pico acima do 1, baixa um nível sem mexer no temporizador;
-    // na subida do nível 1, a onda acaba; no pico do nível 1, vai para a queda (ou acaba, sem queda); na queda, acaba. Com
-    // uma onda de fundo, a que acaba dá lugar a ela.
+    // 4.5, a água, com o alívio (pedido do usuário de 2026-10-01): sem onda, nada; na subida acima do nível 1 e no pico acima
+    // do 1, baixa um nível sem mexer no temporizador; no nível 1, da subida ou do pico, vai para a queda (ou acaba, sem
+    // queda); na queda, acaba. Com uma onda de fundo, a que acaba dá lugar a ela. Antes do alívio, a subida do nível 1
+    // acabava; o resto é o mesmo.
     [Teste]
     public static void Agua_BaixaUmNivelEEncerraAQueda()
     {
@@ -1220,8 +1228,11 @@ internal static class OndaTestes
         Resultado subida = Usar(c, Item.Agua);
         Afirmar.Igual(new EstadoDaOnda(Onda.Bebado, FaseDaOnda.Subida, 1, 2), subida.Estado.Onda, "na subida do nível 2: nível 1, o pior continua 2");
         Afirmar.Falso(subida.Efeitos.Any(e => e is AgendarOnda or CancelarOnda), "sem mexer no temporizador");
+        Resultado daSubidaAQueda = Usar(c, Item.Agua);
+        Afirmar.Igual(new EstadoDaOnda(Onda.Bebado, FaseDaOnda.Queda, 1, 2), daSubidaAQueda.Estado.Onda, "na subida do nível 1: a queda (antes do alívio, a onda acabava)");
+        Afirmar.Sequencia([TimeSpan.FromSeconds(112.5)], daSubidaAQueda.Efeitos.OfType<AgendarOnda>().Select(a => a.Atraso), "com a duração cheia da queda, pelo pior nível 2");
         Resultado fim = Usar(c, Item.Agua);
-        Afirmar.Nulo(fim.Estado.Onda, "na subida do nível 1: a onda acaba");
+        Afirmar.Nulo(fim.Estado.Onda, "na queda: a onda acaba");
         Afirmar.Verdadeiro(fim.Efeitos.OfType<CancelarOnda>().Count() == 1, "e o temporizador é cancelado");
 
         Usar(c, Item.Vodka);
@@ -1255,7 +1266,11 @@ internal static class OndaTestes
     // perfil efetivo, gestos só em IDLE, o apoio do personagem (o cambaleio sempre no chão e entre as laterais; com calma,
     // agarrado só preso ou atento, DEC-022), os itens na área útil (parados no chão; nenhum invisível caindo) e, no fim de
     // cada uso, a volta ao mesmo apoio: o chão, a parede ou o cipó (agarrado, preso se já estava, com ele preso ou por
-    // conta própria; com calma, sem estar preso, solto para descer) e o esconderijo, na mesma borda.
+    // conta própria; com calma, sem estar preso, solto para descer) e o esconderijo, na mesma borda. O uso na parede e no
+    // cipó por conta própria é conferido quando acontece, mas não é exigido: ele escala e se pendura sozinho poucos segundos
+    // por hora, e o uso até o fim ali sai por sorte (de nenhum a poucos em 4 horas, conforme a trajetória, que muda com
+    // qualquer regra nova, como o alívio do pedido do usuário de 2026-10-01). Os casos determinísticos ficam em UsoTestes
+    // (Usar_NaParedePertoDoChao_VoltaAParede e Usar_NoAltoPorContaPropria_VoltaAoMesmoApoio).
     [Teste]
     public static void EmRepouso_ComItens_ORelogioNaoLigaEOsDisparosSaoUnicos()
     {
@@ -1372,8 +1387,9 @@ internal static class OndaTestes
             }
         }
         Console.WriteLine($"         {eventos} eventos em 4 horas simuladas, {comItem} com itens; {disparos} disparos; usos até o fim: {string.Join(", ", usos.OrderBy(u => u.Key).Select(u => $"{u.Key}={u.Value}"))}");
-        // Na parede e no cipó, preso pelo usuário e por conta própria (escalando ou pendurado, sem estar preso).
-        foreach (string apoio in new[] { "Chao", "Parede", "Parede (preso)", "Cipo", "Cipo (preso)", "Esconderijo" })
+        // Exigidos, os apoios que a simulação sempre alcança: o chão, a parede e o cipó com ele preso pelo usuário, e o
+        // esconderijo. Por conta própria ("Parede" e "Cipo", sem estar preso), só contados (veja o comentário do teste).
+        foreach (string apoio in new[] { "Chao", "Parede (preso)", "Cipo (preso)", "Esconderijo" })
             Afirmar.Verdadeiro(usos.GetValueOrDefault(apoio) > 0, $"um uso até o fim em {apoio}");
         Afirmar.Verdadeiro(disparos >= 40, $"disparos da onda: {disparos}");
     }

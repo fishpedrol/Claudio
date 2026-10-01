@@ -13,7 +13,7 @@ namespace Buzzy.Identidade;
 /// Uso: dotnet run --project tools/Buzzy.Identidade -c Release
 ///   (padrão)     pixel art (DEC-018): assets/identidade/pixel/ — folhas nativas (poses e itens do
 ///                tamagotchi, DEC-028) e prévias ampliadas, inclusive as animações de uso, as
-///                sobreposições de efeito, os gestos da onda e os ícones do menu; confere que nenhuma
+///                sobreposições de efeito, os gestos da onda, a paranoia a 8× e os ícones do menu; confere que nenhuma
 ///                pose (as de estado e as dos gestos), quadro de uso (com cada item) ou efeito encosta
 ///                na borda do quadro de 64 × 64, que nenhuma cara deixa preenchimento na borda de cima
 ///                ou dos lados (o contorno seria cortado) e que cada item pousa na última linha da grade

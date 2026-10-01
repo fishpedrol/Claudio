@@ -157,6 +157,45 @@ internal static class UsoTestes
         }
     }
 
+    // Tabela 4.6 e invariante 24, no alto por conta própria (sem estar preso: ele escalou sozinho): bem acima do chão, na
+    // parede, ou pendurado no cipó, ele fica atento ao item (agarrado ali) e o usa no mesmo apoio; no fim do uso, volta a
+    // ele, agarrado, no mesmo lugar e sem ficar preso. A simulação longa com itens (OndaTestes) só chega a esses usos por
+    // sorte; estes são os casos determinísticos (o de perto do chão fica em Usar_NaParedePertoDoChao_VoltaAParede).
+    [Teste]
+    public static void Usar_NoAltoPorContaPropria_VoltaAoMesmoApoio()
+    {
+        var achados = new List<string>();
+        foreach (bool noCipo in new[] { false, true })
+        {
+            string caso = noCipo ? "no cipó" : "na parede";
+            Estado apoio = noCipo ? Estado.Hanging : Estado.Climbing;
+            bool NoAlto(EstadoDoNucleo s) => s.Estado == apoio && !s.PresoPeloUsuario && !s.Movimento.Agarrado && !s.Movimento.Foguete
+                && !s.Itens.AlgumCaindo && s.Lugar is { } l && Sup(s).Chao - l.Ancora.Y > 300;
+            bool achou = false;
+            for (ulong semente = 1; semente <= 80 && !achou; semente++)
+            {
+                var sim = new SimuladorDeTempo(ComFisica() with { Acoes = AcoesAutonomas.Escalar }, semente, TopologiasDeExemplo.UmMonitor);
+                ItemNoMundo item = InvocarEAssentar(sim, Item.Banana);
+                sim.Avancar(TimeSpan.FromMinutes(5), NoAlto);
+                if (!NoAlto(sim.Estado)) continue;
+                achou = true;
+                PontoPx noAltoDoApoio = sim.Estado.Lugar!.Ancora;
+                achados.Add($"{caso}, semente {semente}, {Sup(sim.Estado).Chao - noAltoDoApoio.Y} px acima do chão");
+
+                SoltarSobreEle(sim, item.Id);
+                sim.Esta(Estado.Using, $"{caso}: usando");
+                Afirmar.Igual(noCipo ? ApoioDoUso.Cipo : ApoioDoUso.Parede, sim.Estado.Uso!.Apoio, $"{caso}: o apoio do uso");
+                TerminarOUso(sim, out IReadOnlyList<Transicao> fim);
+                Afirmar.Sequencia([Estado.Settling, apoio], fim.Select(t => t.Para), $"{caso}: volta ao mesmo apoio");
+                Afirmar.Verdadeiro(sim.Estado.Movimento.Agarrado && !sim.Estado.PresoPeloUsuario, $"{caso}: agarrado, e não preso (não foi o usuário que o pôs lá)");
+                Afirmar.Igual(noAltoDoApoio, sim.Estado.Lugar!.Ancora, $"{caso}: no mesmo lugar");
+                Afirmar.Falso(sim.RelogioLigado, $"{caso}: parado, sem relógio");
+            }
+            Afirmar.Verdadeiro(achou, $"{caso}: alguma semente o levou ao alto por conta própria");
+        }
+        Console.WriteLine($"         {string.Join("; ", achados)}");
+    }
+
     // Tabela 4.6 com a física, o caso que a simulação longa não alcança (pendência do T5): reagindo a um clique no meio de
     // uma queda, longe das laterais e da borda de cima (toon force: ele flutua enquanto reage), ele aceita o item solto
     // sobre ele; o apoio, pela geometria, é o chão, e o uso acontece ali, parado no ar. No fim, a acomodação decide: sem

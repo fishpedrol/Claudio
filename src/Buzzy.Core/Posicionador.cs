@@ -11,7 +11,9 @@ public sealed record PosicaoDoPersonagem(string ChaveMonitor, double FracaoX, do
     /// <summary>
     /// Tela do monitor da chave na última vez em que a posição foi descrita nele (o "retângulo desse
     /// monitor na época" de ARCHITECTURE.md 2.8); nula quando é desconhecida. Na partida, acha o
-    /// monitor pelo retângulo quando a chave não existe mais (<see cref="Posicionador.Restaurar"/>).
+    /// monitor pelo retângulo quando a chave não existe mais (<see cref="Posicionador.Restaurar"/>); em execução, acha o mesmo
+    /// monitor com chave nova (<see cref="Posicionador.MonitorCorrespondente"/>). Nunca é deslocada por cálculo: a posição que
+    /// acompanha a topologia (<see cref="Posicionador.Rebasear"/>) fica com a tela de um monitor real ou com a de antes.
     /// Fica fora do construtor posicional: uma posição construída sem ela tem a tela desconhecida.
     /// </summary>
     public RetanguloPx? TelaDoMonitor { get; init; }
@@ -184,6 +186,109 @@ public static class Posicionador
     /// <summary>O primeiro monitor, na ordem da topologia, com exatamente essa tela; nulo se a tela é desconhecida ou não há nenhum.</summary>
     private static MonitorDoDesktop? MonitorComATela(Topologia topologia, RetanguloPx? tela)
         => tela is { } t ? topologia.Monitores.FirstOrDefault(m => m.Tela == t) : null;
+
+    // ---------------------------------------------------------------- topologia em execução (DEC-030)
+
+    /// <summary>
+    /// Se <paramref name="depois"/> é <paramref name="antes"/> só transladado no desktop virtual, como num rearranjo ou numa troca
+    /// de principal, em que o Windows move a origem: a tela e a área útil deslocadas pelo mesmo (dx, dy) e o mesmo DPI. A marca
+    /// de principal não conta. Com dx = dy = 0, nada que importe ao personagem mudou nesse monitor.
+    /// </summary>
+    public static bool SoTranslacao(MonitorDoDesktop antes, MonitorDoDesktop depois, out int dx, out int dy)
+    {
+        ArgumentNullException.ThrowIfNull(antes);
+        ArgumentNullException.ThrowIfNull(depois);
+        dx = depois.Tela.Esquerda - antes.Tela.Esquerda;
+        dy = depois.Tela.Topo - antes.Tela.Topo;
+        return depois.Tela == antes.Tela.Deslocado(dx, dy) && depois.AreaUtil == antes.AreaUtil.Deslocado(dx, dy) && depois.Dpi == antes.Dpi;
+    }
+
+    /// <summary>
+    /// O monitor da topologia nova que é o da chave na antiga: o da mesma chave; sem ele, o primeiro com a mesma tela cuja chave
+    /// não existia antes, o apelido por retângulo de DEC-008 (a chave passou da reserva <c>gdi:</c> para <c>mon:</c>, ou o
+    /// caminho do dispositivo mudou com o driver). A chave nova é a condição que impede confundir o monitor com o sobrevivente
+    /// que o Windows põe na origem quando o principal é desconectado. Nulo se não há nenhum.
+    /// </summary>
+    public static MonitorDoDesktop? MonitorCorrespondente(Topologia antiga, Topologia nova, string chave, RetanguloPx? tela)
+    {
+        ArgumentNullException.ThrowIfNull(antiga);
+        ArgumentNullException.ThrowIfNull(nova);
+        ArgumentNullException.ThrowIfNull(chave);
+        if (nova.PorChave(chave) is { } mesmo) return mesmo;
+        return tela is { } t ? nova.Monitores.FirstOrDefault(m => m.Tela == t && antiga.PorChave(m.Chave) is null) : null;
+    }
+
+    /// <summary>
+    /// Leva uma posição guardada da topologia antiga para a nova, sem mover nada: vale em qualquer estado, para a posição do
+    /// personagem e para o retorno da tela cheia (ARCHITECTURE.md 2.8).
+    /// <list type="bullet">
+    /// <item>Com o monitor correspondente (<see cref="MonitorCorrespondente"/>), a posição relativa vale na área útil atual dele,
+    /// e a posição passa a ter a chave e a tela dele.</item>
+    /// <item>Sem ele, a posição continua ligada à chave dela, com as mesmas frações e a mesma tela: se o monitor voltar antes de
+    /// ela ser usada, ela vale nele. Só a âncora absoluta anda, junto com o sobrevivente mais próximo do pixel dos pés medido
+    /// nas coordenadas antigas (no empate, o principal; depois, a ordem da topologia nova). Quando o principal é desconectado,
+    /// o Windows move a origem, e o mais próximo nas coordenadas novas seria outro. Sem sobrevivente, nada muda.</item>
+    /// </list>
+    /// A tela guardada nunca é deslocada por cálculo: transladada, ela seria uma tela que nunca existiu, e a partida seguinte
+    /// poderia achar por engano um monitor "pelo retângulo".
+    /// </summary>
+    public static PosicaoDoPersonagem Rebasear(Topologia antiga, Topologia nova, PosicaoDoPersonagem posicao, TamanhoDip tamanho)
+    {
+        ArgumentNullException.ThrowIfNull(antiga);
+        ArgumentNullException.ThrowIfNull(nova);
+        ArgumentNullException.ThrowIfNull(posicao);
+
+        if (MonitorCorrespondente(antiga, nova, posicao.ChaveMonitor, posicao.TelaDoMonitor) is { } correspondente)
+        {
+            PontoPx ancora = NoMonitor(correspondente, posicao.FracaoX, posicao.FracaoY, tamanho).Ancora;
+            return posicao with { ChaveMonitor = correspondente.Chave, AncoraAbsoluta = ancora, TelaDoMonitor = correspondente.Tela };
+        }
+
+        return TranslacaoDoSobrevivente(antiga, nova, PixelDosPes(posicao.AncoraAbsoluta)) is (int dx, int dy)
+            ? posicao with { AncoraAbsoluta = new PontoPx(posicao.AncoraAbsoluta.X + dx, posicao.AncoraAbsoluta.Y + dy) }
+            : posicao;
+    }
+
+    /// <summary>
+    /// Um ponto livre (a âncora de um arraste, do personagem ou de um item na mão do usuário) levado da topologia antiga para a
+    /// nova junto com o monitor em que estava, o do pixel dos pés na antiga: o Windows leva a janela e o cursor com o monitor
+    /// físico quando a origem muda. Se esse monitor continua (<see cref="MonitorCorrespondente"/>), o ponto anda com a tela
+    /// dele; senão, com a do sobrevivente mais próximo do pixel dos pés medido nas coordenadas antigas, como em
+    /// <see cref="Rebasear"/>; sem nenhum, fica onde está. O ponto não é preso a nada: quem solta valida (DEC-030).
+    /// </summary>
+    public static PontoPx AcompanharPonto(Topologia antiga, Topologia nova, PontoPx ponto)
+    {
+        ArgumentNullException.ThrowIfNull(antiga);
+        ArgumentNullException.ThrowIfNull(nova);
+        PontoPx pes = PixelDosPes(ponto);
+        MonitorDoDesktop velho = antiga.MonitorMaisProximo(pes);
+        (int dx, int dy)? translacao = MonitorCorrespondente(antiga, nova, velho.Chave, velho.Tela) is { } correspondente
+            ? (correspondente.Tela.Esquerda - velho.Tela.Esquerda, correspondente.Tela.Topo - velho.Tela.Topo)
+            : TranslacaoDoSobrevivente(antiga, nova, pes);
+        return translacao is (int x, int y) ? new PontoPx(ponto.X + x, ponto.Y + y) : ponto;
+    }
+
+    /// <summary>
+    /// A translação da tela do sobrevivente (o monitor da topologia nova cuja chave já existia na antiga) mais próximo de
+    /// <paramref name="pes"/>, medido nas coordenadas antigas; no empate, o principal, depois a ordem da topologia nova. Nula
+    /// se nenhum monitor sobreviveu.
+    /// </summary>
+    private static (int Dx, int Dy)? TranslacaoDoSobrevivente(Topologia antiga, Topologia nova, PontoPx pes)
+    {
+        MonitorDoDesktop? sobrevivente = null;
+        MonitorDoDesktop? antes = null;
+        long melhor = long.MaxValue;
+        foreach (MonitorDoDesktop m in nova.Monitores)
+        {
+            if (antiga.PorChave(m.Chave) is not { } velho) continue;
+            long d = velho.Tela.DistanciaAoQuadrado(pes);
+            if (d < melhor || (d == melhor && m.Principal && !sobrevivente!.Principal))
+            {
+                (sobrevivente, antes, melhor) = (m, velho, d);
+            }
+        }
+        return sobrevivente is null || antes is null ? null : (sobrevivente.Tela.Esquerda - antes.Tela.Esquerda, sobrevivente.Tela.Topo - antes.Tela.Topo);
+    }
 
     /// <summary>
     /// Fração de posição saneada: NaN vira 0,5; o resto, inclusive ±∞, é preso em [0, 1]. A mesma regra vale

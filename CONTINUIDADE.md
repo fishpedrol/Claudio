@@ -320,3 +320,81 @@ Mantenha aqui um resumo do estado atual e acrescente uma entrada curta por marco
     - teste de integração que confere o `settings.json` real intocado.
   - O P8 inclui R14, `USING` como `REACTING` nas revalidações e itens rebaseados.
   - Os agentes podem rodar `-Integracao`. Só Claude roda a verificação de tela e a medição.
+- **2026-10-01 12:35 — Claude:** **pedido novo do usuário** (12:20): "sobre o tabaco, cerveja e vodka, mantém como está, só quero que alimentos ou bebidas sem ser alcoólicas diminuam aos poucos o efeito da onda".
+  - **Leitura de Claude, a registrar na DEC-028 como "alívio":**
+    - **Itens de alívio:** banana, bala, água, café e energético.
+    - **Ondas de substância:** Bebado, Chapado, Eletrico, Euforico, Tonto, Viajando e Relaxado. Os itens que as causam ficam como estão.
+    - **Regra:** com uma onda de substância na frente, o item de alívio dá **um passo** para baixo nela e **não** liga a própria onda. A onda de fundo não é tocada.
+      - **Subida e pico:** nível acima de 1 perde um nível, com o temporizador mantido. No nível 1, vai para a queda (ou acaba, se a onda não tem queda).
+      - **Queda:** acaba.
+    - **Água:** alivia qualquer onda da frente. Isso unifica o `Refrescar`; a subida no nível 1 passa a ir para a queda em vez de acabar.
+    - Sem onda de substância, banana, bala, café e energético mantêm o comportamento de hoje.
+  - **Execução:**
+    - O bloco B está no P8 (P6 terminou às 11:05 e P7 às 11:54). Uma cópia tirada no meio do P8 foi descartada.
+    - Um vigia em segundo plano (task `b46z0jhtq`) tira a cópia `scratchpad\alivio` e a base `scratchpad\alivio-base` assim que o P9 começar (o P9 só mexe no app).
+    - Depois: workflow na cópia (só o núcleo) e mescla de 3 vias com a árvore principal no fim do bloco B.
+- **2026-10-01 13:15 — Claude:**
+  - **Fase 5, bloco B (`wf_247fdf06-c9a`):** P6, P7, P8 e P9 terminaram; os revisores estão rodando.
+  - **Cópia do alívio:** tirada às 12:37:08, no início do P9 (`scratchpad\alivio` e a base `scratchpad\alivio-base`, com a lógica consistente depois do P8).
+  - **Workflow `wf_22ec9738-cc1`** (implementador → revisor → corretor) lançado na cópia, com a regra de alívio exata registrada no log das 12:35.
+  - **Mescla:** de 3 vias contra `alivio-base` depois que o bloco B terminar. Os arquivos com risco de conflito são `Maquina*.cs`, `InvariantesTestes.cs`, `Gravacao.cs` e a referência 07.
+- **2026-10-01 13:30 — Claude:** **pedido novo do usuário** (13:20): "caso o macaco use muitas coisas ele fica paranoico, como o meme 'os cara tá no teto' mas de forma engraçada". Decisão de Claude, a registrar na DEC-028 como "paranoia":
+  - **Gatilho:** `EstadoDoNucleo.Carga` soma 1 a cada item de **substância** usado (vodka, cerveja, cigarro, baseado, cocaína, MD, lança-perfume, cogumelo).
+    - Volta a 0 no fim de qualquer evento em que nem a onda da frente nem a de fundo seja de substância. Paranoico conta como substância.
+    - Na **4ª** substância do episódio, depois da combinação normal do item:
+      - sem paranoia na frente: a paranoia vai à frente na Subida, nível 1, e a frente anterior vai para o fundo, que é descartado como manda a precedência;
+      - com paranoia na frente: nível +1 (teto 3) e o pico recomeça; da queda, volta ao pico.
+  - **Onda `Paranoico`:** fica no fim do enum `Onda`, com precedência **4**. Conta como substância para o **alívio**: comida e bebida sem álcool a acalmam um passo.
+    - **Subida:** 1 s, com a cara Assustado.
+    - **Pico:** 40 s por nível, com a cara **Paranoico**.
+    - **Queda:** base de 15 s (×100/125/150% pelo pior nível), com a cara Sonolento.
+  - **Perfil no pico** (em % do normal):
+    - intervalo 60, descanso 30, andar 50, **escalar 0**, **pular 0**, **descansar 0**, gesto 300, troca de cara 150, velocidade 70, foguete 0;
+    - gestos: **OlharProTeto 4**, **Agachar 3**, Tremedeira 2, OlharAoRedor 2, Espiar 1;
+    - caras: Paranoico 5, Assustado 2, Surpreso 1.
+  - **Perfil na queda** (em % do normal):
+    - intervalo 120, descanso 150, andar 80, escalar 50, pular 50, descansar 150, gesto 100, troca de cara 100, velocidade 85;
+    - gestos: OlharAoRedor 2, Espreguicar 1;
+    - caras: Sonolento 2, Pensativo 1, Neutro 1.
+  - **Ao começar em `IDLE`:** faz na hora o gesto OlharProTeto, com duração fixa e sem sorteio.
+  - **Enums novos no fim:** `Expressao.Paranoico`; `Gesto.OlharProTeto` e `Gesto.Agachar`; `EfeitoVisual.Suor`. A apresentação liga Paranoico à sobreposição Suor.
+  - **Testes previstos:** a referência nova `08-paranoia.txt` e o caso V17 na verificação de tela.
+  - **Arte:** workflow **`wf_53171ac2-ca4`** na cópia `scratchpad\paranoia-arte` (a partir de `alivio-base`): cara "paranoico", poses "olharproteto" e "agachar" no fim de `DosGestos`, sobreposição Suor; revisor e corretor.
+  - **Núcleo e apresentação:** depois do alívio, na cópia `scratchpad\alivio`, com a arte mesclada nela.
+- **2026-10-01 17:30 — Claude:** **bloco B da Fase 5 (P6–P9) concluído** pelo workflow `wf_247fdf06-c9a`, e **alívio mesclado**.
+  - **Bloco B**, relatórios em `scratchpad\blocoB\`:
+    - P6: chave `mon:` + 16 hex do SHA-256 do caminho do dispositivo; cache pelo nome GDI e pelo tamanho; leitura parcial como último recurso.
+    - P7: persistência ligada, `AgendaDeGravacao`, esquema v3 com esconderijo e "preso", emoção no `Loaded`, V16 ligada.
+    - P8: rebase sem transladar a tela; R14 em todas as saídas de PRESSED; o arraste e o item na mão andam com o monitor.
+    - P9: releitura agrupada, reafirmação tardia sem ordem Z, `TaskbarCreated`.
+    - Revisores e corretor: o portão ganhou a categoria "Alterar configuração global" (`SetDisplayConfig`, `ChangeDisplaySettings*`); `ArquivosReais.cs` tira uma foto dos arquivos reais antes e depois da integração, da verificação e da medição.
+    - Docs do bloco B e do tamagotchi verificado: feitos pelos agentes.
+  - **Execução de Claude:**
+    - `testar.ps1 -Integracao` código 0: Core **441**, portão **74**, App **342/342**; arquivos reais intocados.
+    - Tela: `--fase 1` com 25 OK e 4 SIMULADO; `--fase 3` com 34 OK e 2 N/A; `--fase 4` **INVÁLIDA**, porque o usuário mexeu no mouse. A Fase 4 e o tamagotchi (com V16) ainda precisam ser rodados.
+  - **RS0, a confirmar com o usuário:** o `settings.json` real foi criado às 12:12:21 e gravado até 12:22:24. É provável que o usuário tenha aberto o Buzzy de `bin\Release` (o P7 já estava ligado). A integração não toca nesses arquivos.
+  - **Alívio** (workflow `wf_22ec9738-cc1`, relatórios em `scratchpad\alivio-relatorios\`): mesclado na árvore principal.
+    - 10 arquivos copiados.
+    - `Maquina.Itens.cs` mesclado em 3 vias sem conflito.
+    - `InvariantesTestes.cs` com 1 conflito: duas listas de casos exigidos; ficaram os dois lados.
+    - A referência 07 mudou só a linha 141 (o texto da transição diz "alivia Tonto/Queda/1 -> fim").
+    - `testar.ps1` código 0: Core **450**, portão 74, App 312 (+30).
+  - **Próximo:**
+    1. mesclar a arte da paranoia (o corretor do `wf_53171ac2-ca4` está rodando);
+    2. lançar o núcleo e a apresentação da paranoia na árvore principal;
+    3. depois, uma verificação de tela completa (Fase 4 e tamagotchi com V16 e V17) e as medições de repouso e onda.
+- **2026-10-01 17:45 — Claude:** **arte da paranoia mesclada.**
+  - Workflow `wf_53171ac2-ca4` (relatórios em `scratchpad\paranoia-relatorios\`).
+    - Cara "paranoico": olhos arregalados com a pupila no alto e gota de suor na têmpora.
+    - `Mao.Apontando`.
+    - Gestos "olharproteto" e "agachar" no fim de `DosGestos`.
+    - `EfeitoVisual.Suor`.
+    - Os desenhos antigos estão idênticos: 21.378 impressões digitais.
+  - **Mescla:** 16 arquivos copiados, sem conflito (a árvore principal estava igual à base nesses arquivos).
+  - `testar.ps1` código 0: Core 450, portão 74, App **329** (+30).
+  - **Workflow `wf_aad0e340-b2a` lançado:**
+    - núcleo da paranoia (Carga, onda Paranoico, gesto imediato, referência 08);
+    - apresentação (Paranoico → Suor, gestos, desfazer os ajustes TEMPORÁRIOS de `NucleoEArteTestes` e `PoseTestes`);
+    - verificação escrita V17 (paranoia) e V18 (alívio), sem executar;
+    - revisor, corretor e docs do alívio e da paranoia (DEC-028 etc.).
+  - **Depois:** Claude roda a verificação de tela completa (Fase 4 e tamagotchi com V16, V17 e V18) e as medições, avisando o usuário antes.

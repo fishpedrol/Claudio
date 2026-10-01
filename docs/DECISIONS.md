@@ -133,7 +133,7 @@ Essas fontes justificam o protótipo, mas não substituem as verificações de P
 - **Alternativas consideradas:** (a) coordenadas em DIPs do framework, que em escalas mistas formam "ilhas" com lacunas e sobreposições, segundo a documentação do Qt e relatos do Electron e do WPF; (b) usar o retângulo envolvente do desktop virtual como mundo, o que inclui áreas vazias fora de qualquer monitor; (c) persistir `HMONITOR` ou o nome `\\.\DISPLAYn`, que não são estáveis entre sessões.
 - **Motivo:** documentação da Microsoft. O monitor principal está em (0,0), outros podem ter coordenadas negativas e o desktop virtual tem áreas vazias. `HMONITOR` só vale durante a execução. PMv2 é o modo recomendado e o único em que o Windows não estica a janela nem virtualiza coordenadas. Fontes: The Virtual Screen, HMONITOR and the Device Context, DISPLAYCONFIG_TARGET_DEVICE_NAME e High DPI Desktop Application Development, no Microsoft Learn.
 - **Trade-offs:** mais código de adaptação no adaptador de plataforma. A estabilidade da chave do monitor precisa de protótipo (P5).
-- **Consequências:** o mundo do desktop tem testes com topologias de exemplo desde a Fase 1. A matriz S1 a S12 da Fase 5 (TODO.md) usa esse modelo. *Atualização de 2026-09-30 (DEC-030):* a restauração em cascata da partida está implementada no núcleo, e o retângulo do monitor passou a ser usado nela. A chave pelo caminho do dispositivo é do passo P6 da Fase 5.
+- **Consequências:** o mundo do desktop tem testes com topologias de exemplo desde a Fase 1. A matriz S1 a S12 da Fase 5 (TODO.md) usa esse modelo. *Atualização de 2026-09-30 (DEC-030):* a restauração em cascata da partida está implementada no núcleo, e o retângulo do monitor passou a ser usado nela. A chave pelo caminho do dispositivo é do passo P6 da Fase 5. *Atualização de 2026-10-01 (DEC-030):* a chave pelo caminho do dispositivo está implementada no passo P6, como um resumo: o caminho em si nunca é gravado nem registrado. O nome GDI passou a ser só a reserva, quando o caminho não pode ser lido. Com o app aberto, o retângulo também acha o monitor que só trocou de chave (passo P8). A estabilidade da chave continua a conferir no protótipo P5.
 
 ## DEC-009 — Arbitragem de input: janela que não ativa e limiar do sistema
 
@@ -157,7 +157,7 @@ Essas fontes justificam o protótipo, mas não substituem as verificações de P
 - **Alternativas consideradas:** (a) registro do Windows, menos transparente para o usuário e mais difícil de inspecionar e migrar; (b) banco de dados local, sem necessidade para uma dezena de campos; (c) gravar só ao sair, o que perde dados, porque o Windows pode encerrar o processo no desligamento e dá cerca de 2 s na suspensão.
 - **Motivo:** documentação da Microsoft sobre `WM_ENDSESSION`, `WM_POWERBROADCAST` e pastas conhecidas; baixo volume de dados.
 - **Trade-offs:** a pasta de dados muda entre distribuição sem pacote e MSIX, e trocar de modelo exige migração explícita.
-- **Consequências:** a gravação da posição começa na Fase 5 e o esquema completo na Fase 8. *Atualização de 2026-09-30 (DEC-029):* a gravação atômica, o `.bak` e a cópia de diagnóstico estão implementados no adaptador, ainda sem uso pelo app. O `.bak` também serve à leitura (principal → `.bak` → padrões), o que muda o critério 3 da Fase 8.
+- **Consequências:** a gravação da posição começa na Fase 5 e o esquema completo na Fase 8. *Atualização de 2026-09-30 (DEC-029):* a gravação atômica, o `.bak` e a cópia de diagnóstico estão implementados no adaptador, ainda sem uso pelo app. O `.bak` também serve à leitura (principal → `.bak` → padrões), o que muda o critério 3 da Fase 8. *Atualização de 2026-10-01 (DEC-029):* desde o passo P7, o app lê o arquivo na partida e grava pela agenda da raiz.
 
 ## DEC-011 — Tempo ocioso por eventos e plano de medição de desempenho
 
@@ -276,9 +276,9 @@ O usuário aceitou estas metas em 2026-09-27. A Fase 1 deve apenas estabelecer a
   5. **Instância única** por mutex e evento nomeados em `Local\`, com o SID do usuário no nome. A primeira instância espera o evento com `RegisterWaitForSingleObject`, sem polling; a segunda sinaliza e sai. Se os objetos não puderem ser criados, o app sai com código 6.
   6. **Recusa rodar elevado** (SECURITY.md 8, item 5): com token elevado, mostra um aviso e sai com código 5.
   7. **Log de diagnóstico opcional**, só com `--diagnostico`, em `%LOCALAPPDATA%\Buzzy\diagnostico.log`, com limite de 1 MB e uma rotação. Registra apenas eventos do próprio Buzzy; é a fonte dos testes de integração.
-  8. **Sprite provisório** gerado em código (128 × 128 DIP, alfa forçado a 0 ou 255). Posição inicial: pés no chão da área útil do principal, a 85% da largura. Mudanças de topologia são agrupadas em 300 ms, valor provisório até P5, com até três releituras se a leitura falhar.
+  8. **Sprite provisório** gerado em código (128 × 128 DIP, alfa forçado a 0 ou 255). Posição inicial: pés no chão da área útil do principal, a 85% da largura. Mudanças de topologia são agrupadas em 300 ms, valor provisório até P5, com até três releituras se a leitura falhar. *Atualização de 2026-10-01 (DEC-030):* desde o passo P9 da Fase 5, o agrupamento tem teto de 1 s desde a primeira mensagem, as novas tentativas saem em 500 ms, 1 s e 2 s, e cada releitura publicada arma uma conferência tardia do lugar das janelas.
   9. **Portão de APIs** como ferramenta própria (`tools/Buzzy.PortaoApis`), executada por um alvo MSBuild depois de cada build do app: lê as importações nativas e as declarações P/Invoke dos binários, procura as chamadas no código-fonte e confere o manifesto (`asInvoker` e Per-Monitor V2). O `Buzzy.exe` é o apphost genérico do SDK, que só localiza o runtime e entrega a execução ao `Buzzy.dll`. Ele importa quatro funções que coincidem com a lista de SECURITY.md 3.2 (`LoadLibraryExW`, `LoadLibraryA`, `GetProcAddress` e `ShellExecuteW`, esta usada só para abrir a página de download do .NET quando o runtime falta e o usuário aceita). Elas são permitidas **somente no apphost nativo**, por nome exato e com o motivo no relatório; nunca valem para as DLLs. Uma importação nova reprova o build até ser revisada.
-  10. **Fim de sessão.** O `System.Windows.Application` expõe só `SessionEnding`, disparado na pergunta `WM_QUERYENDSESSION`; o Buzzy encerra limpo nesse evento. Limitação aceita: se outro aplicativo cancelar o desligamento depois, o Buzzy já terá fechado. A gravação de estado entra com a persistência (Fase 5).
+  10. **Fim de sessão.** O `System.Windows.Application` expõe só `SessionEnding`, disparado na pergunta `WM_QUERYENDSESSION`; o Buzzy encerra limpo nesse evento. Limitação aceita: se outro aplicativo cancelar o desligamento depois, o Buzzy já terá fechado. A gravação de estado entra com a persistência (Fase 5). *Atualização de 2026-10-01 (DEC-029):* desde o passo P7, o `SESSION_ENDING` grava a posição e as preferências na hora, dentro do próprio `SessionEnding`, antes de o app encerrar.
 - **Alternativas consideradas:** MSTest ou xUnit (dependências de telemetria ou pacotes extras); menu WPF, que numa janela que não ativa não fecha nem devolve o foco de modo confiável; `FindWindow` com `SetForegroundWindow` para a segunda instância, que exigiria procurar janelas e mexer no primeiro plano; `UseAppHost=false`, que obrigaria abrir o app por `dotnet Buzzy.dll`.
 - **Motivo:** menos dependências, menor superfície de segurança e mais comportamento testável sem janela.
 - **Trade-offs:** mais código próprio (executor, portão, interop); sem integração com o Test Explorer; a permissão do apphost precisa ser revista quando o SDK mudar.
@@ -537,7 +537,7 @@ O usuário aceitou estas metas em 2026-09-27. A Fase 1 deve apenas estabelecer a
 
      *Atualização de 2026-10-01 (DEC-028):* com a autonomia pausada ou o painel aberto, o agarrado sem estar preso não espera a agenda: desce pela parede ou se solta do cipó (regra da calma, DEC-022, item 4). O preso continua onde está. No fim do uso de um item na parede ou no cipó, ele volta agarrado ao mesmo apoio, mesmo a menos de 32 DIP do chão, e só fica preso se já estava.
 - **Motivo:** o macaquinho fica onde o usuário o põe, como pedido, sem custo parado e sem nenhum invariante de apoio relaxado. A lateral, o cipó e o chão são todos apoio.
-- **Trade-offs:** o preso só é lembrado durante a execução. A persistência da Fase 5 grava a posição, não a condição de preso. *Atualização de 2026-09-30 (DEC-029):* a marca de preso passa a ser gravada no passo P7 da Fase 5; depois de reabrir, ele continua preso onde o usuário o deixou.
+- **Trade-offs:** o preso só é lembrado durante a execução. A persistência da Fase 5 grava a posição, não a condição de preso. *Atualização de 2026-09-30 (DEC-029):* a marca de preso passa a ser gravada no passo P7 da Fase 5; depois de reabrir, ele continua preso onde o usuário o deixou. *Atualização de 2026-10-01 (DEC-029 e DEC-030):* feito no passo P7, no esquema v3, e coberto por testes automatizados e de integração. Com o app aberto, uma mudança de topologia que só translada o monitor dele, como a troca de principal, o deixa preso onde está, sem passar pela acomodação (passo P8).
 - **Consequências:** ARCHITECTURE 2.6 (linhas de `SETTLING`, `CLIMBING` e `HANGING`), 2.9 e 2.10; TODO Fase 4 (critério 8); testes `AgarrarTestes` e a verificação de tela.
 
 ## DEC-025 — Esconderijo pelo clique duplo; painel de energia pelo menu
@@ -562,7 +562,7 @@ O usuário aceitou estas metas em 2026-09-27. A Fase 1 deve apenas estabelecer a
   4. **Painel de energia (Fase 8):** abre pelo menu de contexto ("Energia…"), já previsto na tabela de ARCHITECTURE 2.6. O núcleo guarda a regra antiga atrás de `EsconderijoNoCliqueDuplo = false`, para os testes das Fases 2 e 8.
   5. **Configuração do app:** fica numa fonte única, `ConfiguracaoDoNucleo.DoAplicativo`, usada pelo app e pelas simulações que escolhem sementes nos testes, que antes tinham cópias da configuração que podiam divergir do app.
 - **Motivo:** o usuário pediu o gesto e o modo; o painel continua acessível pelo menu, que funciona por teclado e leitor de tela.
-- **Trade-offs:** um terceiro clique rápido não conta como outro clique duplo, como no Windows. *Atualização de 2026-09-30 (DEC-029):* o esconderijo passa a ser gravado no passo P7 da Fase 5; ao reabrir, ele volta escondido no mesmo lado.
+- **Trade-offs:** um terceiro clique rápido não conta como outro clique duplo, como no Windows. *Atualização de 2026-09-30 (DEC-029):* o esconderijo passa a ser gravado no passo P7 da Fase 5; ao reabrir, ele volta escondido no mesmo lado. *Atualização de 2026-10-01 (DEC-029 e DEC-030):* feito no passo P7, no esquema v3, e coberto por testes automatizados e de integração. A borda gravada só volta com o esconderijo pelo clique duplo ligado na configuração do núcleo, como no aplicativo. Com o app aberto, uma mudança de topologia que só translada o monitor dele o deixa escondido onde está, sem passar pela acomodação (passo P8).
 - **Consequências:**
   - ARCHITECTURE 2.6 (estado `PEEKING` e linhas do clique duplo) e 2.10;
   - PRODUCT_SPEC (controle);
@@ -590,7 +590,7 @@ O usuário aceitou estas metas em 2026-09-27. A Fase 1 deve apenas estabelecer a
 
 - **Data:** 2026-09-30; detalhada em 2026-10-01, com o núcleo e o menu implementados.
 - **Estado da decisão:** pedido do usuário, com o desenho técnico de Claude sob DEC-015.
-- **STATUS:** PLANNED. O núcleo e o esquema v2 (passo T1 da seção "Interação" de [TODO.md](TODO.md)) e o menu com os rostos (passo T2) estão implementados e verificados por testes automatizados, por integração com mensagens postadas às janelas do próprio Buzzy e, em 2026-10-01, pela verificação de tela com input SINTÉTICO (V1, V2 e o foco de volta ao aplicativo em uso depois dos menus): o usuário já escolhe a emoção pelo menu. Continua sem VERIFIED pelas conferências [MANUAL] do menu e pela persistência entre execuções (passo P7 da Fase 5; a V16 fica N/A até lá): até lá, a escolha não sobrevive a reabrir o app.
+- **STATUS:** PLANNED. O núcleo e o esquema v2 (passo T1 da seção "Interação" de [TODO.md](TODO.md)) e o menu com os rostos (passo T2) estão implementados e verificados por testes automatizados, por integração com mensagens postadas às janelas do próprio Buzzy e, em 2026-10-01, pela verificação de tela com input SINTÉTICO (V1, V2 e o foco de volta ao aplicativo em uso depois dos menus): o usuário já escolhe a emoção pelo menu. Desde o passo P7 da Fase 5 (2026-10-01), a escolha é gravada e volta ao reabrir o app, coberta por testes automatizados e de integração (DEC-029). Continua sem VERIFIED pelas conferências [MANUAL] do menu e pela V16 da verificação de tela, escrita no passo P7 e ainda não executada.
 - **Pedido do usuário (2026-09-30):** "crie uma opção quando clicar com o botão direito para escolher a emoção dominante pra ele, use as expressões png pra criar essas opções".
 - **Problema:**
   - dar ao personagem um humor de base escolhido pelo usuário, sem mudar física, apoio, ações nem a prioridade do usuário;
@@ -627,14 +627,14 @@ O usuário aceitou estas metas em 2026-09-27. A Fase 1 deve apenas estabelecer a
   - parte das trocas não muda a cara (item 3);
   - a 96 DPI, o ícone de 40 × 32 deixa cada opção do submenu com cerca de 32 px de altura, perto do dobro do normal, e o queixo sai cortado reto na borda de baixo. O passo T2 manteve a célula como está, e a conferência no menu de verdade é [MANUAL];
   - a cada abertura do menu, o dono temporário recebe o primeiro plano (DEC-016): nos testes de integração, que abrem o menu muitas vezes, o foco pisca;
-  - até o passo P7, o app parte das preferências padrão e só registra `GravarPreferencias` no log: a escolha não sobrevive a reabrir o app.
+  - até o passo P7, o app partia das preferências padrão e só registrava `GravarPreferencias` no log, e a escolha não sobrevivia a reabrir o app. Desde ele, o `Loaded` leva a emoção lida do arquivo, e o `GravarPreferencias` vira um pedido à agenda de gravação (DEC-029).
 - **Desvios na implementação do menu (2026-10-01):**
   - a abertura inteira (montar, mostrar, destruir o menu e só então apagar os bitmaps) é uma função testável sem exibir, e também o estado e o DPI lidos na abertura; a revisão de correção pediu as duas últimas, porque o caminho real do menu não tinha teste;
   - `AppendMenuW` saiu: todo item entra por `InsertMenuItemW`, numa posição explícita;
   - o log leva o lado do rosto como texto (`lado=40x32`), porque o ícone não é quadrado.
 - **Pendente** ([TODO.md](TODO.md), seção "Interação"):
   - [MANUAL]: a marca de rádio ao lado do rosto nos temas claro, escuro e de alto contraste; o Narrador lendo o submenu; a altura das opções e o queixo do recorte; o menu a 125%, 150%, 175% e 200%, porque os fatores 2 e 3 dos ícones só foram testados sem janela;
-  - a persistência entre execuções, no passo P7 da Fase 5; a verificação V16 fica N/A até lá.
+  - a V16 (a emoção gravada no perfil de teste e restaurada ao reabrir), escrita no passo P7 da Fase 5: falta rodá-la na verificação de tela com input SINTÉTICO.
 - **Consequências:**
   - ARCHITECTURE.md 2.6 (dimensão, evento, transição e invariantes 4 e 27), 2.12 (esquema v2), 2.13.3 e 2.16 (menu); SECURITY.md 3.1, 5 e 7;
   - dois oráculos do teste de propriedade foram refinados, sem mudar as contagens: no invariante 4, começar é entrar no estado, e a transição para o mesmo estado não conta; a conferência das trocas de cara sem transição deixa a carga de fora;
@@ -672,6 +672,8 @@ O usuário aceitou estas metas em 2026-09-27. A Fase 1 deve apenas estabelecer a
      - inalar: lança-perfume.
   3. **A duração do uso é a do verbo**, igual à soma dos quadros da animação na arte: comer 150 passos, beber 120, fumar 210, cheirar 120, engolir 90 e inalar 120, isto é, de 1,5 s a 3,5 s a 60 passos por segundo.
   4. **Estado novo `USING`,** no grupo do usuário: o relógio corre, nada autônomo chega, `PRESS` o segura no mesmo evento e, no fim, a acomodação o devolve ao mesmo apoio.
+
+     *Atualização de 2026-10-01 (DEC-030, passo P8 da Fase 5):* numa mudança de topologia, `USING` é tratado como `REACTING`: o uso continua quando o monitor dele não mudou de geometria, inclusive quando só foi transladado, e acaba numa revalidação, com a onda seguindo.
   5. **Sete caras de efeito e seis gestos novos, no fim dos enums.** As caras (`Bebado`, `Enjoado`, `Chapado`, `Eletrico`, `Apaixonado`, `Tonto` e `Viajando`) só aparecem pela onda. Os gestos (`Soluco`, `Danca`, `Gargalhada`, `Espirro`, `Tosse` e `Tremedeira`) só acontecem em `IDLE`, e só a onda os sorteia. Os sorteios de sempre usam listas fixas, e as referências 01–05 não mudaram.
   6. **A onda de desenho animado.** Cada item, menos a água, começa uma onda: Satisfeito, Alegre, Relaxado, Ligado, Bebado, Chapado, Eletrico, Euforico, Tonto ou Viajando.
      - Ela passa por subida, pico com níveis de 1 a 3 e queda; algumas ondas não têm queda.
@@ -694,6 +696,8 @@ O usuário aceitou estas metas em 2026-09-27. A Fase 1 deve apenas estabelecer a
       - o item nasce 140 DIP acima dos pés dele, ao lado, primeiro do lado para onde ele olha. Cai com a mesma gravidade e a mesma queda máxima dele, quica uma vez, de leve, e não achata ao pousar;
       - parado e sem onda, ele fica empolgado com o item novo;
       - os itens só existem em memória e somem ao sair.
+
+      *Atualização de 2026-10-01 (DEC-030, passo P8 da Fase 5):* numa mudança de topologia, os itens seguem a regra do personagem: no monitor que só foi transladado, andam junto, caindo ou no chão, com a mesma velocidade; senão, vão pela posição relativa no monitor correspondente ou no sobrevivente. O item na mão anda com o monitor em que está, e soltá-lo logo depois o deixa no mesmo monitor físico.
   13. **"Solto sobre ele":** o retângulo do item, já preso na área útil, cruza o retângulo do sprite do personagem encolhido 20% de cada lado. O núcleo decide sozinho, sem a raiz informar a transparência.
   14. **Aceitação do soltar:**
       - aceito com ele parado, andando (o plano é descartado), na parede ou no cipó (preso ou não), escondido na borda, descansando (acorda antes), reagindo ou pousando (os dois são cortados);
@@ -737,6 +741,8 @@ O usuário aceitou estas metas em 2026-09-27. A Fase 1 deve apenas estabelecer a
       - O cache de quadros passou a ter um orçamento de 16 MiB de pixels: os menos usados saem primeiro.
   21. **Uma janela por item (passo T8),** com a receita da janela do personagem: do tamanho do item (48 × 48 DIP), transparente fora do desenho, sempre no topo, fora da barra de tarefas e sem nunca ativar nem tirar o foco. A captura do mouse só existe no gesto sobre o item, e só a raiz fecha a janela.
   22. **Ordem Z por evento:** o item fica logo abaixo do personagem; no gesto sobre ele, vai para o topo, para não sumir atrás do personagem justamente quando vai ser solto sobre ele, e volta para baixo no fim. Quando o personagem reaparece, a ordem é reafirmada. Nunca por timer (SECURITY.md 2).
+
+      *Atualização de 2026-10-01 (DEC-030, passo P9 da Fase 5):* a releitura da topologia e a conferência tardia dela, que é um temporizador de disparo único, devolvem só o lugar das janelas dos itens, sem mexer na ordem Z. A ordem continua mudando apenas nos três eventos acima.
   23. **Árbitro dos itens:** uma segunda instância do árbitro de gestos da DEC-021, com as mesmas regras do personagem. Os gestos viram eventos do item em que o botão foi pressionado; clique, clique duplo ou gesto cancelado viram `ITEM_RELEASE`, e o item fica no chão, ou cai de onde está, sem uso. O botão direito num item abre o mesmo menu do personagem; tirar um item da tela é pelo "Recolher itens".
   24. **Temporizador da onda:** um segundo temporizador do app, ao lado do da agenda, só de disparo único: ele se desliga antes de avisar, nunca fica periódico e para ao encerrar.
   25. **Submenu "Itens" (passo T8):** só existe com a chave ligada e fica desabilitado com o Buzzy escondido. Tem os 13 itens na ordem do enum, só com o nome e o desenho do chão como ícone, um separador e "Recolher itens", desabilitado sem itens na tela. O id escolhido vira o item por uma lista fixa.
@@ -799,7 +805,7 @@ O usuário aceitou estas metas em 2026-09-27. A Fase 1 deve apenas estabelecer a
   - os nomes dos itens ficam visíveis no código e nos textos do menu; se o repositório virar público (Q-10), a decisão é do usuário, como foi com o chapéu na DEC-019;
   - cada item é uma janela do WPF: a correção de DPI e a recuperação da minimização da Fase 5 (passos P12 e P14) valem também para elas. Até lá, uma janela de item minimizada pelo Windows volta ao normal na hora, sem esconder o personagem;
   - a 300%, o cache de 16 MiB guarda só 28 quadros do personagem, e andar com uma sobreposição já usa cerca de 24: pode haver redesenho repetido (conferência [MANUAL]; o log conta os quadros descartados).
-- **Pendente** ([TODO.md](TODO.md), seção "Interação"): a revisão visual e de tom pelo usuário; as outras pendências [MANUAL] e [HW]; e os pontos herdados pelos blocos seguintes da Fase 5 (passos P7, P8, P12, P13 e P14).
+- **Pendente** ([TODO.md](TODO.md), seção "Interação"): a revisão visual e de tom pelo usuário; as outras pendências [MANUAL] e [HW]; e os pontos herdados pelos blocos seguintes da Fase 5 (passos P12, P13 e P14). Os dos passos P7 e P8 foram feitos em 2026-10-01: a emoção no `Loaded` e a V16 escrita, ainda sem rodar (DEC-029), e o `USING` e os itens na mudança de topologia (DEC-030).
 - **Consequências:**
   - o roadmap ganhou a seção "Interação — emoção dominante e tamagotchi adulto", intercalada com a Fase 5;
   - ARCHITECTURE.md 1, 2.3, 2.6, 2.7, 2.9, 2.10, 2.12, 2.13 e 2.16; SECURITY.md 2, 3.1, 3.2, 5, 6, 7 e 10; IDENTIDADE_VISUAL.md; PRODUCT_SPEC.md, seção "Emoção dominante e tamagotchi adulto"; notas na DEC-022 e na DEC-024;
@@ -808,9 +814,9 @@ O usuário aceitou estas metas em 2026-09-27. A Fase 1 deve apenas estabelecer a
 
 ## DEC-029 — Persistência mínima da posição: esquema v1, arquivo atômico e perfis de teste (Fase 5)
 
-- **Data:** 2026-09-30
+- **Data:** 2026-09-30; ligada no app em 2026-10-01 (passo P7).
 - **Estado da decisão:** ACCEPTED por Claude sob a autorização de DEC-015 (decisão técnica dentro de DEC-010, DEC-011, ARCHITECTURE.md 2.12 e SECURITY.md 5). O item 11 é uma escolha de produto que o usuário deixou com Claude em 2026-09-30, às 20:40 ("faz o que achar melhor").
-- **STATUS:** PLANNED até o gate da Fase 5 ser registrado em TODO.md. O esquema, o arquivo, a política de gravação e o isolamento dos testes (passos P3–P5) estão implementados e cobertos por testes automatizados; o app ainda não lê nem grava o arquivo (passo P7).
+- **STATUS:** PLANNED até o gate da Fase 5 ser registrado em TODO.md. O esquema, o arquivo, a política de gravação e o isolamento dos testes (passos P3–P5) estão implementados e cobertos por testes automatizados. Desde o passo P7 (2026-10-01), o app lê o arquivo na partida e grava pela agenda, com o esquema v3, coberto por testes automatizados e de integração. Faltam a verificação de tela com input SINTÉTICO (a V16) e as conferências [MANUAL]: o Process Monitor (SECURITY.md 8, item 4) e o cenário S12 real.
 - **Problema:** a Fase 5 precisa restaurar a posição entre execuções (DEC-010):
   - sem nunca deixar o arquivo ilegível;
   - sem gravação periódica (DEC-011);
@@ -820,9 +826,9 @@ O usuário aceitou estas metas em 2026-09-27. A Fase 1 deve apenas estabelecer a
   1. **Onde mora cada parte:**
      - no núcleo puro (`Buzzy.Core.Persistencia`): o esquema v1 (tipos, padrões, validação, normalização e conversão de bytes) e a política de quando gravar;
      - no adaptador: a pasta, a leitura dos arquivos e o protocolo atômico (`PastaDeDados`, `ArquivoDeConfiguracoes`);
-     - na raiz, no passo P7: o atraso, a gravação na hora e a gravação ao encerrar.
+     - na raiz (`AgendaDeGravacao`, passo P7): a leitura da partida, o atraso, a gravação na hora e a do encerramento.
 
-     A máquina de estados não ganha evento nem efeito: `GravarPosicao` e `GravarPreferencias` já existem, e a raiz recebe o evento que gerou cada efeito. A restauração na partida é da DEC-030.
+     A máquina de estados não ganha evento nem efeito: `GravarPosicao` e `GravarPreferencias` já existem, e a raiz recebe o evento que gerou cada efeito. No passo P7, `GravarPosicao` e `Loaded` só ganharam a postura (item 11). A restauração na partida é da DEC-030.
   2. **Formato:** JSON em UTF-8 sem BOM, com `schemaVersion` inteiro e nomes em português, em camelCase. A leitura extrai campo a campo de um `JsonDocument`, e a escrita usa `Utf8JsonWriter`. Não há `JsonSerializer` nem reflexão no núcleo ou no app, e System.Text.Json vem do framework, sem pacote NuGet (DEC-016).
   3. **Conteúdo do v1:**
      - a posição do efeito `GravarPosicao`, com a tela do monitor da época (DEC-030);
@@ -831,8 +837,8 @@ O usuário aceitou estas metas em 2026-09-27. A Fase 1 deve apenas estabelecer a
      `Preferencias` ganha `AtravessarMonitores` como parâmetro posicional com padrão ligado. Ainda não tem efeito: a travessia entra nos passos seguintes da Fase 5. Guardá-la desde já evita uma migração só por ela, e, a partir do passo P7, editar o arquivo com o Buzzy fechado é o jeito de desligá-la antes da tela de configurações da Fase 8.
   4. **Qual posição vai para o disco:** exatamente a do efeito `GravarPosicao`, isto é, onde o Buzzy estava ao soltar, cancelar o arraste, esconder, bloquear, suspender, redefinir ou sair.
      - Inclui o lugar a que o passeio autônomo o levou.
-     - Com retorno de tela cheia guardado, vai o retorno, nunca a posição temporária (invariante 16).
-     - A raiz nunca lê o estado do núcleo para gravar.
+     - Com retorno de tela cheia guardado, vai o retorno, nunca a posição temporária (invariante 16). A postura que vai junto (item 11) é a do estado depois do evento.
+     - A raiz nunca lê o estado do núcleo para gravar: a posição e a postura vêm do `GravarPosicao`, e as preferências, do `GravarPreferencias` e da leitura da partida.
      - Fica registrada, sem bloquear, a alternativa de gravar só a última posição escolhida pelo usuário (arraste ou redefinição). Ela faria o Buzzy "voltar para casa" a cada partida e exigiria um campo novo no estado do núcleo; o usuário pode pedi-la.
   5. **Leitura tolerante:** só a estrutura torna o arquivo ilegível; o resto é avaliado campo a campo, com aviso e o padrão do campo. A energia só vale pelos três nomes, nunca por `Enum.Parse`, que aceita `"1"` e `"Baixa,Alta"`. Comentários e vírgula final são aceitos, porque o arquivo pode ser editado à mão. Detalhes de implementação:
      - a chave exige UTF-16 válido: um surrogate solto não tem representação em JSON, e aceitá-lo faria a escrita lançar ou a posição não voltar igual da leitura;
@@ -855,25 +861,36 @@ O usuário aceitou estas metas em 2026-09-27. A Fase 1 deve apenas estabelecer a
      - na hora em `SUSPENDING`, `SESSION_ENDING`, `CMD_EXIT` e também `SESSION_LOCKED`: bloquear e depois suspender é o caminho comum antes do sono, e a suspensão com o personagem já escondido pela sessão não gera outro pedido;
      - novas tentativas em 2, 10 e 60 s; na hora, 3 tentativas com 50 ms entre elas.
 
-     No passo P7, a agenda da raiz também:
-     - não grava o que já está no disco;
-     - durante um gesto do usuário, espera o fim do gesto, em vez de rearmar a espera a cada 2 s;
-     - descarrega o pendente ao encerrar e na suspensão;
-     - faz a E/S de forma síncrona, na thread da interface: o arquivo tem menos de 1 KiB, e o custo vai para o log.
+     A agenda da raiz (`AgendaDeGravacao`, implementada no passo P7) também:
+     - lê o arquivo uma vez, antes de tudo, numa instância só por execução; qualquer exceção da leitura desliga a persistência nesta execução, sem derrubar a partida;
+     - não grava nem agenda quando o disco já tem o conteúdo pedido; sem nenhum pedido na execução, nada fica pendente, e a partida nunca grava sozinha. Vindo da reserva ou dos padrões, o primeiro pedido grava e recria o principal;
+     - quando o disparo com atraso chega durante um gesto do usuário (botão pressionado, arraste ou um item na mão), não rearma a espera: o fim do gesto grava;
+     - descarrega o pendente e para antes de desmontar o resto, ao encerrar, e descarrega o que der, uma vez só e sem lançar, no erro não tratado. A descarga na suspensão entra com o tratador dela (passo P11): hoje, entre os eventos de gravação na hora, o app só recebe a saída e o fim de sessão;
+     - também agenda as novas tentativas quando a gravação na hora falha, salvo depois de parar;
+     - desliga a gravação nesta execução, sem derrubar o Buzzy, quando ela lança uma exceção que não é de E/S;
+     - faz a E/S de forma síncrona, na thread da interface: o arquivo tem cerca de 500 bytes, a gravação levou de 7,7 a 8,9 ms na integração, e o custo vai para o log.
   10. **Isolamento dos testes:** `--perfil-de-teste NOME` põe os dados em `%LOCALAPPDATA%\Buzzy\testes\NOME`; o log de diagnóstico continua na pasta do Buzzy.
       - **Falha fechada:** nome inválido, opção sem nome ou opção escrita de outro jeito desligam a persistência naquela execução.
       - **Nome:** validado caractere a caractere, sem expressão regular, porque `$` numa regex do .NET aceita um `\n` no fim. Os nomes reservados incluem `com0` e `lpt0`.
       - **Regra única:** só uma função escolhe a pasta (`PastaDeDados.DasConfiguracoes`), e só ela cria o arquivo (`ArquivoDeConfiguracoes.DaExecucao`), com teste de tabela e teste de fonte.
-      - **Lançadores:** os testes de integração (`integracao`), o `Buzzy.Verificacao` (`verificacao`) e a medição de desempenho (`desempenho`) passam o perfil e apagam a pasta dele antes de abrir o Buzzy, recusando junção ou link no caminho.
+      - **Lançadores:** os testes de integração (`integracao` e, nos da persistência, `persistencia`), o `Buzzy.Verificacao` (`verificacao`) e a medição de desempenho (`desempenho`) passam o perfil e apagam a pasta dele antes de abrir o Buzzy, recusando junção ou link no caminho. Desde a revisão do bloco B da Fase 5 (2026-10-01), cada trecho do caminho que existe é conferido antes de tudo, também quando a pasta do perfil ainda não existe.
+      - **Foto dos arquivos reais** (desde a mesma revisão): a integração, a verificação de tela e a medição de desempenho olham os arquivos reais de configuração do usuário antes e depois, só por fora (existência, tamanho e datas de criação e de escrita, nunca o conteúdo), e falham se algo mudar.
   11. **Esconderijo e "preso pelo usuário" também vão para o disco** (escolha de produto, 2026-09-30). O bloco A grava só a posição:
       - quem saía escondido reaparecia inteiro, na mesma borda;
       - quem estava preso na parede ou no cipó voltava agarrado, mas a agenda podia tirá-lo de lá.
 
       No passo P7, o esquema passa a guardar a borda do esconderijo (DEC-025) e a marca de preso (DEC-024). Ao reabrir, ele volta escondido no mesmo lado e continua preso onde o usuário o deixou. A ampliação incrementa `schemaVersion` (item 6). *Atualização de 2026-10-01 (DEC-027):* a v2 já é a da emoção dominante; o esconderijo e o preso entram na v3, e a versão futura dos testes passa de 3 a 4.
+
+      *Implementado no passo P7 (2026-10-01):*
+      - a v3 escreve sempre, dentro de `posicao`, `esconderijo` (`nenhum`, `baixo`, `esquerda` ou `direita`, lido por lista fechada) e `presoPeloUsuario` (booleano). Os dois só existem junto com uma posição; arquivos v1 e v2, sem eles, continuam lidos sem aviso, sem esconderijo e solto;
+      - no núcleo, a postura vai nos efeitos `GravarPosicao` e na carga (`Loaded`), e não em `PosicaoDoPersonagem`: a camada geométrica não depende do personagem, o estado não ganha duas fontes de verdade, e a restauração da DEC-030 não mudou;
+      - a carga só aplica a postura quando há posição salva; a borda só vale com o esconderijo pelo clique duplo ligado na configuração e dentro do enum. A acomodação o devolve escondido na mesma borda, ou agarrado e ainda preso; longe da parede e do cipó, a marca se apaga;
+      - escondido pela bandeja ou pela sessão, a borda vai junto, mas a ocultação não: ao reabrir, ele aparece;
+      - as reproduções gravadas escrevem `esconderijo=` e `preso=sim` só quando há postura, em `Loaded` e em `GravarPosicao`. As referências 01–05 e 07 não mudaram.
   12. **Log sem dado pessoal:**
       - erros do sistema vão só com o tipo e o código da exceção, nunca com a mensagem, que pode trazer um caminho com o nome do usuário ou o SID da conta. Isso já vale para a gravação, a instância única e o erro não tratado;
       - o nome de perfil recusado e a chave lida do arquivo não vão para o log;
-      - no passo P7, as linhas `CONFIG` levarão só enums, contagens e tempos. Nunca a pasta, valores do arquivo, nomes de campos desconhecidos nem o texto automático dos registros, que imprime a chave e a tela.
+      - as linhas `CONFIG` (passo P7; contrato em ARCHITECTURE.md 2.13.4) levam só enums, contagens e tempos. A pasta vai como `perfil` ou `padrao`, e a versão do arquivo, que é um valor lido dele, como `atual`, `anterior`, `futura` ou `-`, nunca o número. Nunca a pasta, valores do arquivo, nomes de campos desconhecidos nem o texto automático dos registros, que imprime a chave e a tela.
   13. **Reproduções gravadas:** as preferências escrevem `travessia=nao` só quando a travessia está desligada, em `Loaded`, `SettingsChanged` e `GravarPreferencias`. As referências 01–05 não mudam.
 - **Alternativas consideradas:**
   - tudo no app, com a validação testável só com arquivos; E/S no núcleo, que quebraria a pureza; um efeito novo para descarregar a gravação, que mudaria as referências sem ganho;
@@ -890,21 +907,33 @@ O usuário aceitou estas metas em 2026-09-27. A Fase 1 deve apenas estabelecer a
   - um principal preso por cerca de 200 ms na partida bloqueia a gravação a sessão inteira;
   - a cópia de diagnóstico pode ficar registrada de forma imprecisa quando uma tentativa anterior de `File.Replace` já tinha movido o arquivo ilegível;
   - `File.Replace` exige NTFS local, e a queda de energia no meio da gravação não é testável (SECURITY.md 9);
-  - os testes de queda com processo real deixaram a suíte do app sem janelas mais lenta: de menos de 1 s para cerca de 8 s.
+  - os testes de queda com processo real deixaram a suíte do app sem janelas mais lenta: de menos de 1 s para cerca de 8 s;
+  - cada gravação custa de 8 a 9 ms na thread da interface, 2 s depois do último pedido ou na hora ao sair. Isso pode atrasar um quadro numa verificação de tela;
+  - o caminho do erro não tratado só foi revisto no código: não tem teste automático, e um gancho no produto só para testá-lo foi recusado. O descarregar do encerramento é a rede de segurança, porque a saída já grava na hora;
+  - o Buzzy do usuário, aberto sem perfil de teste, passa a criar `%LOCALAPPDATA%\Buzzy\settings.json` ao sair.
+- **Desvios na implementação do passo P7 (2026-10-01):**
+  - a postura vai no efeito e na carga, e não na posição (item 11);
+  - as preferências vêm só dos efeitos `GravarPreferencias` e da leitura da partida: o desenho sugeria lê-las do estado do núcleo, o que o item 4 proíbe;
+  - uma exceção que não é de E/S na gravação desliga a gravação nesta execução, sem derrubar o Buzzy; o desenho a deixava propagar;
+  - o gesto que adia a gravação inclui o item na mão, além de pressionar e arrastar, para a E/S não cair no meio do arraste de um item;
+  - "sem pedido, nada pendente": sem isso, encerrar sem nenhum pedido recriaria o principal com os padrões;
+  - um nome de campo com um surrogate solto às vezes é só um campo desconhecido e às vezes torna o arquivo ilegível; o teste exige apenas que a leitura nunca lance;
+  - o gerador das sequências aleatórias de `InvariantesTestes` não mudou, para preservar as contagens de evidência; a cobertura da postura na carga ficou nos testes da persistência;
+  - os testes de integração conferem os arquivos reais só por metadados: um resumo do conteúdo exigiria ler o `settings.json` real, o que a regra proíbe.
 - **Adiado, com dono:**
-  - **passo P7:** `Iniciar` vai proteger a leitura contra qualquer exceção. Hoje uma exceção que não é de E/S ainda escapa de `ArquivoDeConfiguracoes.Ler()`, por exemplo com um link plantado pelo próprio usuário para algo que não é arquivo, e fecharia o app na partida. Com a proteção, a persistência fica desligada naquela execução, e o log leva só o tipo e o código. A captura ampla dentro da leitura do esquema será estreitada junto;
+  - **feito no passo P7 (2026-10-01):** `Iniciar` protege a leitura contra qualquer exceção, também a que não é de E/S, como um link plantado pelo próprio usuário para algo que não é arquivo: a persistência fica desligada naquela execução, e o log leva só o tipo e o código. A captura dentro da leitura do esquema ficou só com `InvalidOperationException`;
   - **aceito:** o `diagnostico.log`, anterior à Fase 5, segue um link que já exista (SECURITY.md 9).
 - **Consequências:**
-  - ARCHITECTURE.md 1, 2.6 (invariante 18), 2.12 e 2.13; SECURITY.md 3.1, 5, 6, 7, 8, 9 e 10; TODO.md, Fase 5 (passos e evidências) e Fase 8 (critério 3);
-  - notas nas DEC-010, DEC-024 e DEC-025;
-  - testes `EsquemaDeConfiguracoesTestes`, `PropriedadesDaPersistenciaTestes`, `InvariantesTestes`, `ArquivoDeConfiguracoesTestes`, `IsolamentoTestes` e `PlataformaTestes`;
+  - ARCHITECTURE.md 1, 2.6 (linha de `BOOTING` e invariante 18), 2.12 e 2.13 (linhas `CONFIG` em 2.13.4); SECURITY.md 3.1, 5, 6, 7, 8, 9 e 10; TODO.md, Fase 5 (passos e evidências), seção "Interação" (V16) e Fase 8 (critério 3);
+  - notas nas DEC-010, DEC-016 (item 10), DEC-024, DEC-025 e DEC-027;
+  - testes `EsquemaDeConfiguracoesTestes` (com a amostra `settings-v3.json`), `PropriedadesDaPersistenciaTestes`, `PosturaSalvaTestes`, `InvariantesTestes`, `InvarianteDezoito`, `ReproducaoTestes`, `ArquivoDeConfiguracoesTestes`, `AgendaDeGravacaoTestes`, `IsolamentoTestes` e `PlataformaTestes`; na integração, `PersistenciaIntegracaoTestes`; na verificação de tela, a V16, ainda não executada;
   - todo teste, verificação ou ferramenta que abre o `Buzzy.exe` passa `--perfil-de-teste` ([PROMPT_MESTRE_BUZZY.md](PROMPT_MESTRE_BUZZY.md)).
 
 ## DEC-030 — Chave do monitor e topologia (Fase 5)
 
-- **Data:** 2026-09-30
+- **Data:** 2026-09-30; passos P6, P8 e P9 em 2026-10-01.
 - **Estado da decisão:** ACCEPTED por Claude sob a autorização de DEC-015 (decisão técnica dentro de DEC-008 e de ARCHITECTURE.md 2.4 e 2.8).
-- **STATUS:** PLANNED até o gate da Fase 5 ser registrado em TODO.md. A restauração na partida (passos P1–P2) está implementada no núcleo e coberta por testes automatizados; o app só entrega a posição salva no passo P7. A chave estável e a topologia em execução são dos passos P6, P8 e P9 e entram nesta decisão quando forem implementadas.
+- **STATUS:** PLANNED até o gate da Fase 5 ser registrado em TODO.md. A restauração na partida (passos P1–P2), a chave estável do monitor (passo P6), a topologia em execução no núcleo (passo P8) e a releitura robusta no app (passo P9) estão implementadas, revisadas e cobertas por testes automatizados e de integração (2026-10-01); desde o passo P7, o app entrega a posição salva ao núcleo (DEC-029). Faltam a verificação de tela com input SINTÉTICO depois desses passos e as conferências [MANUAL] e [HW]: a estabilidade da chave e a calibração dos tempos no protótipo P5 e os cenários S8, S10, S11 e S12 reais.
 - **Problema:**
   - até a Fase 4, a carga restaurava como a execução: pela mesma chave ou pelo monitor mais próximo da âncora absoluta salva. Numa partida com outra topologia (outro principal, monitor ausente, chave nova), essa âncora fica noutro referencial;
   - a posição não guardava o retângulo do monitor que ARCHITECTURE.md 2.8 pede;
@@ -913,34 +942,81 @@ O usuário aceitou estas metas em 2026-09-27. A Fase 1 deve apenas estabelecer a
   1. **Tela do monitor na posição:** `PosicaoDoPersonagem.TelaDoMonitor` é `RetanguloPx?`, com `init` e fora do construtor posicional; nula quer dizer desconhecida.
      - Semântica única: a tela do monitor da chave na última vez em que a posição foi descrita nele.
      - Quem preenche: `Descrever`, os dois casos de `Reacomodar`, a validação da máquina e `Restaurar`.
-     - Nunca é deslocada por cálculo; no passo P8, a posição que acompanhar a translação da topologia não translada a tela. Assim o arquivo nunca guarda uma tela que não existiu.
+     - Nunca é deslocada por cálculo: com o app aberto, a posição que acompanha a topologia não translada a tela (item 8). Assim o arquivo nunca guarda uma tela que não existiu.
   2. **Restauração na partida, numa função só:** `Posicionador.Restaurar`, com `OrigemDaRestauracao` = `PelaChave`, `PeloRetangulo` ou `NoPrincipal`. Vai ao monitor da chave; senão, ao primeiro com a mesma tela; senão, ao principal.
      - Nos três passos valem as frações salvas, saneadas: NaN vira 0,5, e o resto é preso em [0, 1].
      - A âncora salva não é usada.
      - A posição nova fica com a chave e a tela do destino, e restaurar de novo não move o personagem.
-     - Durante a execução continua valendo `Reacomodar`.
+     - Durante a execução valem as regras do item 8.
   3. **Texto da regra:** "BOOTING: configurações e topologia carregadas; posição salva restaurada pela chave | pelo retângulo do monitor | no monitor principal". O caminho "HIDDEN: pedido de mostrar anterior à carga" recebe o mesmo sufixo. Sem posição salva, o texto não muda, e as referências 01–05 ficam idênticas.
   4. **Pixel dos pés:** o monitor do personagem é o que contém `(x, y − 1)` (`Posicionador.PixelDosPes`). Vale em `Maquina.MonitorDaAncora`, sem mudança de comportamento, e no caso do monitor ausente de `Reacomodar`, que passou a medir a distância a partir dele. Com a barra oculta, a âncora no chão fica na base da tela, que já é o primeiro pixel do monitor de baixo, e a âncora crua escolheria o monitor errado.
   5. **Reproduções gravadas:** a posição salva do `Loaded` usa 9 campos (`chave;fx;fy;ax;ay;esquerda;topo;direita;base`) só quando a tela é conhecida e não vazia, para a reprodução restaurar pelo retângulo como a partida; senão, 5. `GravarPosicao` continua com 5 campos, e a leitura aceita 5 ou 9.
-  6. **Fica para os passos seguintes, nesta decisão:**
-     - a chave estável (passo P6): um resumo do caminho do dispositivo, para não gravar nem registrar o identificador de hardware; o protótipo P5 confere a estabilidade dela;
-     - a topologia em execução: o que acontece quando o monitor do personagem muda, é transladado ou some com o app aberto (passo P8);
-     - a releitura robusta no app (passo P9).
+  6. **Chave estável do monitor** (passo P6, 2026-10-01; `ChavesDeMonitor` e `ConfiguracaoDeVideo`, no adaptador; regras exatas em ARCHITECTURE.md 2.4):
+     - `mon:` seguido de 16 dígitos hexadecimais: os 8 primeiros bytes do SHA-256 do caminho do dispositivo do monitor, em maiúsculas. Esse cálculo nunca pode mudar entre versões, e testes fixam valores dele. O caminho, que identifica o hardware, vira resumo na hora: nunca vai para o arquivo nem para o log, e o nome amigável e o EDID nunca são lidos (SECURITY.md 3.1);
+     - o caminho e o nome GDI de cada monitor vêm da configuração de vídeo, só lida (`GetDisplayConfigBufferSizes`, `QueryDisplayConfig` e `DisplayConfigGetDeviceInfo`). No modo clone, vale o menor caminho, para a escolha não depender da ordem do Windows;
+     - quando a consulta falha, por exemplo numa sessão remota ou bloqueada, ou não traz o caminho de um monitor, vale a chave da última consulta boa para o mesmo nome GDI com uma tela do mesmo tamanho, transladada ou não; sem ela, a reserva `gdi:` seguida do nome GDI. O DPI não conta, porque é a escala que o usuário escolhe;
+     - nenhuma chave se repete: as lidas agora são distribuídas primeiro, e uma do cache que repetiria outra vai para a reserva. O cache só vive na execução e só é trocado por uma leitura coerente, inteira e com a consulta boa;
+     - para o núcleo, a chave continua opaca: ele só a compara por igualdade.
+  7. **Leitura incoerente e leitura parcial** (passo P6 e revisão do bloco B):
+     - a leitura inteira é incoerente quando a informação ou o DPI de um monitor não podem ser lidos, o DPI vem zero, falta o nome GDI ou ele se repete: a topologia nunca sai sem um monitor nem com uma escala inventada. A anterior continua valendo, e a leitura é tentada de novo;
+     - como último recurso, depois das 5 leituras da partida e na última tentativa de cada rajada de releituras, vale a leitura parcial: o monitor que falha fica de fora, contado no log com a falha (função e código), e o cache não muda. Sem ela, uma falha persistente impedia a partida e, com o app aberto, nenhuma releitura saía.
+  8. **Topologia em execução, no núcleo** (passo P8; `Posicionador` e `Maquina.MudarTopologia`; regras exatas em ARCHITECTURE.md 2.6 e 2.8):
+     - em qualquer estado fora de `EXITING`, a posição guardada e o retorno da tela cheia acompanham a topologia, sem mover a janela (`Rebasear`). Com o monitor correspondente, a mesma fração na área útil atual dele, com a chave e a tela dele. Sem ele, a chave, as frações e a tela ficam, e só a âncora anda, junto com o sobrevivente mais próximo do pixel dos pés medido nas coordenadas antigas;
+     - o monitor correspondente é o da mesma chave; sem ele, o primeiro com a mesma tela cuja chave não existia antes. É o apelido por retângulo da DEC-008, para a chave que passou de `gdi:` para `mon:` ou mudou com a porta ou o driver;
+     - nos estados que revalidam (autônomos, físicos, `REACTING` e `USING`), se a geometria do monitor do personagem não mudou (só outros monitores mudaram, ou o dele só foi transladado ou só trocou de chave), o estado continua, e a janela anda junto (`ContinuarNoMonitor`, invariante 19). Se mudou, `SETTLING` na mesma posição relativa. Se ele sumiu, `SETTLING` no sobrevivente mais próximo medido nas coordenadas antigas;
+     - no gesto, nada é validado: toda saída de `PRESSED` parte de onde ele estaria parado, e, em `DRAGGING`, o lugar do arraste anda com o monitor em que está, como a janela e o cursor;
+     - os itens seguem a mesma regra, e o item na mão anda com o monitor em que está (DEC-028).
+  9. **Releitura robusta, no app** (passo P9; `AgendaDaReleitura`; regras exatas em ARCHITECTURE.md 2.4 e 2.8):
+     - as mensagens que podem mudar a topologia, inclusive a `TaskbarCreated`, vão ao log só com o tipo (no `WM_DPICHANGED`, também o DPI novo) e pedem a releitura, que sai 300 ms depois da última, com teto de 1 s desde a primeira. A espera mínima que a retomada vai pedir (passo P10) prevalece sobre as duas;
+     - a rajada acaba quando a releitura sai. Uma leitura incoerente é tentada de novo em 500 ms, 1 s e 2 s; depois, a agenda desiste até a próxima mensagem. Cada releitura leva no máximo 32 motivos;
+     - cada releitura publicada devolve a janela do personagem e as dos itens ao lugar do núcleo, se saíram dele, sem mexer na ordem Z, e arma a conferência tardia do mesmo lugar 1,5 s depois, no máximo uma por rajada, nunca periódica. Com "Lembrar locais das janelas" ligado, o Windows pode devolver uma janela ao monitor reconectado depois da releitura;
+     - com a barra de tarefas recriada, o ícone volta na hora, e a topologia vai ao núcleo pela releitura agrupada: a raiz não troca mais a topologia por fora do núcleo;
+     - os três tempos são provisórios até o protótipo P5.
+  10. **Log** (contrato em ARCHITECTURE.md 2.13.4; SECURITY.md 6): a linha `TOPOLOGIA` leva cada chave ao lado do nome GDI, o resultado da consulta e as contagens; `POSICAO` ganhou o nome GDI; `MENSAGEM` leva só o tipo; `POSICAO|reaplicada` e `ITEM|reaplicado` levam só retângulos das janelas do Buzzy. O caminho do dispositivo e o nome do monitor nunca vão.
 - **Alternativas consideradas:**
   - continuar carregando por `Reacomodar`, que escolhe o monitor mais próximo de uma âncora de outra sessão;
   - "monitor mais próximo da âncora salva" no último passo: menos previsível, porque o Buzzy poderia surgir numa TV recém-ligada;
   - a tela como quinto parâmetro posicional, que quebraria as construções de posição nos testes, ou guardada só no arquivo, que a perderia quando o monitor some com o personagem escondido;
   - um retângulo vazio para "desconhecido", em vez de nulo;
-  - duas funções de restauração, com textos de regra diferentes.
-- **Motivo:** é a cascata que DEC-008 e ARCHITECTURE.md 2.8 já descreviam. A fração é estável entre sessões; a âncora absoluta não é.
+  - duas funções de restauração, com textos de regra diferentes;
+  - guardar o caminho do dispositivo, que poria um identificador de hardware no arquivo e no log, ou o nome GDI, que muda entre sessões (DEC-008);
+  - exigir a mesma tela para usar o cache: com a consulta negada, a troca de principal punha todas as chaves na reserva, e o apelido por retângulo levava o personagem ao outro monitor;
+  - revalidar em toda mudança de topologia: uma troca de principal interrompia a caminhada, a reação e o uso;
+  - transladar a tela guardada junto com a posição: o arquivo guardaria uma tela que nunca existiu;
+  - medir o sobrevivente nas coordenadas novas: com o principal desconectado, o Windows move a origem, e o mais próximo seria outro;
+  - agrupar sem teto, que deixa uma rajada sem fim adiar a releitura para sempre; conferir o lugar das janelas periodicamente, contra a DEC-011; reafirmar a ordem Z dos itens na releitura e na conferência tardia, que poria um temporizador mexendo na ordem Z (SECURITY.md 2).
+- **Motivo:** é a cascata que DEC-008 e ARCHITECTURE.md 2.8 já descreviam. A fração é estável entre sessões; a âncora absoluta não é. A chave pelo resumo é tão estável quanto o caminho, sem gravar o identificador do hardware. Numa troca de principal ou num rearranjo, o Windows só translada os monitores, e para o personagem nada mudou.
 - **Trade-offs:**
   - a igualdade de `PosicaoDoPersonagem` passou a incluir a tela: compare campo a campo ou obtenha as duas posições pelas funções do `Posicionador`;
   - o pixel dos pés muda a escolha em execução em casos de borda: a âncora exatamente na base da tela com um monitor logo abaixo, ou um empate de distância deslocado em 1 px;
-  - com monitores clonados ou sobrepostos, a escolha "pela tela" é determinística, mas arbitrária.
-- **Adiado para o passo P8:** um clique depois de o monitor mudar com o botão pressionado valida a posição com a tela nova, mas com as frações da área antiga, até o fim da reação. Se o usuário esconder ou sair nesse intervalo, a partida seguinte restaura noutro ponto. O passo P8 resolve, validando a partir da posição que acompanhou a topologia.
+  - com monitores clonados ou sobrepostos, a escolha "pela tela" é determinística, mas arbitrária;
+  - a consulta da configuração de vídeo e a enumeração dos monitores são duas chamadas: uma reconfiguração entre elas pode trocar chaves até a próxima releitura, cerca de 300 ms depois. Cada releitura passou a custar a consulta, só em eventos;
+  - com a consulta negada, um nome GDI reaproveitado por outro monitor do mesmo tamanho herda a chave; antes, isso só acontecia com a mesma tela;
+  - o caminho inclui a porta: trocar o cabo de porta muda a chave, e a restauração vai pelo retângulo ou para o principal;
+  - com a leitura parcial, depois de cerca de 3,8 s de falhas seguidas, o monitor que falha fica de fora; se for o do personagem, ele migra e não volta sozinho;
+  - na partida seguinte, com a chave sumida, o apelido por retângulo pode cair no sobrevivente que passou a ocupar a tela antiga, enquanto com o app aberto ele iria ao sobrevivente mais próximo: é a semântica da DEC-008;
+  - os monitores ocupados pela tela cheia ficam guardados pelas chaves e não seguem um apelido até a raiz mandar outra lista (Fase 8);
+  - a conferência tardia pode desfazer, até 1,5 s depois de uma releitura publicada, um lugar que outro programa deu à janela. Com DPI diferente entre os monitores, isso pode deixar INCONCLUSIVO o critério 6 da Fase 1 na verificação de tela [HW];
+  - o arraste e o item na mão supõem que o Windows leva a janela junto com o monitor numa troca de principal, o que só um S2 real confirma [HW].
+- **Resolvido no passo P8 (2026-10-01):** um clique depois de o monitor mudar com o botão pressionado validava a posição com a tela nova, mas com as frações da área antiga, até o fim da reação. Agora toda saída de `PRESSED` parte da posição que acompanhou a topologia, e as frações gravadas descrevem o lugar validado (item 8). O teste que documentava o defeito foi reescrito.
+- **Desvios na implementação (2026-10-01):**
+  - **chave:** a distribuição em duas passagens (numa só, a chave lida agora podia ir para a reserva); nome GDI vazio ou repetido torna a leitura incoerente, como antes, quando o nome era a chave; a leitura da topologia é uma classe, e não um registro, para o texto automático não imprimir tudo no log, e o texto do alvo da consulta esconde o caminho;
+  - **topologia:** perto da borda de cima, a revalidação o faz agarrar o cipó de novo (DEC-024), em vez de cair, como previa o desenho, anterior ao agarrar; a posição fina só anda nos estados de movimento, porque os outros partem da âncora; quando o estado continua, a posição passa a descrever o lugar novo, e frações arbitrárias vindas do arquivo viram as exatas da mesma âncora; o invariante 20 só confere a âncora na área útil quando o sprite cabe nela;
+  - **correção anterior à fase,** exposta pelo fluxo aleatório novo dos testes: num monitor mais estreito que o sprite, ele começava a escalar fora da lateral. Agora as duas laterais ficam no meio, onde a validação o põe (ARCHITECTURE.md 2.5);
+  - **releitura:** a lógica ficou numa classe própria, testável sem janela; uma mensagem durante uma nova tentativa começa outra rajada, com as tentativas do zero, como o código anterior fazia; o mesmo prazo não reagenda; a barra recriada mantém uma leitura só para o tamanho do ícone e pede a releitura mesmo sem a bandeja criada;
+  - **revisões de correção e de segurança:** o cache pelo tamanho da tela, a regra do gesto em todas as saídas de `PRESSED`, o arraste e o item na mão que andam com o monitor, a releitura sem ordem Z, o teto de 32 motivos e a leitura parcial entraram por elas (DEVELOPMENT_LOG.md).
+- **Pendente, com dono:**
+  - **passo P10:** o sinal do árbitro do sistema entre o log `MENSAGEM` e o pedido de releitura, que passa a levar a espera mínima; reler a topologia antes de `SESSION_UNLOCKED` e `RESUMED`;
+  - **passo P11:** a releitura imediata do mostrar vira uma função própria; esse caminho não arma a conferência tardia;
+  - **passo P12:** a minimização consulta a releitura pendente da agenda;
+  - **passo P13:** a travessia em curso fica fora do invariante 19 e vai a `SETTLING` numa mudança de topologia;
+  - **passos P13 e P14:** limitar as rodadas seguidas de reaplicação do lugar causadas só pelo próprio `WM_DPICHANGED`, quando o sprite atravessar monitores ou com a histerese de escala;
+  - **protótipo P5 [MANUAL][HW]:** a estabilidade da chave (reiniciar, trocar porta ou cabo, atualizar o driver, modo clone, sessão bloqueada, RDP e um monitor DisplayPort que some com a tela apagada) e a calibração de 300 ms, 1 s e 1,5 s.
 - **Consequências:**
-  - ARCHITECTURE.md 2.6 (linha de `BOOTING`) e 2.8; nota na DEC-008;
+  - ARCHITECTURE.md 1, 2.4, 2.5, 2.6 (linhas de `BOOTING`, `PRESSED`, `TOPOLOGY_CHANGED` e `USING`; invariantes 19 e 20), 2.7, 2.8, 2.13.3, 2.13.4 e 2.16; SECURITY.md 2, 3.1, 3.2, 5, 6 e 10; notas nas DEC-008, DEC-016 (item 8), DEC-024, DEC-025 e DEC-028;
   - testes `RestaurarTestes` (cascata, S1–S7, S9, S11, frações inválidas, idempotência, carga e reprodução), `PropriedadesDaPersistenciaTestes`, `ReacomodarTestes`, `PosicionadorTestes`, `PropriedadesTestes` e a conferência da carga em `InvariantesTestes`;
+  - dos passos P6, P8 e P9: `ChavesDeMonitorTestes`, `LeitorDeTopologiaTestes`, `PlataformaTestes`, `RebasearTestes`, `MudancaDeTopologiaTestes`, `InvariantesTestes` (invariantes 19 e 20 e as saídas do gesto), `TransicoesComplementaresTestes`, `MovimentoTestes`, `AgendaDaReleituraTestes` e `GerenteDosItensTestes`; na integração, a fumaça (a mesma chave nos dois processos), a barra recriada, a rajada sem fim, a conferência tardia e a releitura com itens;
+  - na verificação de tela, o critério 5 da Fase 3 compara o nome GDI, e o X1 do tamagotchi acha a chave do secundário pela linha `TOPOLOGIA`;
   - o mapa dos cenários S1–S12 fica em TODO.md, Fase 5.
 
 ## Decisões de produto registradas pelo usuário

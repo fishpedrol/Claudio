@@ -226,7 +226,10 @@ public sealed record Loaded(Topologia Topologia, PosicaoDoPersonagem? PosicaoSal
     public bool PresoPeloUsuario { get; init; }
 }
 
-/// <summary><c>TOPOLOGY_CHANGED</c>: nova leitura dos monitores, já agrupada pelo adaptador.</summary>
+/// <summary>
+/// <c>TOPOLOGY_CHANGED</c>: nova leitura dos monitores, já agrupada pelo adaptador. Com o monitor do personagem só transladado
+/// ou igual, o estado continua; senão, ele revalida a posição (DEC-030, Maquina.MudarTopologia).
+/// </summary>
 public sealed record TopologyChanged(Topologia Topologia) : Evento
 {
     public override Origem Origem => Origem.Sistema;

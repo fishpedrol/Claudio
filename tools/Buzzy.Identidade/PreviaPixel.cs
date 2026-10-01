@@ -11,7 +11,7 @@ namespace Buzzy.Identidade;
 /// Prévias da identidade em pixel art (assets/identidade/pixel/previa/): folha de modelo ampliada
 /// sem suavização, grade de poses, grade de expressões, tamanho real (2× = 128 DIP a 100%), os itens
 /// do tamagotchi (DEC-028) no chão, na mão e ao lado do boneco, as animações de uso, as sobreposições
-/// de efeito e os ícones do menu nativo.
+/// de efeito, os gestos da onda, a paranoia de perto e os ícones do menu nativo.
 /// </summary>
 internal static class PreviaPixel
 {
@@ -88,6 +88,7 @@ internal static class PreviaPixel
         Salvar(UsosEmTamanhoReal(), Path.Combine(pasta, "usos-tamanho-real.png"));
         Salvar(Efeitos(poses), Path.Combine(pasta, "efeitos.png"));
         Salvar(Gestos(), Path.Combine(pasta, "gestos.png"));
+        Salvar(Paranoico(andando, xDoPerfil), Path.Combine(pasta, "paranoico-8x.png"));
         Salvar(IconesDoMenuNativo(), Path.Combine(pasta, "icones-menu.png"));
 
         // A folha nativa (64 × 64 por quadro) é o arquivo que a Fase 6 usa; a ampliação é só prévia.
@@ -201,6 +202,7 @@ internal static class PreviaPixel
         EfeitoVisual.Estrelinhas => "tonto",
         EfeitoVisual.Coracoes => "apaixonado",
         EfeitoVisual.Cores => "viajando",
+        EfeitoVisual.Suor => "paranoico",
         _ => null,
     };
 
@@ -342,8 +344,8 @@ internal static class PreviaPixel
     }
 
     /// <summary>
-    /// As poses provisórias dos seis gestos da onda (crítica, L11): em cima, cada uma com a cara própria, a
-    /// 4×; embaixo, a 2×, com a sobreposição e o modificador da onda em que o gesto mais aparece (fase 0).
+    /// As poses dos gestos da onda (crítica, L11; as seis provisórias e as duas da paranoia): em cima, cada uma com a
+    /// cara própria, a 4×; embaixo, a 2×, com a sobreposição e o modificador da onda em que o gesto mais aparece (fase 0).
     /// </summary>
     private static BitmapSource Gestos()
     {
@@ -355,6 +357,8 @@ internal static class PreviaPixel
             ["espirro"] = EfeitoVisual.Brilhos,
             ["tosse"] = EfeitoVisual.Nenhum,
             ["tremedeira"] = EfeitoVisual.Brilhos,
+            ["olharproteto"] = EfeitoVisual.Suor,
+            ["agachar"] = EfeitoVisual.Suor,
         };
         BitmapSource proprias = Grade([.. PosesPixel.DosGestos.Select(p => ($"{p.Nome} ({p.Expressao})", BonecoPixel.Desenhar(p)))], 4, PosesPixel.DosGestos.Count, Fundo);
         BitmapSource naOnda = Grade([.. PosesPixel.DosGestos.Select(p =>
@@ -366,6 +370,31 @@ internal static class PreviaPixel
             dc.DrawRectangle(new SolidColorBrush(ParaCor(Fundo)), null, new Rect(0, 0, largura, altura));
             dc.DrawImage(proprias, new Rect(0, 0, proprias.PixelWidth, proprias.PixelHeight));
             dc.DrawImage(naOnda, new Rect(0, proprias.PixelHeight, naOnda.PixelWidth, naOnda.PixelHeight));
+        }
+        return Renderizar(visual, largura, altura);
+    }
+
+    /// <summary>
+    /// A paranoia (onda Paranoico, adicional de 2026-10-01) de perto, a 8×: em cima, a cara "paranoico" de frente (o
+    /// recorte de expressoes.png) e de perfil (o de rostos-efeito.png); embaixo, os gestos "olharproteto" e "agachar" com
+    /// a sobreposição de suor na fase parada, como aparecem sem o relógio.
+    /// </summary>
+    private static BitmapSource Paranoico(PosePixel andando, int xDoPerfil)
+    {
+        BitmapSource rostos = Grade(
+        [
+            ("paranoico", IconesDoMenu.Rosto("paranoico")),
+            ("paranoico (perfil)", BonecoPixel.Desenhar(andando, "paranoico").Recortada(xDoPerfil, IconesDoMenu.YDoRosto, IconesDoMenu.LarguraDoRosto, IconesDoMenu.AlturaDoRosto - 1)),
+        ], 8, 2, Fundo);
+        BitmapSource gestos = Grade([.. new[] { "olharproteto", "agachar" }.Select(nome => PosesPixel.PorNome(nome)!).Select(p =>
+            ($"{p.Nome} + {EfeitoVisual.Suor} 0", BonecoPixel.Desenhar(EfeitosPixel.Modificar(p, EfeitoVisual.Suor, 0), null, null, EfeitoVisual.Suor, 0)))], 8, 2, Fundo);
+        var visual = new DrawingVisual();
+        int largura = Math.Max(rostos.PixelWidth, gestos.PixelWidth), altura = rostos.PixelHeight + gestos.PixelHeight;
+        using (DrawingContext dc = visual.RenderOpen())
+        {
+            dc.DrawRectangle(new SolidColorBrush(ParaCor(Fundo)), null, new Rect(0, 0, largura, altura));
+            dc.DrawImage(rostos, new Rect(0, 0, rostos.PixelWidth, rostos.PixelHeight));
+            dc.DrawImage(gestos, new Rect(0, rostos.PixelHeight, gestos.PixelWidth, gestos.PixelHeight));
         }
         return Renderizar(visual, largura, altura);
     }

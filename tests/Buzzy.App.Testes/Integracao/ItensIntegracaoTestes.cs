@@ -12,7 +12,8 @@ namespace Buzzy.App.Testes.Integracao;
 /// seção 6): o menu (pelo personagem, pela bandeja e pelo botão direito num item; "Recolher itens" desabilitado sem
 /// itens), as janelas dos itens, o arraste até ele, o fim do gesto (captura solta e ordem Z), o uso, o PRESS no meio do
 /// uso, recolher, esconder e mostrar (também com outra janela "sempre no topo" à frente), minimizar no meio do arraste de
-/// um item, arrastar o personagem com um item na tela, sair com itens na tela e o temporizador da onda.
+/// um item, arrastar o personagem com um item na tela, sair com itens na tela, o temporizador da onda e a paranoia (adicional
+/// de 2026-10-01: quatro substâncias seguidas, o olhar pro teto com o suor e a água que acalma um passo).
 /// Tudo por mensagens POSTADAS às janelas do próprio Buzzy aberto pelo teste, com o PID de cada janela conferido antes
 /// de cada mensagem (as dos itens, a do dono de cada menu e a de serviço vêm do log): nada passa pela fila de input do
 /// Windows nem por outro aplicativo, e o resultado vale como integração automatizada, não como gesto. Só rodam com
@@ -153,6 +154,71 @@ internal sealed class ItensIntegracaoTestes
         Afirmar.Verdadeiro(cancelada >= 0 && saida[cancelada]["pendente"] == "sim", "o disparo pendente foi cancelado ao sair");
         Afirmar.Verdadeiro(encerrando > cancelada, "antes do encerramento");
         Afirmar.Falso(saida.Any(e => e.Chave == "ONDA" && e["disparada"] == "sim"), "nenhum disparo depois de sair");
+    }
+
+    [Teste]
+    public void Paranoia_QuatroSubstanciasSeguidas_OlhaProTetoComOSuor_EAAguaAcalmaUmPasso()
+    {
+        // A paranoia (adicional de 2026-10-01, DEC-028), de desenho animado: pausado, a vodka, a cerveja, o cigarro e o
+        // baseado, um depois do outro, soltos nele. Na 4ª substância, a onda Paranoico vai para a frente; no fim do uso que
+        // a começou, ele olha pro teto na hora (a pose da arte, com a cara dela e o suor por cima); depois, parado, a cara
+        // paranoica com o suor. A água acalma um passo: o pico vira queda.
+        using BuzzyEmTeste b = BuzzyEmTeste.Iniciar();
+        PontoPx personagem = Preparar(b);
+        long inicio = BuzzyEmTeste.MarcaDoLog();
+        DadosDaOnda paranoia = TabelaDoTamagotchi.DaOnda(Onda.Paranoico);
+        string Ms(TimeSpan t) => ((long)t.TotalMilliseconds).ToString(CultureInfo.InvariantCulture);
+
+        var regras = new List<string>();
+        long marcaDaQuarta = 0;
+        foreach ((char tecla, string nome) in new[] { ('v', "Vodka"), ('c', "Cerveja"), ('i', "Cigarro"), ('s', "Baseado") })
+        {
+            long marcaDoItem = BuzzyEmTeste.MarcaDoLog();
+            ItemNaTela item = Invocar(b, () => AbrirPeloPersonagem(b, personagem), tecla, nome);
+            (_, PontoPx opaco) = EsperarParado(b, marcaDoItem, item);
+            marcaDaQuarta = BuzzyEmTeste.MarcaDoLog();
+            Arrastar(b, item, opaco, personagem);
+            regras.Add(EsperarDesde(b, marcaDaQuarta, e => e.Chave == "NUCLEO" && e["evento"] == "ItemDragEnd" && e["para"] == "Using", 3000, $"{nome} solto nele: USING")["regra"]);
+            EsperarDesde(b, marcaDaQuarta, e => e.Chave == "NUCLEO" && e["de"] == "Settling" && e["para"] == "Idle", 8000, $"o fim do uso de {nome}");
+        }
+        for (int i = 0; i < 3; i++)
+            Afirmar.Falso(regras[i].Contains("paranoia", StringComparison.Ordinal), $"a {i + 1}ª substância ainda não começa a paranoia: {regras[i]}");
+        Afirmar.Contem("Fumar Baseado; a paranoia começa: Paranoico/Subida/1", regras[3]);
+
+        // A onda, em disparos únicos com a duração da tabela: a subida e, depois dela, o pico do nível 1. Tudo é procurado
+        // depois do soltar do baseado: o temporizador da onda anterior (o bêbado) pode ter disparado no meio do arraste.
+        int soltou = BuzzyEmTeste.EventosDesde(marcaDaQuarta).FindIndex(e => e.Chave == "NUCLEO" && e["evento"] == "ItemDragEnd" && e["para"] == "Using");
+        int iSubida = EsperarIndice(b, marcaDaQuarta, e => e.Chave == "ONDA" && e["agendada"] == "sim", 3000, "a subida da paranoia agendada", aPartirDe: soltou);
+        EventoDoLog subida = BuzzyEmTeste.EventosDesde(marcaDaQuarta)[iSubida];
+        Afirmar.Igual(Ms(paranoia.Duracao(FaseDaOnda.Subida, 1)), subida["atrasoMs"], "a subida da paranoia, um disparo único");
+        EsperarDesde(b, marcaDaQuarta, e => e.Chave == "NUCLEO" && e["evento"] == "ItemEffectTimer" && e["regra"].Contains("Paranoico/Subida/1 -> Paranoico/Pico/1", StringComparison.Ordinal),
+            4000, "a subida vira pico", aPartirDe: soltou);
+        EventoDoLog pico = EsperarDesde(b, marcaDaQuarta, e => e.Chave == "ONDA" && e["agendada"] == "sim", 3000, "o pico agendado", aPartirDe: iSubida);
+        Afirmar.Igual(Ms(paranoia.Duracao(FaseDaOnda.Pico, 1)), pico["atrasoMs"], "o pico do nível 1, um disparo único");
+
+        // No fim do uso que a começou, livre e no chão, ele olha pro teto na hora, sem sorteio: a pose da arte, com a cara
+        // dela, e o suor da paranoia por cima. Acabado o gesto, parado, a cara paranoica, com o suor.
+        EventoDoLog olhou = EsperarDesde(b, marcaDaQuarta, e => e.Chave == "NUCLEO" && e["de"] == "Idle" && e["para"] == "Idle" && e["regra"].Contains("a paranoia começou", StringComparison.Ordinal),
+            4000, "o olhar pro teto no começo da paranoia");
+        Afirmar.Igual(("Tick", "IDLE: a paranoia começou, gesto OlharProTeto"), (olhou["evento"], olhou["regra"]), "o gesto no fim do uso, sem a agenda");
+        EventoDoLog teto = EsperarDesde(b, marcaDaQuarta, e => e.Chave == "SPRITE" && e["pose"] == "olharproteto", 3000, "o quadro do olhar pro teto");
+        Afirmar.Igual(("-", "-", "Suor"), (teto["expressao"], teto["item"], teto["efeito"]), "olhar pro teto: a cara da pose, sem item e com o suor por cima");
+        EventoDoLog parado = EsperarDesde(b, marcaDaQuarta, e => e.Chave == "SPRITE" && e["pose"] == "parado" && e["expressao"] == "paranoico", 5000, "parado com a cara paranoica");
+        Afirmar.Igual(("Suor", "0"), (parado["efeito"], parado["fase"]), "parado com a cara paranoica e o suor, na fase parada (relógio desligado)");
+
+        // A água acalma um passo: o pico do nível 1 vira a queda, que recomeça com a duração dela.
+        long marcaDaAgua = BuzzyEmTeste.MarcaDoLog();
+        ItemNaTela agua = Invocar(b, () => AbrirPeloPersonagem(b, personagem), 'g', "Agua");
+        (_, PontoPx opacoDaAgua) = EsperarParado(b, marcaDaAgua, agua);
+        long marcaDoAlivio = BuzzyEmTeste.MarcaDoLog();
+        Arrastar(b, agua, opacoDaAgua, personagem);
+        int bebeu = EsperarIndice(b, marcaDoAlivio, e => e.Chave == "NUCLEO" && e["evento"] == "ItemDragEnd" && e["para"] == "Using", 3000, "a água solta nele");
+        Afirmar.Contem("Beber Agua; alivia Paranoico/Pico/1 -> Paranoico/Queda/1", BuzzyEmTeste.EventosDesde(marcaDoAlivio)[bebeu]["regra"]);
+        EventoDoLog queda = EsperarDesde(b, marcaDoAlivio, e => e.Chave == "ONDA" && e["agendada"] == "sim", 3000, "a queda agendada", aPartirDe: bebeu);
+        Afirmar.Igual(Ms(paranoia.Duracao(FaseDaOnda.Queda, 1)), queda["atrasoMs"], "a queda, um disparo único com a duração cheia dela");
+        Afirmar.Falso(BuzzyEmTeste.EventosDesde(inicio).Any(e => e.Chave == "ERRO"), "sem erro");
+
+        Afirmar.Igual(0, b.FecharPorWmClose());
     }
 
     [Teste]
@@ -356,7 +422,7 @@ internal sealed class ItensIntegracaoTestes
 
         // O Windows minimiza o personagem, sem ativar nada (SW_SHOWMINNOACTIVE, como em IntegracaoTestes): o Buzzy se esconde.
         long marcaMinimizar = BuzzyEmTeste.MarcaDoLog();
-        NativoTeste.ShowWindow(b.Janela, NativoTeste.SW_SHOWMINNOACTIVE);
+        b.MinimizarPorFora(b.Janela, "SW_SHOWMINNOACTIVE");
         EsperarDesde(b, marcaMinimizar, e => e.Chave == "VISIVEL" && e["visivel"] == "nao", 3000, "escondido ao ser minimizado");
         EsperarDesde(b, marcaMinimizar, e => e.Chave == "ITEM" && e["capturaLiberada"] == banana.IdNoLog, 2000, "LIBERAR_CAPTURA_DO_ITEM na banana");
         EsperarDesde(b, marcaMinimizar, e => e.Chave == "ITEM" && e["escondido"] == banana.IdNoLog, 2000, "a janela da banana escondida junto");
@@ -386,6 +452,55 @@ internal sealed class ItensIntegracaoTestes
 
         Afirmar.Igual(0, b.FecharPorWmClose());
     }
+
+    [Teste]
+    public void ReleituraDaTopologia_OItemMovidoPorForaVoltaAoLugar_ETambemNaConferenciaTardia_SemMexerNaOrdemZ()
+    {
+        // Fase 5, passo P9: as janelas dos itens acompanham a releitura. O núcleo reacomoda os itens pela topologia nova
+        // (DEC-030); a raiz devolve ao lugar do núcleo uma janela que o Windows tenha levado para outro lugar (ao reconectar
+        // um monitor, com "Lembrar locais das janelas"), na releitura e na conferência tardia dela. A ordem Z não é tocada
+        // nelas: só muda quando o item aparece, no gesto sobre ele e quando o personagem reaparece (DEC-028, item 22;
+        // SECURITY.md 2), e a conferência tardia é um temporizador (revisão do bloco P6-P9). Posta acima do personagem por
+        // outro agente, a banana fica lá.
+        using BuzzyEmTeste b = BuzzyEmTeste.Iniciar();
+        PontoPx personagem = Preparar(b);
+        long inicio = BuzzyEmTeste.MarcaDoLog();
+        ItemNaTela banana = Invocar(b, () => AbrirPeloPersonagem(b, personagem), 'b', "Banana");
+        (RetanguloPx noChao, _) = EsperarParado(b, inicio, banana);
+        Afirmar.Igual(1, NativoTeste.PosicoesAbaixo(b.Janela, banana.Hwnd), "premissa: o item logo abaixo do personagem");
+
+        // Outro agente (aqui, o teste) leva a janela da banana para longe e para o topo do grupo "sempre no topo", acima do
+        // personagem, sem passar pelo núcleo.
+        RetanguloPx fora = noChao.Deslocado(-200, -150);
+        Afirmar.Verdadeiro(b.MoverPorFora(banana.Hwnd, NativoTeste.HWND_TOPMOST, fora.Esquerda, fora.Topo, 0, "mover a banana para o topo"), "a banana movida por fora");
+        Afirmar.Igual(fora, RetanguloDe(banana.Hwnd), "premissa: a banana saiu do lugar");
+        Afirmar.Diferente(1, NativoTeste.PosicoesAbaixo(b.Janela, banana.Hwnd), "premissa: a banana saiu de logo abaixo do personagem");
+
+        // A releitura da topologia (sem mudança real) devolve a banana ao lugar do núcleo, sem mexer na ordem Z.
+        long marca = BuzzyEmTeste.MarcaDoLog();
+        Afirmar.Verdadeiro(b.Postar(b.Servico, NativoTeste.WM_DISPLAYCHANGE, 32, (nint)(1920 | (1080 << 16)), "WM_DISPLAYCHANGE"), "WM_DISPLAYCHANGE postada");
+        EventoDoLog reaplicado = EsperarDesde(b, marca, e => e.Chave == "ITEM" && e["reaplicado"] == banana.IdNoLog, 3000, "a banana reaplicada na releitura");
+        Afirmar.Igual(("WM_DISPLAYCHANGE", fora, noChao), (reaplicado["motivo"], EventoDoLog.Retangulo(reaplicado["real"]), EventoDoLog.Retangulo(reaplicado["nucleo"])),
+            "o motivo, onde a janela estava e o lugar do núcleo");
+        EventoDoLog releitura = EsperarDesde(b, marca, e => e.Chave == "TOPOLOGIA" && e["motivo"] == "WM_DISPLAYCHANGE", 2000, "a releitura");
+        EsperarRetangulo(b, banana.Hwnd, noChao, 2000, "a banana de volta ao chão, onde o núcleo a pôs");
+        Afirmar.Diferente(1, NativoTeste.PosicoesAbaixo(b.Janela, banana.Hwnd), "a releitura não reafirma a ordem Z: a banana continua acima do personagem");
+
+        // A conferência tardia faz o mesmo com o lugar, 1,5 s depois da releitura, e também não mexe na ordem Z.
+        long marcaTardia = BuzzyEmTeste.MarcaDoLog();
+        RetanguloPx deNovo = noChao.Deslocado(150, -100);
+        Afirmar.Verdadeiro(b.MoverPorFora(banana.Hwnd, 0, deNovo.Esquerda, deNovo.Topo, NativoTeste.SWP_NOZORDER, "mover a banana"), "a banana movida por fora depois da releitura");
+        EventoDoLog tardio = EsperarDesde(b, marcaTardia, e => e.Chave == "ITEM" && e["reaplicado"] == banana.IdNoLog, 4000, "a banana reaplicada pela conferência tardia");
+        Afirmar.Igual("reafirmação tardia", tardio["motivo"], "o motivo da reaplicação");
+        double ms = (tardio.Instante - releitura.Instante).TotalMilliseconds;
+        Afirmar.Verdadeiro(ms >= 1400 && ms < 3000, $"1,5 s depois da releitura: {ms:0} ms");
+        EsperarRetangulo(b, banana.Hwnd, noChao, 2000, "a banana de volta ao chão de novo");
+        Afirmar.Diferente(1, NativoTeste.PosicoesAbaixo(b.Janela, banana.Hwnd), "a conferência tardia (um temporizador) não reafirma a ordem Z");
+        Afirmar.Falso(BuzzyEmTeste.EventosDesde(marca).Any(e => e.Chave == "ERRO"), "sem erro");
+
+        Afirmar.Igual(0, b.FecharPorWmClose());
+    }
+
 
     [Teste]
     public void SairComItensNaTelaEUmNaMao_Codigo0_ACapturaSoltaENenhumaJanelaFicaViva()
@@ -472,7 +587,7 @@ internal sealed class ItensIntegracaoTestes
         Afirmar.Igual((uint)b.Processo.Id, NativoTeste.PidDe(b.Servico), "a janela de serviço é deste Buzzy");
         nint wParam = NativoTeste.MakeLParam(ancora.X, ancora.Y);
         foreach (int evento in new[] { NativoTeste.WM_RBUTTONUP, NativoTeste.WM_CONTEXTMENU })
-            Afirmar.Verdadeiro(NativoTeste.PostMessage(b.Servico, Bandeja.MensagemDeRetorno, wParam, NativoTeste.MakeLParam(evento, (int)Bandeja.IdDoIcone)), $"notificação 0x{evento:X4} da bandeja postada");
+            Afirmar.Verdadeiro(b.Postar(b.Servico, Bandeja.MensagemDeRetorno, wParam, NativoTeste.MakeLParam(evento, (int)Bandeja.IdDoIcone), $"notificação 0x{evento:X4} da bandeja"), $"notificação 0x{evento:X4} da bandeja postada");
     }
 
     /// <summary>
@@ -505,7 +620,7 @@ internal sealed class ItensIntegracaoTestes
         Thread.Sleep(800);
         // O dono do menu só existe enquanto o menu está aberto: a mensagem só vai se ele ainda for deste Buzzy.
         if (!BuzzyEmTeste.EventosDesde(marca).Any(e => e.Chave == "MENU" && e.Campos.ContainsKey("fechado")) && NativoTeste.PidDe(dono) == (uint)b.Processo.Id)
-            Afirmar.Verdadeiro(NativoTeste.PostMessage(dono, NativoTeste.WM_CANCELMODE, 0, 0), "WM_CANCELMODE ao dono do menu");
+            Afirmar.Verdadeiro(b.Postar(dono, NativoTeste.WM_CANCELMODE, 0, 0, "WM_CANCELMODE"), "WM_CANCELMODE ao dono do menu");
         EventoDoLog fechado = EsperarDesde(b, marca, e => e.Chave == "MENU" && e.Campos.ContainsKey("fechado"), 4000, $"menu fechado ({oQue})");
         Afirmar.Igual(fechado["bitmapsCriados"], fechado["bitmapsApagados"], $"{oQue}: a abertura apagou os bitmaps que criou");
         return fechado;

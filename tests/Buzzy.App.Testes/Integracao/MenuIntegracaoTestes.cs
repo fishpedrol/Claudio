@@ -53,7 +53,7 @@ internal sealed class MenuIntegracaoTestes
     {
         long marca = BuzzyEmTeste.MarcaDoLog();
         (nint dono, _) = AbrirMenu(b, opaco, marca);
-        Afirmar.Verdadeiro(NativoTeste.PostMessage(dono, NativoTeste.WM_CANCELMODE, 0, 0), "WM_CANCELMODE ao dono do menu");
+        Afirmar.Verdadeiro(b.Postar(dono, NativoTeste.WM_CANCELMODE, 0, 0, "WM_CANCELMODE"), "WM_CANCELMODE ao dono do menu");
         return Fechado(b, marca, "menu fechado por WM_CANCELMODE");
     }
 
@@ -66,8 +66,8 @@ internal sealed class MenuIntegracaoTestes
         long marca = BuzzyEmTeste.MarcaDoLog();
         (nint dono, EventoDoLog exibindo) = AbrirMenu(b, opaco, marca);
         Afirmar.Igual(emocaoMarcadaAntes, exibindo["emocaoMarcada"], "a marca de rádio está na emoção atual");
-        Afirmar.Verdadeiro(NativoTeste.PostMessage(dono, WM_CHAR, submenu, 0), $"WM_CHAR '{submenu}' ao dono do menu");
-        Afirmar.Verdadeiro(NativoTeste.PostMessage(dono, WM_CHAR, opcao, 0), $"WM_CHAR '{opcao}' ao dono do menu");
+        Afirmar.Verdadeiro(b.Postar(dono, WM_CHAR, submenu, 0, $"WM_CHAR '{submenu}'"), $"WM_CHAR '{submenu}' ao dono do menu");
+        Afirmar.Verdadeiro(b.Postar(dono, WM_CHAR, opcao, 0, $"WM_CHAR '{opcao}'"), $"WM_CHAR '{opcao}' ao dono do menu");
         return Fechado(b, marca, $"menu fechado pelas teclas {submenu} e {opcao}");
     }
 
@@ -128,7 +128,7 @@ internal sealed class MenuIntegracaoTestes
         long marcaFinal = BuzzyEmTeste.MarcaDoLog();
         (nint dono, EventoDoLog exibindo) = AbrirMenu(b, opaco, marcaFinal);
         Afirmar.Igual("Automatica", exibindo["emocaoMarcada"], "a marca voltou para Automática");
-        Afirmar.Verdadeiro(NativoTeste.PostMessage(dono, NativoTeste.WM_CANCELMODE, 0, 0), "WM_CANCELMODE ao dono do menu");
+        Afirmar.Verdadeiro(b.Postar(dono, NativoTeste.WM_CANCELMODE, 0, 0, "WM_CANCELMODE"), "WM_CANCELMODE ao dono do menu");
         Afirmar.Igual("Nenhum", Fechado(b, marcaFinal, "menu cancelado")["fechado"]);
 
         Afirmar.Igual(0, b.FecharPorWmClose());

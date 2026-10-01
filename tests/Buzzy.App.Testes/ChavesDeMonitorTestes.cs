@@ -140,17 +140,41 @@ internal sealed class ChavesDeMonitorTestes
     }
 
     [Teste]
-    public void Atribuir_CacheSoValeComAMesmaTela()
+    public void Atribuir_CacheValeComOMesmoNomeEOMesmoTamanho_InclusiveTransladado()
     {
-        // O nome GDI pode ir para outro monitor; com outra tela, a chave antiga não é reaproveitada.
+        // Uma troca de principal ou um rearranjo translada as telas sem mudar o monitor nem o nome GDI dele: com a consulta
+        // negada (sessão bloqueada ou remota), o cache segura a chave. Exigir a mesma tela punha todos os monitores na
+        // reserva, e o apelido por retângulo do núcleo levava o personagem ao monitor que passou a ocupar a tela antiga
+        // (revisão de correção do bloco P6-P9, achado 1). Com outro tamanho de tela, o nome GDI pode ter ido para outro
+        // monitor: a chave antiga não é reaproveitada.
         var cache = new Dictionary<string, ChaveConhecida>(StringComparer.OrdinalIgnoreCase) { [@"\\.\DISPLAY1"] = new(ChaveDell, TelaA) };
-        foreach (RetanguloPx outra in new[] { TelaB, TelaA.Deslocado(1, 0), new RetanguloPx(0, 0, 2560, 1440) })
+        foreach (RetanguloPx mesmoTamanho in new[] { TelaA, TelaB, TelaA.Deslocado(1, 0), TelaA.Deslocado(1920, -360) })
+        {
+            ChaveAtribuida c = ChavesDeMonitor.Atribuir([(@"\\.\DISPLAY1", mesmoTamanho)], mapa: null, cache).Single();
+            Afirmar.Igual(new ChaveAtribuida(@"\\.\DISPLAY1", ChaveDell, OrigemDaChave.Cache), c, $"tela {mesmoTamanho}");
+        }
+        foreach (RetanguloPx outra in new[] { new RetanguloPx(0, 0, 2560, 1440), new RetanguloPx(0, 0, 1080, 1920), new RetanguloPx(0, 0, 1920, 1200) })
         {
             ChaveAtribuida c = ChavesDeMonitor.Atribuir([(@"\\.\DISPLAY1", outra)], mapa: null, cache).Single();
-            Afirmar.Igual(OrigemDaChave.Reserva, c.Origem, $"tela {outra}");
-            Afirmar.Igual(@"gdi:\\.\DISPLAY1", c.Chave);
+            Afirmar.Igual(new ChaveAtribuida(@"\\.\DISPLAY1", @"gdi:\\.\DISPLAY1", OrigemDaChave.Reserva), c, $"tela {outra}");
         }
-        Afirmar.Igual(OrigemDaChave.Cache, ChavesDeMonitor.Atribuir([(@"\\.\DISPLAY1", TelaA)], mapa: null, cache).Single().Origem, "mesma tela");
+        Afirmar.Igual(OrigemDaChave.Reserva, ChavesDeMonitor.Atribuir([(@"\\.\DISPLAY2", TelaA)], mapa: null, cache).Single().Origem, "outro nome GDI");
+    }
+
+    [Teste]
+    public void Atribuir_TrocaDePrincipalComAConsultaNegada_CadaMonitorFicaComAChaveDele()
+    {
+        // S2 com a consulta negada: o DISPLAY2, à esquerda, vira o principal; a origem vai para ele e as duas telas andam
+        // 1920 px para a direita. Cada nome GDI continua com a chave do próprio caminho, lida na última consulta boa.
+        var cache = new Dictionary<string, ChaveConhecida>(StringComparer.OrdinalIgnoreCase)
+        {
+            [@"\\.\DISPLAY1"] = new(ChaveDell, TelaA),
+            [@"\\.\DISPLAY2"] = new(ChaveGsm, TelaB),
+        };
+        IReadOnlyList<ChaveAtribuida> chaves = ChavesDeMonitor.Atribuir([(@"\\.\DISPLAY1", TelaA.Deslocado(1920, 0)), (@"\\.\DISPLAY2", TelaA)], mapa: null, cache);
+        Afirmar.Sequencia(
+            [new ChaveAtribuida(@"\\.\DISPLAY1", ChaveDell, OrigemDaChave.Cache), new ChaveAtribuida(@"\\.\DISPLAY2", ChaveGsm, OrigemDaChave.Cache)],
+            chaves);
     }
 
     [Teste]
@@ -183,8 +207,11 @@ internal sealed class ChavesDeMonitorTestes
     }
 
     [Teste]
-    public void NovoCache_SoGuardaAsChavesLidasDoCaminho()
+    public void NovoCache_GuardaAsChavesDoCaminhoEAsQueContinuaramPeloCache()
     {
+        // Uma consulta boa que não traz o caminho de um monitor ainda enumerado (o alvo marcado como indisponível, ou o
+        // nome que não pôde ser lido) não apaga a chave dele: ela continuou pelo cache e continua lá, com a tela de agora.
+        // A reserva nunca entra.
         IReadOnlyList<(string NomeGdi, RetanguloPx Tela)> enumerados = [(@"\\.\DISPLAY1", TelaA), (@"\\.\DISPLAY2", TelaB), (@"\\.\DISPLAY3", TelaC)];
         IReadOnlyList<ChaveAtribuida> chaves =
         [
@@ -193,8 +220,10 @@ internal sealed class ChavesDeMonitorTestes
             new(@"\\.\DISPLAY3", @"gdi:\\.\DISPLAY3", OrigemDaChave.Reserva),
         ];
         IReadOnlyDictionary<string, ChaveConhecida> cache = ChavesDeMonitor.NovoCache(enumerados, chaves);
-        Afirmar.Igual(1, cache.Count, "só a chave lida do caminho");
+        Afirmar.Igual(2, cache.Count, "a do caminho e a que continuou pelo cache; a reserva, não");
         Afirmar.Igual(new ChaveConhecida(ChaveDell, TelaA), cache[@"\\.\display1"], "com a tela da época; o nome não diferencia maiúsculas");
+        Afirmar.Igual(new ChaveConhecida(ChaveGsm, TelaB), cache[@"\\.\DISPLAY2"], "a do cache, com a tela de agora");
+        Afirmar.Falso(cache.ContainsKey(@"\\.\DISPLAY3"), "a reserva não entra");
     }
 
     [Teste]

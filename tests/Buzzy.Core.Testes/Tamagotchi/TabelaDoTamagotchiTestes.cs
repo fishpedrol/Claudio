@@ -5,9 +5,9 @@ namespace Buzzy.Core.Testes.Tamagotchi;
 
 /// <summary>
 /// Tipos e tabelas do tamagotchi adulto (DEC-028, passo T3), ainda sem comportamento: os itens na ordem do menu, o verbo
-/// e a duração do uso de cada um, as ondas com fases, perfis, gestos e caras (desenho do núcleo, tabelas 4.1 a 4.4), as
-/// sete caras de efeito e os seis gestos novos no fim dos enums, e a chave Tamagotchi desligada. O esperado vem de
-/// <see cref="TabelasDoDesenho"/>, transcrito do desenho à parte do código.
+/// e a duração do uso de cada um, as ondas com fases, perfis, gestos e caras (desenho do núcleo, tabelas 4.1 a 4.4, com a
+/// paranoia no fim), as oito caras de efeito e os oito gestos novos no fim dos enums, e a chave Tamagotchi desligada. O
+/// esperado vem de <see cref="TabelasDoDesenho"/>, transcrito do desenho à parte do código.
 /// </summary>
 internal static class TabelaDoTamagotchiTestes
 {
@@ -24,7 +24,8 @@ internal static class TabelaDoTamagotchiTestes
     }
 
     // Tabela 4.1 com os verbos e as durações do coordenador: o uso dura os passos do verbo (a sequência de quadros da
-    // arte soma o mesmo), a cara durante o uso é de humor, e só a água não começa onda (soma 0; os outros, 1 ou 2).
+    // arte soma o mesmo), a cara durante o uso é de humor, só a água não começa onda (soma 0; os outros, 1 ou 2), e cada item
+    // é de alívio ou de substância como na transcrição.
     [Teste]
     public static void TodoItemTemOVerboOsPassosEACaraDaTabela()
     {
@@ -41,6 +42,7 @@ internal static class TabelaDoTamagotchiTestes
             Afirmar.Igual(esperado.Intensidade, d.Intensidade, $"{onde}: intensidade");
             Afirmar.Igual(d.Onda is null, d.Intensidade == 0, $"{onde}: sem onda, intensidade 0; com onda, 1 ou 2");
             Afirmar.Verdadeiro(d.Intensidade is >= 0 and <= 2, $"{onde}: intensidade de 0 a 2");
+            Afirmar.Igual(esperado.Alivio, d.Alivio, $"{onde}: de alívio (ou de substância)");
         }
         Afirmar.Sequencia([Item.Agua], TabelaDoTamagotchi.Itens.Where(i => TabelaDoTamagotchi.DoItem(i).Onda is null), "só a água não começa onda");
 
@@ -52,8 +54,8 @@ internal static class TabelaDoTamagotchiTestes
         Afirmar.Lanca<ArgumentOutOfRangeException>(() => TabelaDoTamagotchi.PassosDoUso((VerboDeUso)6), "verbo fora do enum");
     }
 
-    // Tabelas 4.2 a 4.4: para cada onda, a precedência, os tempos, as caras de cada fase e os perfis de cada nível do
-    // pico e da queda, campo a campo, com os gestos e as caras sorteados em cada fase.
+    // Tabelas 4.2 a 4.4: para cada onda, a precedência, os tempos, as caras de cada fase, a classe (de substância ou leve)
+    // e os perfis de cada nível do pico e da queda, campo a campo, com os gestos e as caras sorteados em cada fase.
     [Teste]
     public static void TodaOndaSegueAsTabelasDoDesenho()
     {
@@ -70,6 +72,7 @@ internal static class TabelaDoTamagotchiTestes
             Afirmar.Igual(esperada.CaraDaSubida, d.CaraDaSubida, $"{onde}: cara na subida");
             Afirmar.Igual(esperada.CaraDoPico, d.CaraDoPico, $"{onde}: cara no pico");
             Afirmar.Igual(esperada.CaraDaQueda, d.CaraDaQueda, $"{onde}: cara na queda");
+            Afirmar.Igual(esperada.DeSubstancia, d.DeSubstancia, $"{onde}: de substância (ou leve)");
             Afirmar.Igual(3, d.PicoPorNivel.Count, $"{onde}: três níveis no pico");
             for (int nivel = 1; nivel <= 3; nivel++)
             {
@@ -88,7 +91,39 @@ internal static class TabelaDoTamagotchiTestes
                 Afirmar.Lanca<InvalidOperationException>(() => d.Perfil(FaseDaOnda.Queda, 1), $"{onde}: sem queda");
             }
         }
-        Afirmar.Lanca<ArgumentOutOfRangeException>(() => TabelaDoTamagotchi.DaOnda((Onda)10), "onda fora do enum");
+        Afirmar.Lanca<ArgumentOutOfRangeException>(() => TabelaDoTamagotchi.DaOnda((Onda)11), "onda fora do enum");
+    }
+
+    // O alívio (pedido do usuário de 2026-10-01, decisão do coordenador para a DEC-028), com as listas da decisão: a comida
+    // e a bebida sem álcool (banana, bala, água, café e energético) são de alívio, e os outros oito itens, de substância,
+    // ficam como estão; as ondas do bêbado, do chapado, do elétrico, do eufórico, do tonto, do viajando e do relaxado são de
+    // substância, e as do satisfeito, do alegre e do ligado, leves. A paranoia (outro pedido do mesmo dia) também é de
+    // substância: a comida e a bebida sem álcool a acalmam um passo, como as outras. A classificação do núcleo e a da
+    // transcrição são exatamente essas, e são coerentes: a onda própria de um item de alívio é leve (a água não tem onda), e
+    // a de um item de substância, de substância.
+    [Teste]
+    public static void Alivio_AClassificacaoEhExatamenteADaDecisao()
+    {
+        Item[] deAlivio = [Item.Banana, Item.Bala, Item.Agua, Item.Cafe, Item.Energetico];
+        Item[] deSubstancia = [Item.Vodka, Item.Cerveja, Item.Cigarro, Item.Baseado, Item.Cocaina, Item.Md, Item.LancaPerfume, Item.Cogumelo];
+        Onda[] ondasDeSubstancia = [Onda.Bebado, Onda.Chapado, Onda.Eletrico, Onda.Euforico, Onda.Tonto, Onda.Viajando, Onda.Relaxado, Onda.Paranoico];
+        Onda[] ondasLeves = [Onda.Satisfeito, Onda.Alegre, Onda.Ligado];
+        Afirmar.Sequencia(Enum.GetValues<Item>(), deAlivio.Concat(deSubstancia).Order(), "a decisão classifica os 13 itens, cada um uma vez");
+        Afirmar.Sequencia(Enum.GetValues<Onda>(), ondasDeSubstancia.Concat(ondasLeves).Order(), "e as 11 ondas, cada uma uma vez");
+
+        Afirmar.Sequencia(deAlivio.Order(), TabelaDoTamagotchi.Itens.Where(i => TabelaDoTamagotchi.DoItem(i).Alivio).Order(), "os itens de alívio do núcleo");
+        Afirmar.Sequencia(ondasDeSubstancia.Order(), Enum.GetValues<Onda>().Where(o => TabelaDoTamagotchi.DaOnda(o).DeSubstancia).Order(), "as ondas de substância do núcleo");
+        Afirmar.Sequencia(deAlivio.Order(), TabelasDoDesenho.ItensEsperados().Where(i => i.Alivio).Select(i => i.Item).Order(), "os itens de alívio da transcrição");
+        Afirmar.Sequencia(ondasDeSubstancia.Order(), TabelasDoDesenho.OndasEsperadas().Where(o => o.DeSubstancia).Select(o => o.Onda).Order(), "as ondas de substância da transcrição");
+
+        foreach (Item item in TabelaDoTamagotchi.Itens)
+        {
+            DadosDoItem d = TabelaDoTamagotchi.DoItem(item);
+            if (d.Onda is { } onda)
+                Afirmar.Igual(!d.Alivio, TabelaDoTamagotchi.DaOnda(onda).DeSubstancia, $"{item}: a onda própria ({onda}) é leve no item de alívio e de substância no outro");
+            else
+                Afirmar.Igual((Item.Agua, true), (item, d.Alivio), "só a água não tem onda, e ela é de alívio");
+        }
     }
 
     // A cara de cada fase (a queda sem cara própria fica com a do pico) e as durações: a subida e cada nível do pico são
@@ -129,9 +164,9 @@ internal static class TabelaDoTamagotchiTestes
         Afirmar.Igual(TimeSpan.FromSeconds(1), curta.Duracao(FaseDaOnda.Queda, 2), "nem na queda");
     }
 
-    // Conjuntos válidos: precedência de 1 a 3, velocidade de 50 a 200% (D10), cambaleio e percentuais não negativos,
-    // gestos e caras com peso positivo; os gestos novos e as caras de efeito só aparecem nas tabelas das ondas, e cada
-    // um deles aparece em alguma.
+    // Conjuntos válidos: precedência de 1 a 3 nas ondas dos itens e 4 só na paranoia, velocidade de 50 a 200% (D10),
+    // cambaleio e percentuais não negativos, gestos e caras com peso positivo; os gestos novos e as caras de efeito só
+    // aparecem nas tabelas das ondas, e cada um deles aparece em alguma.
     [Teste]
     public static void TodaOndaTemConjuntosValidos()
     {
@@ -140,7 +175,7 @@ internal static class TabelaDoTamagotchiTestes
         foreach (Onda onda in Enum.GetValues<Onda>())
         {
             DadosDaOnda d = TabelaDoTamagotchi.DaOnda(onda);
-            Afirmar.Verdadeiro(d.Precedencia is >= 1 and <= 3, $"{onda}: precedência de 1 a 3");
+            Afirmar.Verdadeiro(onda == Onda.Paranoico ? d.Precedencia == 4 : d.Precedencia is >= 1 and <= 3, $"{onda}: precedência de 1 a 3 (a paranoia, 4)");
             Afirmar.Verdadeiro(d.Subida >= TimeSpan.FromSeconds(1) && d.NivelDoPico >= TimeSpan.FromSeconds(1), $"{onda}: fases de 1 s ou mais");
             var perfis = new List<PerfilDaOnda>(d.PicoPorNivel) { d.Perfil(FaseDaOnda.Subida, 1) };
             if (d.Queda is { } queda) perfis.Add(queda);
@@ -159,7 +194,7 @@ internal static class TabelaDoTamagotchiTestes
             if (d.CaraDaQueda is { } caraDaQueda) carasVistas.Add(caraDaQueda);
             Afirmar.Verdadeiro(Expressoes.EhDeHumor(d.CaraDaSubida), $"{onda}: a subida mostra uma cara de humor");
         }
-        Afirmar.Verdadeiro(new[] { Gesto.Soluco, Gesto.Danca, Gesto.Gargalhada, Gesto.Espirro, Gesto.Tosse, Gesto.Tremedeira }.All(gestosVistos.Contains), "cada gesto novo aparece em alguma onda");
+        Afirmar.Verdadeiro(new[] { Gesto.Soluco, Gesto.Danca, Gesto.Gargalhada, Gesto.Espirro, Gesto.Tosse, Gesto.Tremedeira, Gesto.OlharProTeto, Gesto.Agachar }.All(gestosVistos.Contains), "cada gesto novo aparece em alguma onda");
         Afirmar.Verdadeiro(Expressoes.DeEfeito.All(carasVistas.Contains), "cada cara de efeito aparece em alguma onda");
         Afirmar.Verdadeiro(TabelaDoTamagotchi.Itens.All(i => Expressoes.EhDeHumor(TabelaDoTamagotchi.DoItem(i).CaraDurante)), "nenhum item mostra cara de efeito durante o uso");
     }
@@ -195,25 +230,47 @@ internal static class TabelaDoTamagotchiTestes
         }
     }
 
-    // As sete caras de efeito e os seis gestos novos ficam no fim dos enums, na ordem do coordenador, com as chaves da
-    // arte em minúsculas; as 14 caras de humor e os gestos de sempre não mudam de valor, e o sorteio automático de gesto
-    // (de Espiar a Brincar) não alcança os novos.
+    // As oito caras de efeito e os oito gestos novos ficam no fim dos enums, na ordem do coordenador (a cara e os dois
+    // gestos da paranoia por último), com as chaves da arte em minúsculas; as 14 caras de humor e os gestos de sempre não
+    // mudam de valor, e o sorteio automático de gesto (de Espiar a Brincar) não alcança os novos.
     [Teste]
     public static void CarasDeEfeitoEGestosNovos_NoFimDosEnums()
     {
-        Expressao[] deEfeito = [Expressao.Bebado, Expressao.Enjoado, Expressao.Chapado, Expressao.Eletrico, Expressao.Apaixonado, Expressao.Tonto, Expressao.Viajando];
+        Expressao[] deEfeito = [Expressao.Bebado, Expressao.Enjoado, Expressao.Chapado, Expressao.Eletrico, Expressao.Apaixonado, Expressao.Tonto, Expressao.Viajando, Expressao.Paranoico];
         Afirmar.Sequencia(deEfeito, Expressoes.DeEfeito, "as caras de efeito");
-        Afirmar.Sequencia(Enumerable.Range(14, 7), deEfeito.Select(e => (int)e), "no fim do enum, depois das 14 de humor");
-        Afirmar.Sequencia(["bebado", "enjoado", "chapado", "eletrico", "apaixonado", "tonto", "viajando"], deEfeito.Select(e => e.ToString().ToLowerInvariant()), "chaves da arte");
+        Afirmar.Sequencia(Enumerable.Range(14, 8), deEfeito.Select(e => (int)e), "no fim do enum, depois das 14 de humor");
+        Afirmar.Sequencia(["bebado", "enjoado", "chapado", "eletrico", "apaixonado", "tonto", "viajando", "paranoico"], deEfeito.Select(e => e.ToString().ToLowerInvariant()), "chaves da arte");
         Afirmar.Sequencia(Enum.GetValues<Expressao>(), Expressoes.DeHumor.Concat(Expressoes.DeEfeito), "de humor e de efeito cobrem o enum inteiro");
         Afirmar.Verdadeiro(deEfeito.All(e => !Expressoes.EhDeHumor(e)), "nenhuma de efeito é de humor (nem pode ser a emoção dominante)");
         Afirmar.Igual(13, (int)Expressao.Determinado, "as 14 de humor não mudam de valor");
+        Afirmar.Igual(21, (int)Expressao.Paranoico, "a da paranoia depois de Viajando");
 
-        Gesto[] novos = [Gesto.Soluco, Gesto.Danca, Gesto.Gargalhada, Gesto.Espirro, Gesto.Tosse, Gesto.Tremedeira];
-        Afirmar.Sequencia(Enumerable.Range(6, 6), novos.Select(g => (int)g), "gestos novos no fim do enum");
-        Afirmar.Sequencia(["soluco", "danca", "gargalhada", "espirro", "tosse", "tremedeira"], novos.Select(g => g.ToString().ToLowerInvariant()), "poses dos gestos novos");
+        Gesto[] novos = [Gesto.Soluco, Gesto.Danca, Gesto.Gargalhada, Gesto.Espirro, Gesto.Tosse, Gesto.Tremedeira, Gesto.OlharProTeto, Gesto.Agachar];
+        Afirmar.Sequencia(Enumerable.Range(6, 8), novos.Select(g => (int)g), "gestos novos no fim do enum");
+        Afirmar.Sequencia(["soluco", "danca", "gargalhada", "espirro", "tosse", "tremedeira", "olharproteto", "agachar"], novos.Select(g => g.ToString().ToLowerInvariant()), "poses dos gestos novos");
         Afirmar.Sequencia([0, 1, 2, 3, 4, 5], new[] { Gesto.Nenhum, Gesto.Espiar, Gesto.OlharAoRedor, Gesto.Cocar, Gesto.Espreguicar, Gesto.Brincar }.Select(g => (int)g), "os gestos de sempre não mudam de valor");
-        Afirmar.Igual(12, Enum.GetValues<Gesto>().Length, "doze gestos com o nenhum");
+        Afirmar.Igual(14, Enum.GetValues<Gesto>().Length, "catorze gestos com o nenhum");
+        Afirmar.Igual(10, (int)Onda.Paranoico, "a paranoia no fim do enum Onda");
+    }
+
+    // A paranoia (pedido do usuário de 2026-10-01; decisão do coordenador para a DEC-028) na tabela: nenhum item a começa
+    // (ela vem da carga), a precedência 4 é maior que a de toda onda de item, é de substância (o alívio a acalma) e tem
+    // queda; no pico, igual nos três níveis, ele nunca escala, pula, descansa nem dispara o foguete, e os gestos mais
+    // pesados são os da paranoia (olhar pro teto e agachar).
+    [Teste]
+    public static void Paranoia_NenhumItemAComecaEAPrecedenciaEhAMaior()
+    {
+        DadosDaOnda d = TabelaDoTamagotchi.DaOnda(Onda.Paranoico);
+        Afirmar.Falso(TabelaDoTamagotchi.Itens.Any(i => TabelaDoTamagotchi.DoItem(i).Onda == Onda.Paranoico), "nenhum item começa a paranoia");
+        Afirmar.Verdadeiro(Enum.GetValues<Onda>().Where(o => o != Onda.Paranoico).All(o => TabelaDoTamagotchi.DaOnda(o).Precedencia < d.Precedencia), "a precedência da paranoia é maior que a de todas");
+        Afirmar.Verdadeiro(d.DeSubstancia && d.Queda is not null, "de substância e com queda");
+        foreach (int nivel in new[] { 1, 2, 3 })
+        {
+            PerfilDaOnda p = d.Perfil(FaseDaOnda.Pico, nivel);
+            Afirmar.Igual((0, 0, 0, (int?)0), (p.Escalar, p.Pular, p.Descansar, p.ChanceDoFoguete), $"pico {nivel}: sem escalar, pular, descansar nem foguete");
+            Afirmar.Igual((Gesto.OlharProTeto, Gesto.Agachar), (p.Gestos[0].Gesto, p.Gestos[1].Gesto), $"pico {nivel}: os gestos mais pesados são os da paranoia");
+            Afirmar.Igual(Expressao.Paranoico, p.Caras.MaxBy(c => c.Peso).Cara, $"pico {nivel}: a cara mais sorteada é a paranoica");
+        }
     }
 
     // A chave do tamagotchi fica desligada por padrão e ligada no aplicativo desde a entrega do app e da arte (D15, passo

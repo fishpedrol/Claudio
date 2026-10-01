@@ -79,6 +79,23 @@ internal static class MovimentoTestes
     }
 
     [Teste]
+    public static void MonitorMaisEstreitoQueOSprite_AsLateraisFicamOndeAValidacaoOPoe()
+    {
+        // 240 px de largura a 240 DPI: o sprite de 128 DIP tem 320 px e não cabe. A validação o centraliza
+        // (Posicionador.PrenderNaAreaUtil: 0 + (240 - 320) / 2 + 160 = 120), e as duas laterais ficam ali também; senão,
+        // ele começaria a escalar no meio, fora da parede, e a física o puxaria 40 px no passo seguinte.
+        var estreito = new Topologia([TopologiasDeExemplo.Principal("E", TopologiasDeExemplo.Ret(0, 0, 240, 1732), TopologiasDeExemplo.Ret(0, 0, 240, 1612), 240)]);
+        TamanhoPx sprite = new TamanhoDip(128, 128).ParaPixels(240);
+        Superficies sup = Superficies.Do(estreito, estreito.Principal, sprite);
+        int x = Posicionador.PrenderNaAreaUtil(new PontoPx(0, 1612), sprite, estreito.Principal.AreaUtil).X;
+        Afirmar.Igual((120, 120, 120), (x, sup.Esquerda, sup.Direita), "as laterais e a validação no mesmo x");
+
+        var c = new Personagem.Cenario(Fase4()).Aplicar(new Loaded(estreito, null, Preferencias.Padrao));
+        c.AplicarCom(Fase4(AcoesAutonomas.Escalar), new AutonomyTimer(c.Atual.Geracao)).Esta(Estado.Climbing);
+        ConferirApoio(c.Atual, "decidiu escalar no monitor estreito");
+    }
+
+    [Teste]
     public static void Passagem_NaoEhAtravessadaNaFase4MasSeEscaladaComToonForce()
     {
         // Secundário à esquerda: a lateral esquerda do principal (x = 0) é passagem. A travessia é

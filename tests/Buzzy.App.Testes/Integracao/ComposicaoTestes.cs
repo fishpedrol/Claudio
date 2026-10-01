@@ -86,14 +86,50 @@ internal sealed class ComposicaoTestes
         long marca = BuzzyEmTeste.MarcaDoLog();
 
         // Outro agente (aqui, o teste) move a janela sem passar pelo núcleo.
-        Afirmar.Verdadeiro(NativoTeste.SetWindowPos(b.Janela, 0, lugar.Esquerda - 300, lugar.Topo - 200, 0, 0,
-            NativoTeste.SWP_NOSIZE | NativoTeste.SWP_NOZORDER | NativoTeste.SWP_NOACTIVATE), "janela movida por fora");
+        Afirmar.Verdadeiro(b.MoverPorFora(b.Janela, 0, lugar.Esquerda - 300, lugar.Topo - 200, NativoTeste.SWP_NOZORDER, "mover a janela"), "janela movida por fora");
         Afirmar.Diferente(lugar, b.RetanguloDaJanela(), "a janela saiu do lugar");
 
         // Uma releitura de topologia (sem mudança real) reafirma o lugar do núcleo.
-        Afirmar.Verdadeiro(NativoTeste.PostMessage(b.Servico, NativoTeste.WM_DISPLAYCHANGE, 32, (nint)(1920 | (1080 << 16))), "WM_DISPLAYCHANGE postada");
+        Afirmar.Verdadeiro(b.Postar(b.Servico, NativoTeste.WM_DISPLAYCHANGE, 32, (nint)(1920 | (1080 << 16)), "WM_DISPLAYCHANGE"), "WM_DISPLAYCHANGE postada");
         EsperarDesde(b, marca, e => e.Chave == "POSICAO" && e["reaplicada"] == "sim", 3000, "lugar reaplicado");
         b.EsperarRetangulo(lugar, 3000, "de volta ao lugar do núcleo");
+
+        Afirmar.Igual(0, b.FecharPorWmClose());
+    }
+
+    [Teste]
+    public void ReafirmacaoTardia_JanelaMovidaDepoisDaReleitura_VoltaAoLugar_UmaVezSo()
+    {
+        // Fase 5, passo P9 (D14 do desenho dos monitores): com "Lembrar locais das janelas", o Windows pode devolver a janela
+        // ao monitor reconectado DEPOIS da releitura. A conferência tardia, 1,5 s depois de cada releitura publicada,
+        // reafirma o lugar do núcleo, uma vez: nada periódico.
+        using BuzzyEmTeste b = BuzzyEmTeste.Iniciar();
+        b.Esperar(e => e.Chave == "NUCLEO" && e["evento"] == "Loaded" && e["para"] == "Idle", 5000, "núcleo carregado");
+        RetanguloPx lugar = b.RetanguloDaJanela();
+        long marca = BuzzyEmTeste.MarcaDoLog();
+
+        Afirmar.Verdadeiro(b.Postar(b.Servico, NativoTeste.WM_DISPLAYCHANGE, 32, (nint)(1920 | (1080 << 16)), "WM_DISPLAYCHANGE"), "WM_DISPLAYCHANGE postada");
+        EventoDoLog releitura = EsperarDesde(b, marca, e => e.Chave == "TOPOLOGIA" && e["motivo"] == "WM_DISPLAYCHANGE", 3000, "releitura da topologia");
+
+        // Depois da releitura, outro agente (aqui, o teste) move a janela sem passar pelo núcleo.
+        long marcaMovida = BuzzyEmTeste.MarcaDoLog();
+        RetanguloPx fora = lugar.Deslocado(-300, -200);
+        Afirmar.Verdadeiro(b.MoverPorFora(b.Janela, 0, fora.Esquerda, fora.Topo, NativoTeste.SWP_NOZORDER, "mover a janela"), "janela movida por fora depois da releitura");
+        Afirmar.Igual(fora, b.RetanguloDaJanela(), "a janela saiu do lugar");
+
+        EventoDoLog reaplicada = EsperarDesde(b, marcaMovida, e => e.Chave == "POSICAO" && e["reaplicada"] == "sim", 4000, "lugar reaplicado pela conferência tardia");
+        Afirmar.Igual("reafirmação tardia", reaplicada["motivo"], "o motivo da reaplicação");
+        double ms = (reaplicada.Instante - releitura.Instante).TotalMilliseconds;
+        Afirmar.Verdadeiro(ms >= 1400 && ms < 3000, $"1,5 s depois da releitura: {ms:0} ms");
+        Afirmar.Igual(fora, EventoDoLog.Retangulo(reaplicada["real"]), "o log traz onde a janela estava");
+        b.EsperarRetangulo(lugar, 2000, "de volta ao lugar do núcleo");
+
+        // Uma vez por releitura: movida de novo, sem mensagem nova, a janela fica onde foi posta.
+        long marcaDeNovo = BuzzyEmTeste.MarcaDoLog();
+        Afirmar.Verdadeiro(b.MoverPorFora(b.Janela, 0, fora.Esquerda, fora.Topo, NativoTeste.SWP_NOZORDER, "mover a janela"), "janela movida por fora de novo");
+        Thread.Sleep(2500);
+        Afirmar.Igual(fora, b.RetanguloDaJanela(), "nenhuma conferência sem releitura: nada periódico");
+        Afirmar.Falso(BuzzyEmTeste.EventosDesde(marcaDeNovo).Any(e => e.Chave is "POSICAO" or "TOPOLOGIA"), "nem reaplicação nem releitura sem mensagem");
 
         Afirmar.Igual(0, b.FecharPorWmClose());
     }

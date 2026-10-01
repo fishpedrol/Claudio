@@ -4,16 +4,18 @@ using Buzzy.Visual.Pixel;
 namespace Buzzy.App.Testes;
 
 /// <summary>
-/// Sobreposições de efeito do tamagotchi (DEC-028, passo A4): 8 efeitos de desenho animado em 3
+/// Sobreposições de efeito do tamagotchi (DEC-028, passo A4): 9 efeitos de desenho animado em 3
 /// fases (a 0 é a parada, que vale sem relógio), desenhados por cima do boneco, nunca sobre os olhos e
-/// a boca e sempre dentro do quadro; e os modificadores de pose, que mexem só no corpo.
+/// a boca e sempre dentro do quadro; e os modificadores de pose, que mexem só no corpo. O suor (a onda
+/// Paranoico, adicional de 2026-10-01) entrou por último; os testes próprios dele estão em ParanoiaPixelTestes.
 /// </summary>
 internal sealed class EfeitosPixelTestes
 {
-    private static readonly EfeitoVisual[] Oito =
+    private static readonly EfeitoVisual[] Nove =
     [
         EfeitoVisual.Fumaca, EfeitoVisual.Bolhas, EfeitoVisual.Brilhos, EfeitoVisual.Estrelinhas,
         EfeitoVisual.Coracoes, EfeitoVisual.Cores, EfeitoVisual.Poeira, EfeitoVisual.Borrifo,
+        EfeitoVisual.Suor,
     ];
 
     private static PosePixel Pose(string nome) => PosesPixel.Todas.First(p => p.Nome == nome);
@@ -35,10 +37,12 @@ internal sealed class EfeitosPixelTestes
     private static int Contar(Tela t, Cor cor) => t.ParaArgb().Count(p => p == Paleta.Argb(cor));
 
     [Teste]
-    public void SaoOitoEfeitosComTresFases()
+    public void SaoNoveEfeitosComTresFases()
     {
         Afirmar.Igual(3, EfeitosPixel.Fases);
-        Afirmar.Sequencia(Oito, EfeitosPixel.Todos);
+        Afirmar.Sequencia(Nove, EfeitosPixel.Todos);
+        // Todo valor do enum, menos o Nenhum, desenha alguma coisa, na mesma ordem.
+        Afirmar.Sequencia(Enum.GetValues<EfeitoVisual>().Where(e => e != EfeitoVisual.Nenhum), EfeitosPixel.Todos, "o enum inteiro");
     }
 
     [Teste]
@@ -54,10 +58,11 @@ internal sealed class EfeitosPixelTestes
             [EfeitoVisual.Cores] = [Cor.Rosa, Cor.Neon, Cor.Lilas],
             [EfeitoVisual.Poeira] = [Cor.Branco],
             [EfeitoVisual.Borrifo] = [Cor.AguaClara],
+            [EfeitoVisual.Suor] = [Cor.AguaClara, Cor.Agua],
         };
         PosePixel parado = Pose("parado");
         Tela sem = BonecoPixel.Desenhar(parado);
-        foreach (EfeitoVisual efeito in Oito)
+        foreach (EfeitoVisual efeito in Nove)
         {
             for (int fase = 0; fase < EfeitosPixel.Fases; fase++)
             {
@@ -73,7 +78,7 @@ internal sealed class EfeitosPixelTestes
     public void AsTresFasesSaoDiferentesECiclicas()
     {
         PosePixel parado = Pose("parado");
-        foreach (EfeitoVisual efeito in Oito)
+        foreach (EfeitoVisual efeito in Nove)
         {
             Tela[] fases = [.. Enumerable.Range(0, EfeitosPixel.Fases).Select(f => BonecoPixel.Desenhar(parado, efeito: efeito, fase: f))];
             for (int a = 0; a < fases.Length; a++)
@@ -101,7 +106,7 @@ internal sealed class EfeitosPixelTestes
             Tela sem = BonecoPixel.Desenhar(pose, null, item);
             IReadOnlySet<(int X, int Y)> rosto = EfeitosPixel.AreaDoRosto(pose);
             Afirmar.Verdadeiro(rosto.Count >= 80, $"{nome}: a área do rosto cobre olhos, nariz e boca ({rosto.Count} pixels)");
-            foreach (EfeitoVisual efeito in Oito)
+            foreach (EfeitoVisual efeito in Nove)
             {
                 for (int fase = 0; fase < EfeitosPixel.Fases; fase++)
                 {
@@ -119,17 +124,19 @@ internal sealed class EfeitosPixelTestes
     {
         // A área protegida é uma máscara dos traços (achado 7 da revisão), não um retângulo: os pixels que
         // mudam entre duas caras do mesmo topete (olhos, sobrancelhas, nariz, rubor e boca) ficam todos nela.
-        // O chapéu e o tufo mudam com o topete e ficam de fora.
+        // O chapéu e o tufo mudam com o topete e ficam de fora. A área depende da cara só na que tem gota de suor
+        // (a paranoica): a diferença entre duas caras fica na união das áreas delas.
         foreach (PosePixel pose in PosesPixel.Todas.Where(p => p.Borda is null))
         {
             PosePixel semCipo = pose with { Cipo = null };
-            IReadOnlySet<(int X, int Y)> rosto = EfeitosPixel.AreaDoRosto(pose);
             foreach (IGrouping<Topete, string> grupo in Rostos.Expressoes.Keys.GroupBy(c => Rostos.Expressoes[c].Topete))
             {
                 Tela referencia = BonecoPixel.Desenhar(semCipo, grupo.First());
                 foreach (string cara in grupo.Skip(1))
                 {
                     Tela outra = BonecoPixel.Desenhar(semCipo, cara);
+                    var rosto = new HashSet<(int X, int Y)>(EfeitosPixel.AreaDoRosto(pose, grupo.First()));
+                    rosto.UnionWith(EfeitosPixel.AreaDoRosto(pose, cara));
                     for (int y = 0; y < BonecoPixel.Lado; y++)
                         for (int x = 0; x < BonecoPixel.Lado; x++)
                             if (referencia[x, y] != outra[x, y] && !rosto.Contains((x, y)))
@@ -175,7 +182,7 @@ internal sealed class EfeitosPixelTestes
                    || (sem[x, y] is Cor.Creme or Cor.CremeSombra && (x + 0.5 - mx) * (x + 0.5 - mx) + (y + 0.5 - my) * (y + 0.5 - my) <= 9);
             // (Em cipo-1 a aba do chapéu esconde quase toda a mão; sobram 3 pixels.)
             Afirmar.Verdadeiro(Enumerable.Range(0, BonecoPixel.Lado * BonecoPixel.Lado).Count(i => sem[i % BonecoPixel.Lado, i / BonecoPixel.Lado] is Cor.Creme or Cor.CremeSombra && AVista(i % BonecoPixel.Lado, i / BonecoPixel.Lado)) >= 3, $"{pose.Nome}: a mão no cipó");
-            foreach (EfeitoVisual efeito in Oito)
+            foreach (EfeitoVisual efeito in Nove)
             {
                 for (int fase = 0; fase < EfeitosPixel.Fases; fase++)
                 {
@@ -195,7 +202,7 @@ internal sealed class EfeitosPixelTestes
         foreach ((string nome, PosePixel pose, string? item) in PosesParaConferir())
         {
             Tela sem = BonecoPixel.Desenhar(pose, null, item);
-            foreach (EfeitoVisual efeito in Oito)
+            foreach (EfeitoVisual efeito in Nove)
             {
                 for (int fase = 0; fase < EfeitosPixel.Fases; fase++)
                 {
@@ -222,6 +229,7 @@ internal sealed class EfeitosPixelTestes
         [EfeitoVisual.Cores] = [Cor.Rosa, Cor.Lilas, Cor.Neon, Cor.Agua, Cor.Branco],
         [EfeitoVisual.Poeira] = [Cor.Branco, Cor.PapelSombra],
         [EfeitoVisual.Borrifo] = [Cor.AguaClara, Cor.Agua],
+        [EfeitoVisual.Suor] = [Cor.AguaClara, Cor.Agua, Cor.Branco],
     };
 
     [Teste]
@@ -233,7 +241,7 @@ internal sealed class EfeitosPixelTestes
         foreach ((string nome, PosePixel pose, string? item) in PosesParaConferir())
         {
             Tela sem = BonecoPixel.Desenhar(pose, null, item);
-            foreach (EfeitoVisual efeito in Oito)
+            foreach (EfeitoVisual efeito in Nove)
             {
                 for (int fase = 0; fase < EfeitosPixel.Fases; fase++)
                 {
@@ -280,7 +288,7 @@ internal sealed class EfeitosPixelTestes
     [Teste]
     public void SaoDeterministicos()
     {
-        foreach (EfeitoVisual efeito in Oito)
+        foreach (EfeitoVisual efeito in Nove)
             for (int fase = 0; fase < EfeitosPixel.Fases; fase++)
                 Afirmar.Sequencia(BonecoPixel.Desenhar(Pose("andando-2"), efeito: efeito, fase: fase).ParaArgb(), BonecoPixel.Desenhar(Pose("andando-2"), efeito: efeito, fase: fase).ParaArgb(), $"{efeito} {fase}");
     }
@@ -304,6 +312,7 @@ internal sealed class EfeitosPixelTestes
             PosePixel apaixonado = EfeitosPixel.Modificar(parado, EfeitoVisual.Coracoes, fase);
             Afirmar.Igual((parado.Tronco + new[] { -3.0, 0, 3 }[fase], parado.QuadrilY, Cauda.Alta), (apaixonado.Tronco, apaixonado.QuadrilY, apaixonado.Cauda), $"apaixonado balança, fase {fase}");
             Afirmar.Igual(parado.Cabeca + new[] { -4.0, 4, 0 }[fase], EfeitosPixel.Modificar(parado, EfeitoVisual.Cores, fase).Cabeca, $"viajando balança a cabeça, fase {fase}");
+            Afirmar.Igual(parado with { QuadrilX = parado.QuadrilX + new[] { 0.0, -1, 1 }[fase] }, EfeitosPixel.Modificar(parado, EfeitoVisual.Suor, fase), $"o paranoico treme 1 pixel, fase {fase}");
             foreach (EfeitoVisual sem in new[] { EfeitoVisual.Nenhum, EfeitoVisual.Poeira, EfeitoVisual.Borrifo })
                 Afirmar.Igual(parado, EfeitosPixel.Modificar(parado, sem, fase), $"{sem} não mexe na pose");
         }
@@ -317,7 +326,7 @@ internal sealed class EfeitosPixelTestes
         // (mancando), e o tonto saltava de +8° para −8°. Cada balanço, somado nas três fases, volta ao meio,
         // e de uma fase para a seguinte (a 2 volta à 0) nada gira mais de 12°.
         PosePixel parado = Pose("parado");
-        foreach (EfeitoVisual efeito in Oito)
+        foreach (EfeitoVisual efeito in Nove)
         {
             foreach ((string parte, Func<PosePixel, double> angulo) in new (string, Func<PosePixel, double>)[] { ("tronco", p => p.Tronco), ("cabeça", p => p.Cabeca) })
             {
@@ -343,7 +352,7 @@ internal sealed class EfeitosPixelTestes
         Afirmar.Falso(EfeitosPixel.Modificavel(parado with { Segura = Segura.MaoB }), "segurando um item");
         foreach (PosePixel pose in PosesPixel.Todas.Concat(UsosPixel.Poses))
         {
-            foreach (EfeitoVisual efeito in Oito)
+            foreach (EfeitoVisual efeito in Nove)
             {
                 for (int fase = 0; fase < EfeitosPixel.Fases; fase++)
                 {
@@ -369,7 +378,7 @@ internal sealed class EfeitosPixelTestes
             foreach (string cara in new[] { pose.Expressao, "surpreso", "bebado" })
             {
                 (int e0, int t0, int d0, int b0) = Afirmar.NaoNulo(BonecoPixel.Desenhar(semCipo, cara).Limites(), pose.Nome);
-                foreach (EfeitoVisual efeito in Oito)
+                foreach (EfeitoVisual efeito in Nove)
                 {
                     for (int fase = 0; fase < EfeitosPixel.Fases; fase++)
                     {

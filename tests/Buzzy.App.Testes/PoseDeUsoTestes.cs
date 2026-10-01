@@ -129,7 +129,10 @@ internal sealed class PoseDeUsoTestes
         }
     }
 
-    /// <summary>A sobreposição de cada onda (crítica, L12), escrita por extenso.</summary>
+    /// <summary>
+    /// A sobreposição de cada onda (crítica, L12), escrita por extenso; a paranoia (adicional de 2026-10-01, DEC-028), o
+    /// suor de quem acha que tem alguém no teto.
+    /// </summary>
     private static readonly Dictionary<Onda, EfeitoVisual> SobreposicaoDaTabela = new()
     {
         [Onda.Satisfeito] = EfeitoVisual.Nenhum,
@@ -142,6 +145,7 @@ internal sealed class PoseDeUsoTestes
         [Onda.Euforico] = EfeitoVisual.Coracoes,
         [Onda.Tonto] = EfeitoVisual.Estrelinhas,
         [Onda.Viajando] = EfeitoVisual.Cores,
+        [Onda.Paranoico] = EfeitoVisual.Suor,
     };
 
     /// <summary>Retratos e dinâmicas de lugares diferentes, com a onda dada: andando, parado, no cipó, com gesto, usando no chão e na parede, escondido.</summary>
@@ -205,6 +209,8 @@ internal sealed class PoseDeUsoTestes
     [Teste]
     public void OsGestosDaOndaUsamAsPosesProvisoriasEATremedeiraAlternaComOParado()
     {
+        // Os da paranoia (adicional de 2026-10-01, DEC-028) têm desenho próprio na arte, com a cara "paranoico" da pose:
+        // olhar pro teto, apontando para cima, e agachar, segurando o chapéu.
         var poses = new Dictionary<Gesto, string>
         {
             [Gesto.Soluco] = "soluco",
@@ -212,6 +218,8 @@ internal sealed class PoseDeUsoTestes
             [Gesto.Gargalhada] = "gargalhada",
             [Gesto.Espirro] = "espirro",
             [Gesto.Tosse] = "tosse",
+            [Gesto.OlharProTeto] = "olharproteto",
+            [Gesto.Agachar] = "agachar",
         };
         foreach ((Gesto gesto, string pose) in poses)
         {

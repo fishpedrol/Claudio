@@ -204,7 +204,9 @@ public static partial class Maquina
         /// <summary>
         /// Ele usa o item solto sobre ele (4.6): o item sai (<see cref="MotivoDaRemocao.Usado"/>), o uso começa no apoio em
         /// que ele está, com a cara de quem usa, e a onda vale desde já (C16): interromper o uso não a desfaz. Descansando,
-        /// acorda antes; andando, reagindo ou pousando, o que fazia é cortado.
+        /// acorda antes; andando, reagindo ou pousando, o que fazia é cortado. A regra da transição diz também o que ele fez
+        /// na onda da frente, com o alívio (<see cref="DescreverOAlivio"/>), e na paranoia (<see cref="SomarACarga"/>). As
+        /// ondas mudam antes de ele entrar em USING, mas a cara de quem usa vale por cima de qualquer cara de fase.
         /// </summary>
         private void UsarItem(ItemNoMundo item)
         {
@@ -213,9 +215,15 @@ public static partial class Maquina
             _s = _s with { Itens = _s.Itens.Sem(item.Id) };
             _removidos[item.Id] = MotivoDaRemocao.Usado;
             if (_s.Estado == Estado.Resting) _s = _s with { Sinal = Sinal.Acordou };
-            _s = _s with { Uso = new Uso(item.Item, dados.Verbo, dados.PassosDoUso, apoio), PassosRestantes = dados.PassosDoUso, Expressao = dados.CaraDurante };
-            IrPara(Estado.Using, $"ITEM_DRAG_END sobre o personagem: {dados.Verbo} {item.Item}");
-            AplicarNaOnda(dados);
+            string alivio = DescreverOAlivio(dados);
+            (string paranoia, bool comecou) = AplicarNaOnda(dados);
+            _s = _s with
+            {
+                Uso = new Uso(item.Item, dados.Verbo, dados.PassosDoUso, apoio) { ComecouAParanoia = comecou },
+                PassosRestantes = dados.PassosDoUso,
+                Expressao = dados.CaraDurante,
+            };
+            IrPara(Estado.Using, $"ITEM_DRAG_END sobre o personagem: {dados.Verbo} {item.Item}{alivio}{paranoia}");
         }
 
         /// <summary>
@@ -238,7 +246,8 @@ public static partial class Maquina
 
         /// <summary>
         /// Fim do uso: a cara volta à de base e a acomodação o devolve ao mesmo apoio (4.6): no chão, IDLE; na parede e no
-        /// cipó, agarrado, preso se já estava (DEC-024); no esconderijo, espiando na mesma borda (DEC-025).
+        /// cipó, agarrado, preso se já estava (DEC-024); no esconderijo, espiando na mesma borda (DEC-025). Se o uso começou
+        /// a paranoia, ele olha pro teto, se ficou livre para isso (<see cref="OlharProTetoNoComecoDaParanoia"/>).
         /// </summary>
         private void FimDoUso()
         {
@@ -246,6 +255,7 @@ public static partial class Maquina
             VoltarACaraDeBase();
             if (_s.Lugar is not { } lugar) return;
             Acomodar(lugar.Ancora, $"USING: fim do uso de {uso?.Item}", apoio: uso?.Apoio);
+            if (uso is { ComecouAParanoia: true }) OlharProTetoNoComecoDaParanoia();
         }
 
         // ---------------------------------------------------------------- física dos itens
@@ -300,17 +310,36 @@ public static partial class Maquina
         }
 
         /// <summary>
-        /// Depois de uma mudança de topologia (4.8), cada item fora da mão é reacomodado como o personagem, pela posição
-        /// relativa no monitor dele; fora do chão, volta a cair. O da mão segue o cursor.
+        /// Depois de uma mudança de topologia (4.8), cada item fora da mão segue a mesma regra do personagem (DEC-030): no
+        /// monitor que não mudou de geometria, no máximo transladado, ele continua como estava, caindo ou no chão, e anda junto;
+        /// senão, a posição dele acompanha a topologia (<see cref="Posicionador.Rebasear"/>, com o sobrevivente medido nas
+        /// coordenadas antigas) e é reacomodada pela posição relativa; fora do chão, volta a cair. O da mão segue o cursor, e o
+        /// Windows leva a janela e o cursor com o monitor físico: o lugar dele anda com o monitor em que está, sem validar, como
+        /// o arraste do personagem (<see cref="Posicionador.AcompanharPonto"/>; revisão do bloco P6-P9, achado 6). Largado antes
+        /// do próximo movimento, ele fica no mesmo monitor físico.
         /// </summary>
-        private void ReacomodarItens(Topologia nova)
+        private void ReacomodarItens(Topologia antiga, Topologia nova)
         {
             if (_s.Itens.Quantidade == 0) return;
             ItensNoMundo itens = _s.Itens;
             foreach (ItemNoMundo item in _s.Itens.Todos)
             {
-                if (item.NaMao) continue;
-                (Posicionamento r, PosicaoDoPersonagem p) = Posicionador.Reacomodar(nova, item.Posicao, _cfg.TamanhoDoItem);
+                if (item.NaMao)
+                {
+                    PontoPx ancora = Posicionador.AcompanharPonto(antiga, nova, item.Lugar.Ancora);
+                    itens = itens.Com(item with { Lugar = LugarDoItem(MonitorDaAncora(nova, ancora), ancora), Y = item.Y + ancora.Y - item.Lugar.Ancora.Y });
+                    continue;
+                }
+                Posicionamento l = item.Lugar;
+                if (Posicionador.MonitorCorrespondente(antiga, nova, l.Monitor.Chave, l.Monitor.Tela) is { } mesmo
+                    && Posicionador.SoTranslacao(l.Monitor, mesmo, out int dx, out int dy))
+                {
+                    var lugar = new Posicionamento(mesmo, new PontoPx(l.Ancora.X + dx, l.Ancora.Y + dy), l.Tamanho, l.Retangulo.Deslocado(dx, dy));
+                    itens = itens.Com(item with { Lugar = lugar, Posicao = Posicionador.Descrever(lugar), Y = item.Y + dy });
+                    continue;
+                }
+                PosicaoDoPersonagem acompanhada = Posicionador.Rebasear(antiga, nova, item.Posicao, _cfg.TamanhoDoItem);
+                (Posicionamento r, PosicaoDoPersonagem p) = Posicionador.Reacomodar(nova, acompanhada, _cfg.TamanhoDoItem);
                 SituacaoDoItem situacao = r.Ancora.Y == r.Monitor.AreaUtil.Base ? SituacaoDoItem.NoChao : SituacaoDoItem.Caindo;
                 itens = itens.Com(item with { Situacao = situacao, Lugar = r, Posicao = p, Y = r.Ancora.Y, VY = 0, Quiques = 0 });
             }

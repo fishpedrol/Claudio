@@ -11,6 +11,9 @@ public enum Mao
 {
     Aberta,
     Fechada,
+
+    /// <summary>O punho com o indicador esticado para cima, saindo do meio do alto dele (a paranoia aponta para o teto).</summary>
+    Apontando,
 }
 
 public enum Cauda
@@ -188,6 +191,9 @@ public static class BonecoPixel
     private const double Coxa = 5.6;
     private const double Canela = 5.2;
 
+    /// <summary>Do centro do punho até onde chega o traço do indicador da <see cref="Mao.Apontando"/>, para cima.</summary>
+    private const double PontaDoDedo = 5.6;
+
     /// <summary>
     /// Desenha a pose numa tela nova de 64 × 64. <paramref name="expressao"/> nula vale a cara da
     /// pose (nas poses de uso, a cara é sempre a da pose: a apresentação passa nulo). O
@@ -243,14 +249,18 @@ public static class BonecoPixel
             DesenharCabecaDePerfil(tela, e, rosto);
         }
 
+        // A gota de suor da cara paranoica vem por cima dos braços da frente: é um sinal de desenho animado, que
+        // precisa ficar à vista (no agachar, os antebraços passam pelas têmporas).
+        if (rosto.Gota) DesenharGota(tela, e, pose.Vista);
+
         // Sobreposições de efeito (DEC-028): a da pose e a pedida, por cima do corpo e fora dos olhos
-        // e da boca; o contorno final as fecha.
+        // e da boca (e da gota de suor); o contorno final as fecha.
         if (pose.EfeitoDaPose != EfeitoVisual.Nenhum || efeito != EfeitoVisual.Nenhum)
         {
             PontosDoEsqueleto pontos = Pontos(pose, e);
             bool cipo = pose.Cipo is not null;
-            EfeitosPixel.Desenhar(tela, pontos, pose.Vista, pose.EfeitoDaPose, pose.FaseDoEfeito, cipo);
-            EfeitosPixel.Desenhar(tela, pontos, pose.Vista, efeito, fase, cipo);
+            EfeitosPixel.Desenhar(tela, pontos, pose.Vista, pose.EfeitoDaPose, pose.FaseDoEfeito, cipo, rosto.Gota);
+            EfeitosPixel.Desenhar(tela, pontos, pose.Vista, efeito, fase, cipo, rosto.Gota);
         }
 
         if (pose.Borda is { } borda)
@@ -509,7 +519,19 @@ public static class BonecoPixel
         Mascara palma = mao == Mao.Aberta
             ? Nova().Elipse(centroDaMao.X, centroDaMao.Y, 2.2, 2.9, -membro.Inferior)
             : Nova().Circulo(centroDaMao.X, centroDaMao.Y, 2.2);
+        // Apontando: o indicador sai do meio do alto do punho, reto para cima, na coluna do centro da mão: um traço de
+        // 1 pixel, 4 acima do punho, pintado junto com a mão (o contorno passa em volta dos dois) e de pele clara (fino
+        // assim, a sombra o pintaria inteiro). Na direção do antebraço inclinado, ele saía curto pela beira do punho e
+        // lia como um polegar (revisão da paranoia, achado 4).
+        Mascara? dedo = null;
+        if (mao == Mao.Apontando)
+        {
+            double x = Math.Floor(centroDaMao.X) + 0.5;
+            dedo = Nova().Capsula(x, centroDaMao.Y - 1.4, x, centroDaMao.Y - PontaDoDedo, 0.7, 0.7).Subtrair(palma);
+            palma.Unir(dedo);
+        }
         tela.Pintar(palma, longe ? Cor.CremeSombra : Cor.Creme, longe ? Cor.PessegoEscuro : Cor.CremeSombra, null, Cor.Contorno);
+        if (dedo is not null) tela.Preencher(dedo, longe ? Cor.CremeSombra : Cor.Creme);
         if (mao == Mao.Aberta && !longe)
         {
             // Dedos: dois riscos de sombra na ponta da mão, na direção do antebraço.
@@ -736,6 +758,31 @@ public static class BonecoPixel
         Mascara labio = Nova().Elipse(abaX, abaY, abaRx, abaRy, graus)
             .Subtrair(Nova().Poligono(G(esquerda, topo), G(direita, topo), G(direita, abaY + 0.2), G(esquerda, abaY + 0.2)));
         tela.Pintar(labio, Cor.Palha, Cor.PalhaEscura, null, Cor.PalhaEscura);
+    }
+
+    /// <summary>
+    /// A gota de suor da cara paranoica (<see cref="Rosto.Gota"/>): só o preenchimento, com a ponta para cima e o brilho
+    /// do lado da luz; o contorno vem da linha interna, onde ela passa por cima do desenho, e do contorno final.
+    /// </summary>
+    internal static readonly Carimbo GotaDeSuor = new(
+        ".A.",
+        "AAa",
+        "WAa",
+        "Aaa");
+
+    /// <summary>
+    /// O canto de cima à esquerda da <see cref="GotaDeSuor"/>, a partir do centro arredondado da cabeça (o dos carimbos do
+    /// rosto): de frente, na têmpora da esquerda da tela, entre a aba e a orelha (a mão que aponta para o teto é a B, do
+    /// outro lado); de perfil, atrás do olho, sob a aba.
+    /// </summary>
+    internal static (int X, int Y) CantoDaGota(Vista vista, int ex, int ey)
+        => vista == Vista.Frente ? (ex - 13, ey - 6) : (ex - 3, ey - 8);
+
+    private static void DesenharGota(Tela tela, Esqueleto e, Vista vista)
+    {
+        (double cx, double cy) = e.Cabeca;
+        (int x, int y) = CantoDaGota(vista, (int)Math.Round(cx), (int)Math.Round(cy));
+        tela.Carimbar(GotaDeSuor, x, y, linhaInterna: Cor.Contorno);
     }
 
     /// <summary>A primeira linha com algum pixel da máscara; <see cref="int.MaxValue"/> se ela estiver vazia.</summary>

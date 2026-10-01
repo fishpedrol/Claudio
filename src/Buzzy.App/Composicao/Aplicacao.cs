@@ -42,8 +42,10 @@ internal sealed record OpcoesDaAplicacao(bool MovimentoPausado, ulong? Semente, 
 /// mouse, bandeja, menu e mensagens do Windows) e escolhe o quadro do sprite pelo retrato.
 ///
 /// Ocioso por eventos (DEC-011): em repouso, nada roda em timer periódico. Os timers são de uma
-/// vez só — o agrupamento das mensagens de topologia (300 ms depois de uma mensagem, com até
-/// três novas tentativas se a leitura vier incoerente), novas tentativas de pôr o ícone na
+/// vez só — a releitura da topologia depois das mensagens do Windows (300 ms depois da última, com
+/// teto de 1 s desde a primeira e até três novas tentativas se a leitura vier incoerente) e a
+/// conferência tardia do lugar das janelas, 1,5 s depois de cada releitura publicada (Fase 5,
+/// passo P9; <see cref="AgendaDaReleitura"/>), novas tentativas de pôr o ícone na
 /// bandeja, a próxima decisão da agenda autônoma, o fim de cada fase da onda de um item do
 /// tamagotchi (DEC-028) e a gravação do settings.json com atraso, com as novas tentativas dela
 /// (Fase 5, passo P7; <see cref="AgendaDeGravacao"/>). O relógio de passo fixo só corre enquanto o
@@ -57,14 +59,8 @@ internal sealed record OpcoesDaAplicacao(bool MovimentoPausado, ulong? Semente, 
 /// </summary>
 internal sealed partial class Aplicacao
 {
-    /// <summary>
-    /// Espera depois da última mensagem de topologia antes de reler (ARCHITECTURE.md 2.4).
-    /// Valor provisório: o intervalo definitivo será calibrado em P5, antes da Fase 5.
-    /// </summary>
-    private static readonly TimeSpan Agrupamento = TimeSpan.FromMilliseconds(300);
-
-    /// <summary>Esperas das novas tentativas quando a leitura da topologia vem incoerente.</summary>
-    private static readonly TimeSpan[] EsperasDeReleitura = [TimeSpan.FromMilliseconds(500), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2)];
+    /// <summary>O motivo da conferência tardia nas linhas <c>POSICAO|reaplicada</c> e <c>ITEM|reaplicado</c>.</summary>
+    private const string MotivoDaReafirmacaoTardia = "reafirmação tardia";
 
     private const int TentativasDaBandeja = 3;
 
@@ -74,9 +70,17 @@ internal sealed partial class Aplicacao
     private readonly Application _app;
     private readonly InstanciaUnica _instancia;
     private readonly OpcoesDaAplicacao _opcoes;
-    private readonly DispatcherTimer _agrupador;
+
+    /// <summary>
+    /// A releitura da topologia depois das mensagens do Windows (Fase 5, passo P9; crítica, C11): o agrupamento com teto, as
+    /// novas tentativas e a conferência tardia, em disparos únicos na prioridade normal do Dispatcher.
+    /// </summary>
+    private readonly AgendaDaReleitura _releitura;
+
+    /// <summary>A origem do relógio monotônico da <see cref="_releitura"/>.</summary>
+    private readonly long _origemDoRelogio = Stopwatch.GetTimestamp();
+
     private readonly DispatcherTimer _repetirBandeja;
-    private readonly List<string> _motivosPendentes = [];
     private readonly Dictionary<Evento, string> _motivosDoNucleo = new(ReferenceEqualityComparer.Instance);
     private readonly ArbitroDeGestos _arbitro = new();
 
@@ -99,8 +103,9 @@ internal sealed partial class Aplicacao
     private bool _descarregouNoErro;
 
     /// <summary>
-    /// A última leitura coerente da topologia, a mesma de <see cref="_topologia"/>, atualizada em todo caminho que relê:
-    /// guarda o nome GDI de cada chave estável, que só vai para o log (DEC-030).
+    /// A última leitura coerente da topologia, a mesma de <see cref="_topologia"/>, atualizada junto com ela em todo caminho
+    /// que a entrega ao núcleo (a partida, a releitura agrupada e o mostrar): guarda o nome GDI de cada chave estável, que só
+    /// vai para o log (DEC-030). A leitura da barra recriada só escolhe o tamanho do ícone (passo P9).
     /// </summary>
     private LeituraDaTopologia? _leitura;
 
@@ -112,7 +117,6 @@ internal sealed partial class Aplicacao
     private long _passosDoRelogio;
     private int _dpiDoSprite;
     private int _dpiDoIcone;
-    private int _releiturasFalhas;
     private int _tentativasDaBandeja;
     private bool _visivel;
     private bool _primeiroQuadroRegistrado;
@@ -136,8 +140,11 @@ internal sealed partial class Aplicacao
         _app = app;
         _instancia = instancia;
         _opcoes = opcoes ?? OpcoesDaAplicacao.Padrao;
-        _agrupador = new DispatcherTimer(DispatcherPriority.Normal) { Interval = Agrupamento };
-        _agrupador.Tick += AoAgrupar;
+        _releitura = new AgendaDaReleitura(
+            () => Stopwatch.GetElapsedTime(_origemDoRelogio),
+            (espera, acao) => DisparoUnico.NoDispatcher(espera, acao, DispatcherPriority.Normal),
+            RelerAgrupada,
+            ReafirmarDepoisDaReleitura);
         _repetirBandeja = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromSeconds(2) };
         _repetirBandeja.Tick += (_, _) =>
         {
@@ -298,64 +305,61 @@ internal sealed partial class Aplicacao
 
     private void AoRecriarBarra()
     {
-        // A barra de tarefas reinicia ou o DPI do monitor principal muda (a Shell difunde a
-        // mesma mensagem): o ícone é refeito no tamanho do DPI atual.
+        // A barra de tarefas reinicia (o Explorer recomeçou) ou o DPI do monitor principal muda (a Shell difunde a mesma
+        // mensagem): o ícone volta na hora, no tamanho do DPI do principal lido agora. A topologia, que pode ter mudado com a
+        // barra (a área útil, o DPI), vai ao núcleo pela releitura agrupada, como as outras mensagens (Fase 5, passo P9;
+        // crítica, C12): esta leitura só escolhe o tamanho do ícone, e a topologia da raiz só muda junto com a do núcleo.
         Diagnostico.Evento("BANDEJA", ("barraDeTarefasRecriada", "sim"));
-        if (_bandeja is null) return;
-        if (LeitorDeTopologia.LerDetalhado(out _) is { } atual)
+        if (_bandeja is not null)
         {
-            _leitura = atual;
-            _topologia = atual.Topologia;
+            if (LeitorDeTopologia.Ler(out _) is { } atual) _dpiDoIcone = atual.Principal.Dpi;
+            _bandeja.TrocarIcone(CriarIcone(_dpiDoIcone), aplicar: false);
+            _tentativasDaBandeja = 0;
+            if (!_bandeja.Recriar()) AgendarNovaTentativaDaBandeja();
+            _servico!.NotificacoesVersao4 = _bandeja.Versao4;
         }
-        _dpiDoIcone = _topologia.Principal.Dpi;
-        _bandeja.TrocarIcone(CriarIcone(_dpiDoIcone), aplicar: false);
-        _tentativasDaBandeja = 0;
-        if (!_bandeja.Recriar()) AgendarNovaTentativaDaBandeja();
-        _servico!.NotificacoesVersao4 = _bandeja.Versao4;
+        AoPossivelMudancaDeTopologia("TaskbarCreated");
     }
 
+    /// <summary>
+    /// Uma mensagem do Windows que pode ter mudado a topologia (WM_DISPLAYCHANGE, WM_SETTINGCHANGE com SPI_SETWORKAREA, o
+    /// WM_DPICHANGED da janela do personagem ou a TaskbarCreated): vai crua ao log, só com o tipo (<c>MENSAGEM|tipo=</c>,
+    /// para calibrar o agrupamento no protótipo P5), e pede a releitura agrupada (crítica, C11). No passo P10, o árbitro do
+    /// sistema recebe o sinal entre as duas coisas.
+    /// </summary>
     private void AoPossivelMudancaDeTopologia(string motivo)
     {
         if (_encerrando) return;
-        _motivosPendentes.Add(motivo);
-        _releiturasFalhas = 0;
-        _agrupador.Stop();
-        _agrupador.Interval = Agrupamento;
-        _agrupador.Start();
+        Diagnostico.Evento("MENSAGEM", ("tipo", motivo));
+        _releitura.Agendar(motivo);
     }
 
-    private void AoAgrupar(object? remetente, EventArgs e)
+    /// <summary>
+    /// A releitura agrupada (<see cref="AgendaDaReleitura"/>). Coerente, a topologia vai ao núcleo (TOPOLOGY_CHANGED), que
+    /// revalida o personagem e reacomoda os itens (DEC-030); depois, o lugar das janelas é reafirmado (sem mexer na ordem Z), e
+    /// o ícone muda se o DPI do principal mudou. Incoerente (troca de modo em andamento), a anterior continua valendo, e a
+    /// agenda tenta de novo algumas vezes, com esperas crescentes. Devolve se publicou.
+    /// </summary>
+    private bool RelerAgrupada(PedidoDeReleitura pedido)
     {
-        _agrupador.Stop();
-        if (_encerrando) return;
-        string motivos = string.Join(",", _motivosPendentes);
+        if (_encerrando) return false;
+        string motivos = pedido.Motivos;
 
-        LeituraDaTopologia? leitura = LeitorDeTopologia.LerDetalhado(out string? erro);
+        // A última tentativa de uma rajada é parcial: um monitor que não pode ser lido por inteiro fica de fora, em vez de
+        // manter para sempre uma topologia que já não existe (revisão de correção do bloco P6-P9, achado 7).
+        LeituraDaTopologia? leitura = LeitorDeTopologia.LerDetalhado(out string? erro, parcial: !pedido.NovaTentativaSeFalhar);
         if (leitura is null)
         {
-            // Leitura incoerente (troca de modo em andamento): mantém a anterior e tenta de
-            // novo algumas vezes, com esperas crescentes. Não vira atividade periódica.
-            bool vaiRepetir = _releiturasFalhas < EsperasDeReleitura.Length;
-            Diagnostico.Evento("TOPOLOGIA", ("motivo", motivos), ("erro", erro), ("mantida", "anterior"), ("novaTentativa", vaiRepetir));
-            if (vaiRepetir)
-            {
-                _agrupador.Interval = EsperasDeReleitura[_releiturasFalhas++];
-                _agrupador.Start();
-            }
-            else
-            {
-                _motivosPendentes.Clear();
-            }
-            return;
+            Diagnostico.Evento("TOPOLOGIA", ("motivo", motivos), ("erro", erro), ("mantida", "anterior"), ("novaTentativa", pedido.NovaTentativaSeFalhar));
+            return false;
         }
 
-        _motivosPendentes.Clear();
         Topologia nova = leitura.Topologia;
         bool mudou = !nova.MesmaConfiguracao(_topologia);
         _leitura = leitura;
         _topologia = nova;
         Enviar(new TopologyChanged(nova), motivos);
-        ReafirmarLugarDaJanela(motivos);
+        ReafirmarLugares(motivos);
 
         if (nova.Principal.Dpi != _dpiDoIcone && _bandeja is not null)
         {
@@ -365,12 +369,25 @@ internal sealed partial class Aplicacao
 
         Diagnostico.Evento("TOPOLOGIA",
             [("motivo", motivos), ("mudou", mudou ? "sim" : "nao"), ("visivel", _visivel), ("impressao", nova.ImpressaoDigital), .. CamposDasChaves(leitura)]);
+        return true;
+    }
+
+    /// <summary>
+    /// A conferência tardia, 1,5 s depois da última releitura publicada (D14 do desenho dos monitores): com "Lembrar
+    /// locais das janelas", o Windows pode devolver uma janela ao monitor reconectado depois da releitura, e o lugar é o
+    /// que o núcleo decidiu. Um disparo por rajada, nunca periódico.
+    /// </summary>
+    private void ReafirmarDepoisDaReleitura()
+    {
+        if (_encerrando) return;
+        ReafirmarLugares(MotivoDaReafirmacaoTardia);
     }
 
     /// <summary>
     /// As chaves de uma leitura, para a linha TOPOLOGIA do log (DEC-030): <c>chaves=chave=nomeGdi;…</c> na ordem do
     /// Windows, <c>consulta=ok</c> ou o motivo da falha (função e código), e as contagens de chaves do cache, da reserva
-    /// e de alvos sem nome. A chave é o resumo opaco; nem o caminho do dispositivo nem o nome do monitor vão ao log.
+    /// e de alvos sem nome. A chave é o resumo opaco; nem o caminho do dispositivo nem o nome do monitor vão ao log. Numa
+    /// leitura parcial, também quantos monitores ficaram de fora e a falha do primeiro (função e código).
     /// </summary>
     private static (string Campo, object? Valor)[] CamposDasChaves(LeituraDaTopologia leitura) =>
     [
@@ -379,9 +396,22 @@ internal sealed partial class Aplicacao
         ("cache", leitura.ChavesDoCache),
         ("reserva", leitura.ChavesDeReserva),
         ("semNome", leitura.CaminhosSemNome),
+        .. leitura.MonitoresIgnorados > 0 ? [("ignorados", leitura.MonitoresIgnorados), ("falhaDoIgnorado", leitura.MotivoDoIgnorado)] : Array.Empty<(string, object?)>(),
     ];
 
     // ------------------------------------------------------------------ ações
+
+    /// <summary>
+    /// Depois de uma releitura publicada e na conferência tardia dela: o lugar da janela do personagem
+    /// (<see cref="ReafirmarLugarDaJanela"/>) e, com ele à vista, o das janelas dos itens
+    /// (<see cref="GerenteDosItens.ReafirmarLugares"/>). Só o lugar: as duas movem as janelas sem mudar a ordem Z, que nunca
+    /// é reafirmada por timer (SECURITY.md 2) e, nos itens, só muda nos eventos da DEC-028, item 22.
+    /// </summary>
+    private void ReafirmarLugares(string motivo)
+    {
+        ReafirmarLugarDaJanela(motivo);
+        if (_visivel && !_encerrando) _itens?.ReafirmarLugares(motivo);
+    }
 
     /// <summary>
     /// Depois de reler a topologia: se a janela não está onde o núcleo a pôs (o Windows a
@@ -401,6 +431,11 @@ internal sealed partial class Aplicacao
         AplicarNaJanela(lugar);
     }
 
+    /// <summary>
+    /// A topologia da partida: até cinco leituras, 200 ms entre elas; depois, uma leitura parcial, o último recurso, que
+    /// deixa de fora um monitor que não pode ser lido por inteiro (revisão de correção do bloco P6-P9, achado 7): com uma
+    /// falha persistente de um monitor, o Buzzy não partia. Nula se nem ela sai.
+    /// </summary>
     private static LeituraDaTopologia? LerTopologiaNaPartida()
     {
         string? erro = null;
@@ -410,7 +445,8 @@ internal sealed partial class Aplicacao
             if (leitura is not null) return leitura;
             Thread.Sleep(200);
         }
-        Diagnostico.Evento("ERRO", ("etapa", "topologia inicial"), ("mensagem", erro));
+        if (LeitorDeTopologia.LerDetalhado(out string? erroDaParcial, parcial: true) is { } parcial) return parcial;
+        Diagnostico.Evento("ERRO", ("etapa", "topologia inicial"), ("mensagem", erro), ("parcial", erroDaParcial));
         return null;
     }
 
@@ -917,7 +953,8 @@ internal sealed partial class Aplicacao
         // fechado antes de destruir as janelas.
         Win32.EndMenu();
         _personagem?.SoltarCaptura();
-        _agrupador.Stop();
+        // A releitura agendada e a conferência tardia (disparos únicos) não saem depois do encerramento.
+        _releitura.Parar();
         _repetirBandeja.Stop();
         PararRelogio();
         CancelarDecisaoAutonoma();

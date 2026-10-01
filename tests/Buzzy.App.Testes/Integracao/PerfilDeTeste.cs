@@ -29,20 +29,34 @@ internal static class PerfilDeTeste
     /// <summary>
     /// Apaga <c>pastaDoBuzzy\testes\perfil</c>, se existir, com tudo o que houver dentro; devolve se apagou. Recusa um
     /// nome de perfil inválido (<see cref="PastaDeDados.NomeDePerfilValido"/>) e um caminho com junção ou link simbólico
-    /// até a pasta do perfil: a limpeza nunca segue para fora da pasta do Buzzy.
+    /// até a pasta do perfil: a limpeza nunca segue para fora da pasta do Buzzy. Cada trecho que existe é conferido antes
+    /// de tudo, também quando a pasta do perfil ainda não existe: com a pasta do Buzzy ou a dos testes como junção, o Buzzy
+    /// de teste e o próprio teste gravariam do outro lado (revisão de segurança do bloco P6-P9, achado 5).
     /// </summary>
     internal static bool Limpar(string perfil, string pastaDoBuzzy)
     {
         string pasta = Pasta(perfil, pastaDoBuzzy);
-        if (!Directory.Exists(pasta)) return false;
-
         string testes = Path.GetDirectoryName(pasta)!;
         foreach (string trecho in new[] { pastaDoBuzzy, testes, pasta })
         {
-            if ((File.GetAttributes(trecho) & FileAttributes.ReparsePoint) != 0)
+            if (Atributos(trecho) is { } atributos && (atributos & FileAttributes.ReparsePoint) != 0)
                 throw new InvalidOperationException($"{trecho} é uma junção ou um link: a limpeza do perfil de teste não segue para fora da pasta do Buzzy.");
         }
+        if (!Directory.Exists(pasta)) return false;
         Directory.Delete(pasta, recursive: true);
         return true;
+    }
+
+    /// <summary>Os atributos do próprio trecho (de uma junção, os dela, mesmo sem o destino); nulo se ele não existe.</summary>
+    private static FileAttributes? Atributos(string trecho)
+    {
+        try
+        {
+            return File.GetAttributes(trecho);
+        }
+        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return null;
+        }
     }
 }

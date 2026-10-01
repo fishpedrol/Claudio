@@ -100,6 +100,9 @@ internal static class NativoTeste
     internal const uint SWP_NOZORDER = 0x0004;
     internal const uint SWP_NOACTIVATE = 0x0010;
 
+    /// <summary>O topo do grupo "sempre no topo", como "inserir depois de" no SetWindowPos.</summary>
+    internal const nint HWND_TOPMOST = -1;
+
     /// <summary>Só para mover a janela do Buzzy aberto pelo próprio teste, "por fora" do núcleo.</summary>
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -394,8 +397,12 @@ internal static class NativoTeste
 
     /// <summary>
     /// Se <paramref name="alto"/> está acima de <paramref name="baixo"/> na ordem Z, subindo de <paramref name="baixo"/> por
-    /// GW_HWNDPREV: só handles são comparados, nada de janela alguma é lido (as duas janelas são deste teste ou do Buzzy
-    /// que ele abriu; outras podem estar no meio, porque outros aplicativos também têm janelas "sempre no topo").
+    /// GW_HWNDPREV, no máximo 5000 passos: só handles são comparados com <paramref name="alto"/>, e nada de janela alguma é
+    /// lido (nem o PID, nem título, classe ou retângulo). As duas janelas são deste teste ou do Buzzy que ele abriu; outras
+    /// podem estar no meio, porque outros aplicativos também têm janelas "sempre no topo". Diferente de
+    /// <see cref="PosicoesAbaixo"/>, que para na primeira janela de outro processo depois de ler o PID dela (SECURITY.md
+    /// 3.2, "Ferramentas de teste": o texto dessa seção ainda descreve só a varredura que para; revisão de segurança do bloco
+    /// P6-P9, achado 3). Só os testes da janela intrusa a usam.
     /// </summary>
     internal static bool EstaAcima(nint alto, nint baixo)
     {

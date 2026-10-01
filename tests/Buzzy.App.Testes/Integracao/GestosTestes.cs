@@ -139,7 +139,7 @@ internal sealed class GestosTestes
         EventoDoLog exibindo = EsperarDesde(b, marcaMenu, e => e.Chave == "MENU" && e["exibindo"] == "sim", 3000, "menu exibido");
         var dono = (nint)long.Parse(exibindo["dono"], System.Globalization.CultureInfo.InvariantCulture);
         Afirmar.Igual((uint)b.Processo.Id, NativoTeste.PidDe(dono), "o dono do menu é deste Buzzy");
-        Afirmar.Verdadeiro(NativoTeste.PostMessage(dono, NativoTeste.WM_CANCELMODE, 0, 0), "WM_CANCELMODE ao dono do menu");
+        Afirmar.Verdadeiro(b.Postar(dono, NativoTeste.WM_CANCELMODE, 0, 0, "WM_CANCELMODE"), "WM_CANCELMODE ao dono do menu");
         EventoDoLog fechado = EsperarDesde(b, marcaMenu, e => e.Chave == "MENU" && e.Campos.ContainsKey("fechado"), 3000, "menu fechado");
         Afirmar.Igual("Nenhum", fechado["fechado"], "cancelar o menu não escolhe nada");
         Afirmar.Verdadeiro(NativoTeste.IsWindowVisible(b.Janela), "o Buzzy continua visível");
@@ -163,7 +163,7 @@ internal sealed class GestosTestes
         b.EsperarRetangulo(arrastado, 3000, "arrastando");
 
         // Cancelar o modo (o que acontece quando outra janela toma o mouse): captura perdida.
-        Afirmar.Verdadeiro(NativoTeste.PostMessage(b.Janela, NativoTeste.WM_CANCELMODE, 0, 0), "WM_CANCELMODE à janela do personagem");
+        Afirmar.Verdadeiro(b.Postar(b.Janela, NativoTeste.WM_CANCELMODE, 0, 0, "WM_CANCELMODE"), "WM_CANCELMODE à janela do personagem");
         EsperarDesde(b, marca, e => e.Chave == "CAPTURA" && e["perdida"] == "sim", 3000, "captura perdida registrada");
         Nucleo(b, marca, "DragCancel", "Dragging", "Settling", 3000, "DRAG_CANCEL");
         Nucleo(b, marca, "DragCancel", "Settling", "Idle", 3000, "acomodado onde estava");

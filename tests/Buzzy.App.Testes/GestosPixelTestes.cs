@@ -4,8 +4,9 @@ using Buzzy.Visual.Pixel;
 namespace Buzzy.App.Testes;
 
 /// <summary>
-/// Poses provisórias dos seis gestos da onda do tamagotchi (DEC-028; crítica, L11), que a crítica pedia no
-/// passo A4 e a arte tinha deixado para a apresentação (revisão da arte, achado 4): com os nomes que o
+/// Poses dos gestos da onda do tamagotchi (DEC-028; crítica, L11): as seis provisórias, que a crítica pedia no
+/// passo A4 e a arte tinha deixado para a apresentação (revisão da arte, achado 4), e as duas da paranoia
+/// (adicional de 2026-10-01; testes próprios em ParanoiaPixelTestes): com os nomes que o
 /// núcleo gera do enum <c>Gesto</c> em minúsculas, achadas por <see cref="PosesPixel.PorNome"/> (uma pose
 /// ausente derruba o app: crítica, F5), no mapeamento do L11 e dentro do quadro com qualquer cara e efeito.
 /// Depois da mescla com o T3, um teste da apresentação amarra o enum <c>Gesto</c> a esta lista.
@@ -13,7 +14,7 @@ namespace Buzzy.App.Testes;
 internal sealed class GestosPixelTestes
 {
     /// <summary>Os gestos da onda, no fim do enum <c>Gesto</c> do núcleo (DEC-028), em minúsculas e na ordem.</summary>
-    private static readonly string[] Gestos = ["soluco", "danca", "gargalhada", "espirro", "tosse", "tremedeira"];
+    private static readonly string[] Gestos = ["soluco", "danca", "gargalhada", "espirro", "tosse", "tremedeira", "olharproteto", "agachar"];
 
     private static PosePixel Pose(string nome) => PosesPixel.Todas.First(p => p.Nome == nome);
 
@@ -21,7 +22,7 @@ internal sealed class GestosPixelTestes
     private static PosePixel Corpo(PosePixel p) => p with { Nome = "", Estado = "", Expressao = "neutro", EfeitoDaPose = EfeitoVisual.Nenhum, FaseDoEfeito = 0 };
 
     [Teste]
-    public void OsSeisGestosDaOndaTemPoseComONomeDoNucleo()
+    public void OsGestosDaOndaTemPoseComONomeDoNucleo()
     {
         Afirmar.Sequencia(Gestos, PosesPixel.DosGestos.Select(p => p.Nome), "os nomes e a ordem do fim do enum Gesto");
         foreach (PosePixel pose in PosesPixel.DosGestos)

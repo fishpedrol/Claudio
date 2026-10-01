@@ -166,6 +166,18 @@ $logDiag = Join-Path (Join-Path ([Environment]::GetFolderPath('LocalApplicationD
 $logDiagCopia = Join-Path (Split-Path -Parent $logDiag) 'diagnostico.1.log'
 $nomesProcesso = @('Buzzy', [IO.Path]::GetFileNameWithoutExtension($Exe)) | Select-Object -Unique
 
+# Os arquivos reais de configuração do usuário (os quatro nomes de ArquivoDeConfiguracoes), vistos só por fora: existência,
+# tamanho e datas, nunca o conteúdo (SECURITY.md 5). A medição usa o perfil de teste e nunca pode mudá-los: a foto de antes
+# de abrir e a do fim são comparadas (revisão de segurança do bloco P6-P9, achado 8; a mesma de ArquivosReais.cs).
+$pastaDoBuzzyReal = Split-Path -Parent $logDiag
+function FotoDosArquivosReais {
+    (@('settings.json', 'settings.json.bak', 'settings.json.tmp', 'settings.corrupt.json') | ForEach-Object {
+        $info = New-Object IO.FileInfo ([IO.Path]::Combine($pastaDoBuzzyReal, $_))
+        if ($info.Exists) { '{0}: {1} bytes, criado {2}, escrito {3}' -f $_, $info.Length, $info.CreationTimeUtc.ToString('o'), $info.LastWriteTimeUtc.ToString('o') }
+        else { '{0}: ausente' -f $_ }
+    }) -join '; '
+}
+
 function Abortar([string] $motivo) {
     Write-Host "ABORTADO: $motivo" -ForegroundColor Red
     Write-Host 'Nada foi aberto nem encerrado.' -ForegroundColor Red
@@ -187,12 +199,15 @@ function LimparPerfilDeTeste([string] $pastaLocal, [string] $perfil) {
     $buzzy = [IO.Path]::Combine($pastaLocal, 'Buzzy')
     $testes = [IO.Path]::Combine($buzzy, 'testes')
     $pasta = [IO.Path]::Combine($testes, $perfil)
-    if (-not [IO.Directory]::Exists($pasta)) { return 'sem pasta de uma medição anterior' }
+    # Cada trecho que existe é conferido antes de tudo, também sem a pasta do perfil: com a pasta do Buzzy ou a dos testes
+    # como junção, o Buzzy medido gravaria do outro lado (revisão de segurança do bloco P6-P9, achado 5).
     foreach ($trecho in @($buzzy, $testes, $pasta)) {
-        if (([IO.File]::GetAttributes($trecho) -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+        try { $atributos = [IO.File]::GetAttributes($trecho) } catch [IO.FileNotFoundException], [IO.DirectoryNotFoundException] { continue }
+        if (($atributos -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
             Abortar ('{0} é uma junção ou um link: a medição não apaga nada fora da pasta do Buzzy.' -f $trecho)
         }
     }
+    if (-not [IO.Directory]::Exists($pasta)) { return 'sem pasta de uma medição anterior' }
     try {
         [IO.Directory]::Delete($pasta, $true)
     } catch {
@@ -215,6 +230,7 @@ try {
 } catch {
     Abortar ('não foi possível criar a pasta do relatório de {0}: {1}' -f $Destino, $_.Exception.Message)
 }
+$fotoAntes = FotoDosArquivosReais
 
 # ------------------------------------------------------------------ interop
 if (-not ('BuzzyFerramentas.MedicaoDesempenho' -as [type])) {
@@ -1897,5 +1913,10 @@ finally {
 }
 
 if ($null -eq $proc) { exit 2 }
+$fotoDepois = FotoDosArquivosReais
+if ($fotoDepois -ne $fotoAntes) {
+    Write-Host ('FALHA: os arquivos reais do usuário (%LOCALAPPDATA%\Buzzy) mudaram durante a medição, vistos só por fora. Antes: {0}. Depois: {1}.' -f $fotoAntes, $fotoDepois) -ForegroundColor Red
+    exit 1
+}
 if ($null -ne $falha -or -not $encerramento.Saiu -or $encerramento.Forcado) { exit 1 }
 exit 0

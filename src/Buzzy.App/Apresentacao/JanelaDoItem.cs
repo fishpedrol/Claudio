@@ -127,7 +127,7 @@ internal sealed class JanelaDoItem : Window, IJanelaDoItem
         => Win32.SetWindowPos(Hwnd, Win32.HWND_TOPMOST, 0, 0, 0, 0, Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
 
     /// <summary>Onde a janela está de fato, em pixels físicos; nulo se o Windows não informar.</summary>
-    internal RetanguloPx? RetanguloReal()
+    public RetanguloPx? RetanguloReal()
         => Hwnd != 0 && Win32.GetWindowRect(Hwnd, out Win32.RECT r) ? new RetanguloPx(r.Left, r.Top, r.Right, r.Bottom) : null;
 
     /// <summary>Captura o mouse para o gesto em curso sobre o item.</summary>

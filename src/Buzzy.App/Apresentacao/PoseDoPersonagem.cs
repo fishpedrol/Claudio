@@ -129,7 +129,9 @@ internal static class PoseDoPersonagem
 
     /// <summary>
     /// A sobreposição de cada onda (crítica, L12): Bebado, bolhas; Chapado, fumaça; Eletrico, brilhos; Tonto,
-    /// estrelinhas; Euforico, corações; Viajando, cores. Satisfeito, Alegre, Relaxado e Ligado só mudam a cara e o jeito.
+    /// estrelinhas; Euforico, corações; Viajando, cores; e a paranoia (adicional de 2026-10-01, DEC-028), o suor de
+    /// desenho animado de quem acha que tem alguém no teto, com o tremidinho de 1 pixel da arte. Satisfeito, Alegre,
+    /// Relaxado e Ligado só mudam a cara e o jeito.
     /// </summary>
     internal static EfeitoVisual SobreposicaoDaOnda(Onda onda) => onda switch
     {
@@ -139,6 +141,7 @@ internal static class PoseDoPersonagem
         Onda.Tonto => EfeitoVisual.Estrelinhas,
         Onda.Euforico => EfeitoVisual.Coracoes,
         Onda.Viajando => EfeitoVisual.Cores,
+        Onda.Paranoico => EfeitoVisual.Suor,
         _ => EfeitoVisual.Nenhum,
     };
 
@@ -193,9 +196,11 @@ internal static class PoseDoPersonagem
                 Gesto.Espreguicar => new("espreguicando", false, null),
                 Gesto.Brincar => new("brincando", false, null),
                 // Gestos da onda (DEC-028): as poses provisórias da arte (crítica, L11), com a cara delas, como os outros
-                // gestos. A tremedeira é o parado deslocado 1 pixel: os dois quadros se alternam, com a mesma cara.
+                // gestos. A tremedeira é o parado deslocado 1 pixel: os dois quadros se alternam, com a mesma cara. Os da
+                // paranoia (adicional de 2026-10-01), olhar pro teto e agachar, têm desenho próprio, com a cara "paranoico".
                 Gesto.Tremedeira when passosNoEstado / PassosPorQuadroDaTremedeira % 2 != 0 => new("parado", false, CaraDaTremedeira),
-                Gesto.Soluco or Gesto.Danca or Gesto.Gargalhada or Gesto.Espirro or Gesto.Tosse or Gesto.Tremedeira => new(NomeDoGesto(r.Gesto), false, null),
+                Gesto.Soluco or Gesto.Danca or Gesto.Gargalhada or Gesto.Espirro or Gesto.Tosse or Gesto.Tremedeira
+                    or Gesto.OlharProTeto or Gesto.Agachar => new(NomeDoGesto(r.Gesto), false, null),
                 _ => new("parado", false, expressao),
             },
             _ => new("parado", false, expressao),

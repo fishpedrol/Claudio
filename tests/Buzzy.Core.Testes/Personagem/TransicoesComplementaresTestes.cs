@@ -895,15 +895,16 @@ internal static class TransicoesComplementaresTestes
 
         c.Aplicar(new Click()).Percorreu(Estado.Pressed, Estado.Reacting);
         Afirmar.Igual(Sinal.FoiClicado, c.Retrato.Sinal);
-        // A âncora (3360,1032) fica a 480 px do DISPLAY3 e a 1441 px do DISPLAY1: vai ao DISPLAY3,
-        // presa na área útil dele (x mínimo 3840 + 64 = 3904), como na validação de soltar.
+        // A âncora (3360,1032) fica a 480 px do DISPLAY3 e a 1441 px do DISPLAY1: vai ao DISPLAY3, na mesma posição
+        // relativa, como ele iria parado (ARCHITECTURE.md 2.8; revisão do bloco P6-P9, achado 3): 3840 + 0,75 · 1920 = 5280.
+        // Antes, a âncora era presa na borda dele (3904), como se o usuário a tivesse soltado ali.
         Afirmar.Igual(TopologiasDeExemplo.Display3, c.Retrato.ChaveMonitor, "validado no monitor mais próximo");
-        Afirmar.Igual(new PontoPx(3904, 1032), c.Ancora, "presa na área útil do DISPLAY3");
+        Afirmar.Igual(new PontoPx(5280, 1032), c.Ancora, "na mesma posição relativa do DISPLAY3");
         Afirmar.Igual(TopologiasDeExemplo.Display3, c.Efeito<MoverJanela>().Destino.Monitor.Chave, "a janela vai para lá já no clique");
         Afirmar.Igual(TopologiasDeExemplo.Display3, Afirmar.NaoNulo(c.Atual.Posicao).ChaveMonitor, "a posição acompanha");
 
         c.Passos(Padrao.PassosDaReacao).Percorreu(Estado.Reacting, Estado.Settling, Estado.Idle);
-        Afirmar.Igual(new PontoPx(3904, 1032), c.Ancora, "a reação termina onde foi validada");
+        Afirmar.Igual(new PontoPx(5280, 1032), c.Ancora, "a reação termina onde foi validada");
     }
 
     // Item P, R10: o monitor mudou (barra de tarefas no topo) valida já no CLICK; sem mudança no monitor do personagem, a reação começa no mesmo lugar.

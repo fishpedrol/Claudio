@@ -192,7 +192,8 @@ internal static class TelaCheiaTestes
         Cenario visivel = CarregadoEm(noMeio);
         visivel.Aplicar(Ocupados(Display2, Display3)).Percorreu(Estado.Idle, Estado.Settling, Estado.Idle);
         Afirmar.Igual(new PontoPx(1632, 1032), visivel.Ancora, "transferido para o único livre, o DISPLAY1");
-        visivel.Aplicar(new TopologyChanged(Cenario.TresEmLinhaSemODoMeio)).Percorreu(Estado.Idle, Estado.Settling, Estado.Idle);
+        // O DISPLAY1, onde ele está, não mudou: ele continua parado, sem revalidar (DEC-030, classe A).
+        visivel.Aplicar(new TopologyChanged(Cenario.TresEmLinhaSemODoMeio)).Percorreu(Estado.Idle, Estado.Idle);
         MesmaPosicao(noMeio, visivel.Atual.RetornoDaTelaCheia, "o retorno sobrevive à mudança de topologia");
         visivel.Aplicar(Ocupados()).Percorreu(Estado.Idle, Estado.Settling, Estado.Idle);
         Afirmar.Igual(Display3, visivel.Retrato.ChaveMonitor, "visível: monitor mais próximo da âncora de antes");

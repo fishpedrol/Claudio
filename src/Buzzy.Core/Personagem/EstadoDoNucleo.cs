@@ -32,7 +32,10 @@ public sealed record EstadoDoNucleo
     /// </summary>
     public EstadoDoMovimento Movimento { get; init; } = EstadoDoMovimento.Nenhum;
 
-    /// <summary>A mesma posição, relativa à área útil do monitor; sobrevive a mudanças de topologia.</summary>
+    /// <summary>
+    /// A mesma posição, relativa à área útil do monitor; sobrevive a mudanças de topologia. Acompanha toda mudança, em qualquer
+    /// estado, sem mover a janela (DEC-030, <see cref="Posicionador.Rebasear"/>): escondido, ele continua ligado à chave do monitor.
+    /// </summary>
     public PosicaoDoPersonagem? Posicao { get; init; }
 
     /// <summary>Deslocamento da pegada: cursor menos âncora no <c>PRESS</c> (invariante 2).</summary>
@@ -73,7 +76,7 @@ public sealed record EstadoDoNucleo
     /// <summary>
     /// Posição anterior à mudança automática por tela cheia, só em memória. "O modo não age de
     /// novo até a próxima mudança" sai da própria regra "uma vez por mudança" de
-    /// <see cref="FullscreenTargetsChanged"/>, sem campo à parte.
+    /// <see cref="FullscreenTargetsChanged"/>, sem campo à parte. Acompanha as mudanças de topologia como a posição.
     /// </summary>
     public PosicaoDoPersonagem? RetornoDaTelaCheia { get; init; }
 
@@ -98,8 +101,8 @@ public sealed record EstadoDoNucleo
     public LadoDoEsconderijo Esconderijo { get; init; }
 
     /// <summary>
-    /// A onda de desenho animado do último item usado (DEC-028), na frente: tipo, fase e nível. Nula sem onda. Só em
-    /// memória, nunca gravada (SECURITY.md 5); com o tamagotchi desligado, não vale.
+    /// A onda de desenho animado do último item usado (DEC-028), ou a paranoia, na frente: tipo, fase e nível. Nula sem
+    /// onda. Só em memória, nunca gravada (SECURITY.md 5); com o tamagotchi desligado, não vale.
     /// </summary>
     public EstadoDaOnda? Onda { get; init; }
 
@@ -109,6 +112,14 @@ public sealed record EstadoDoNucleo
     /// quando a da frente acaba. Só cabem duas: uma terceira descarta a de fundo anterior.
     /// </summary>
     public EstadoDaOnda? OndaDeFundo { get; init; }
+
+    /// <summary>
+    /// A carga da paranoia (pedido do usuário de 2026-10-01; DEC-028), de 0 para cima: quantos itens de substância ele usou
+    /// no episódio. Cada um soma 1, depois da combinação; da 4ª em diante, a paranoia (a onda <c>Paranoico</c>) começa ou
+    /// sobe. Volta a 0 no fim de todo evento em que nem a onda da frente nem a de fundo é de substância (a paranoia conta
+    /// como substância). Só em memória, como a onda.
+    /// </summary>
+    public int Carga { get; init; }
 
     /// <summary>Geração do último agendamento do temporizador da onda.</summary>
     public long GeracaoDaOnda { get; init; }
@@ -162,6 +173,7 @@ public sealed record EstadoDoNucleo
         EmocaoDominante = Preferencias.EmocaoDominante,
         Onda = Onda,
         OndaDeFundo = OndaDeFundo,
+        Carga = Carga,
         Uso = Uso,
         PassoDoUso = Uso is { } uso ? uso.Passos - PassosRestantes : 0,
         Itens = Itens,
@@ -197,6 +209,9 @@ public sealed record Retrato(
     /// <summary>A onda de fundo, congelada atrás da da frente (DEC-028); nula sem ela.</summary>
     public EstadoDaOnda? OndaDeFundo { get; init; }
 
+    /// <summary>A carga da paranoia (pedido do usuário de 2026-10-01): quantos itens de substância ele usou no episódio; 0 sem episódio.</summary>
+    public int Carga { get; init; }
+
     /// <summary>O uso em curso, em USING (DEC-028): o item, o verbo, a duração e o apoio, para a pose de uso; nulo fora dele.</summary>
     public Uso? Uso { get; init; }
 
@@ -208,20 +223,22 @@ public sealed record Retrato(
 
     /// <summary>
     /// Linha canônica, na cultura invariante, usada nas reproduções gravadas. A onda de um item (<c>onda=Tipo/Fase/Nível</c>),
-    /// a de fundo (<c>fundo=</c>), o uso (<c>uso=Item/Verbo/PassodeDuração/Apoio</c>), a emoção dominante (<c>emocao=</c>)
-    /// e os itens (<c>itens=[Id:Item:Situação:(x,y);…]</c>) só aparecem quando há: sem eles, a linha é a de antes
-    /// (referências gravadas 01 a 05).
+    /// a de fundo (<c>fundo=</c>), a carga da paranoia (<c>carga=</c>, só acima de 0), o uso
+    /// (<c>uso=Item/Verbo/PassodeDuração/Apoio</c>), a emoção dominante (<c>emocao=</c>) e os itens
+    /// (<c>itens=[Id:Item:Situação:(x,y);…]</c>) só aparecem quando há: sem eles, a linha é a de antes (referências
+    /// gravadas 01 a 05).
     /// </summary>
     public string Descrever()
     {
         string estado = Estado == Estado.Hidden ? $"Hidden({Motivo})" : Estado.ToString();
         string onda = Onda is { } o ? $" onda={o.Tipo}/{o.Fase}/{o.Nivel}" : "";
         string fundo = OndaDeFundo is { } f ? $" fundo={f.Tipo}/{f.Fase}/{f.Nivel}" : "";
+        string carga = Carga > 0 ? string.Create(CultureInfo.InvariantCulture, $" carga={Carga}") : "";
         string uso = Uso is { } u ? string.Create(CultureInfo.InvariantCulture, $" uso={u.Item}/{u.Verbo}/{PassoDoUso}de{u.Passos}/{u.Apoio}") : "";
         string emocao = EmocaoDominante is { } e ? $" emocao={e}" : "";
         string itens = Itens.Quantidade > 0 ? $" itens=[{Itens}]" : "";
         return string.Create(CultureInfo.InvariantCulture,
-            $"{estado} ancora=({Ancora.X},{Ancora.Y}) monitor={ChaveMonitor} tamanho={Tamanho.Largura}x{Tamanho.Altura} direcao={Direcao} expressao={Expressao} gesto={Gesto} pausada={SimNao(AutonomiaPausada)} painel={SimNao(PainelAberto)} energia={Energia} relogio={SimNao(RelogioAtivo)} sinal={Sinal}{onda}{fundo}{uso}{emocao}{itens}");
+            $"{estado} ancora=({Ancora.X},{Ancora.Y}) monitor={ChaveMonitor} tamanho={Tamanho.Largura}x{Tamanho.Altura} direcao={Direcao} expressao={Expressao} gesto={Gesto} pausada={SimNao(AutonomiaPausada)} painel={SimNao(PainelAberto)} energia={Energia} relogio={SimNao(RelogioAtivo)} sinal={Sinal}{onda}{fundo}{carga}{uso}{emocao}{itens}");
     }
 
     private static string SimNao(bool valor) => valor ? "sim" : "nao";

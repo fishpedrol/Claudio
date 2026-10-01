@@ -111,8 +111,9 @@ public enum NivelDeEnergia
 /// <summary>
 /// Expressão do rosto, dimensão independente do estado (invariante 6). Uma por expressão de
 /// docs/IDENTIDADE_VISUAL.md, seção 6; o manifesto da Fase 6 precisa cobrir todas. As 14 primeiras são as de humor
-/// (<see cref="Expressoes.DeHumor"/>); as sete do fim são as caras de efeito do tamagotchi (DEC-028,
-/// <see cref="Expressoes.DeEfeito"/>), que só a onda de um item mostra. A chave da arte é o nome em minúsculas.
+/// (<see cref="Expressoes.DeHumor"/>); as oito do fim são as caras de efeito do tamagotchi (DEC-028,
+/// <see cref="Expressoes.DeEfeito"/>), que só a onda de um item ou a paranoia mostram. A chave da arte é o nome em
+/// minúsculas.
 /// </summary>
 public enum Expressao
 {
@@ -139,6 +140,9 @@ public enum Expressao
     Apaixonado,
     Tonto,
     Viajando,
+
+    // A da paranoia (pedido do usuário de 2026-10-01): de desenho animado, olhando para o teto.
+    Paranoico,
 }
 
 /// <summary>
@@ -159,12 +163,14 @@ public static class Expressoes
     ];
 
     /// <summary>
-    /// As sete caras de efeito do tamagotchi (DEC-028), no fim do enum: só a onda de um item as mostra, pela cara da fase
-    /// e pelos sorteios dela (<see cref="TabelaDoTamagotchi"/>). Nunca são a emoção dominante nem saem da troca automática.
+    /// As oito caras de efeito do tamagotchi (DEC-028), no fim do enum: só a onda de um item ou a paranoia as mostram, pela
+    /// cara da fase e pelos sorteios dela (<see cref="TabelaDoTamagotchi"/>). Nunca são a emoção dominante nem saem da
+    /// troca automática.
     /// </summary>
     public static IReadOnlyList<Expressao> DeEfeito { get; } =
     [
         Expressao.Bebado, Expressao.Enjoado, Expressao.Chapado, Expressao.Eletrico, Expressao.Apaixonado, Expressao.Tonto, Expressao.Viajando,
+        Expressao.Paranoico,
     ];
 
     /// <summary>
@@ -202,7 +208,8 @@ public static class Expressoes
 /// <summary>
 /// Gesto curto (ARCHITECTURE.md 2.6): ação visual de duração limitada na superfície atual,
 /// que não muda estado, posição nem superfície (invariante 15). A agenda sorteia de <see cref="Espiar"/> a
-/// <see cref="Brincar"/>; os seis do fim são os da onda de um item (DEC-028), que só ela sorteia, também só em IDLE.
+/// <see cref="Brincar"/>; os oito do fim são os da onda de um item (DEC-028) e os da paranoia, que só a onda sorteia,
+/// também só em IDLE (o <see cref="OlharProTeto"/> também vem, sem sorteio, no começo da paranoia).
 /// </summary>
 public enum Gesto
 {
@@ -220,6 +227,10 @@ public enum Gesto
     Espirro,
     Tosse,
     Tremedeira,
+
+    // Os da paranoia (pedido do usuário de 2026-10-01): de desenho animado, "tem alguém no teto".
+    OlharProTeto,
+    Agachar,
 }
 
 /// <summary>Para onde o personagem está virado. As poses de perfil são desenhadas para a direita.</summary>

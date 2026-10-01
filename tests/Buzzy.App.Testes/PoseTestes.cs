@@ -164,8 +164,9 @@ internal sealed class PoseTestes
             Afirmar.Verdadeiro(t.Limites() is not null, $"{q}: desenha alguma coisa");
         }
 
-        // A enumeração passou mesmo por tudo: toda pose de uso e de gesto, toda cara, todo item, toda sobreposição da
-        // onda e as três fases, e o giro do esconderijo.
+        // A enumeração passou mesmo por tudo: toda pose de uso e de gesto (um gesto do núcleo sem caso no switch da
+        // apresentação cairia no "parado" e ficaria vermelho aqui), toda cara, todo item, toda sobreposição da onda e as
+        // três fases, e o giro do esconderijo.
         HashSet<string> poses = [.. quadros.Select(q => q.Pose)];
         foreach (string nome in UsosPixel.Poses.Concat(PosesPixel.DosGestos).Select(p => p.Nome))
             Afirmar.Verdadeiro(poses.Contains(nome), $"a pose {nome} nunca foi escolhida");
@@ -174,8 +175,16 @@ internal sealed class PoseTestes
             Afirmar.Verdadeiro(caras.Contains(PoseDoPersonagem.NomeDaExpressao(e)), $"a cara {e} nunca foi pedida");
         Afirmar.Sequencia(ItensPixel.Todos.Order(StringComparer.Ordinal), quadros.Select(q => q.Item).OfType<string>().Distinct().Order(StringComparer.Ordinal), "todo item na mão");
         Afirmar.Sequencia(
-            new[] { EfeitoVisual.Nenhum, EfeitoVisual.Fumaca, EfeitoVisual.Bolhas, EfeitoVisual.Brilhos, EfeitoVisual.Estrelinhas, EfeitoVisual.Coracoes, EfeitoVisual.Cores },
+            new[] { EfeitoVisual.Nenhum, EfeitoVisual.Fumaca, EfeitoVisual.Bolhas, EfeitoVisual.Brilhos, EfeitoVisual.Estrelinhas, EfeitoVisual.Coracoes, EfeitoVisual.Cores, EfeitoVisual.Suor },
             quadros.Select(q => q.Efeito).Distinct().Order(), "as sobreposições das ondas");
+        // A paranoia (adicional de 2026-10-01, DEC-028), como ela aparece: os dois gestos dela, com a cara da pose, e o
+        // parado e a caminhada com a cara paranoica, todos com o suor por cima, nas três fases.
+        foreach (string pose in new[] { "olharproteto", "agachar" })
+            Afirmar.Sequencia(new[] { 0, 1, 2 }, quadros.Where(q => q.Pose == pose && q.Expressao is null && q.Efeito == EfeitoVisual.Suor).Select(q => q.Fase).Distinct().Order(),
+                $"{pose}, com a cara da pose e o suor, nas três fases");
+        Afirmar.Verdadeiro(quadros.Any(q => q.Pose == "parado" && q.Expressao == "paranoico" && q.Efeito == EfeitoVisual.Suor), "parado, com a cara paranoica e o suor");
+        Afirmar.Verdadeiro(quadros.Any(q => q.Pose.StartsWith("andando-", StringComparison.Ordinal) && q.Expressao == "paranoico" && q.Efeito == EfeitoVisual.Suor),
+            "andando, com a cara paranoica e o suor");
         Afirmar.Sequencia(new[] { 0, 1, 2 }, quadros.Select(q => q.Fase).Distinct().Order(), "as três fases");
         Afirmar.Sequencia(Enum.GetValues<Giro>(), quadros.Select(q => q.Giro).Distinct().Order(), "os giros do esconderijo");
         Console.WriteLine($"         {quadros.Count} quadros distintos conferidos");
@@ -196,6 +205,14 @@ internal sealed class PoseTestes
         Dinamica[] dinamicas = [default, new(1200, 0, false), new(-800, 1, false), new(-1000, 0, true), new(0, 0, false, Agarrado: true), .. esconderijos];
         long[] passos = [0, 3, 7, 12, 25, 40];
         EstadoDaOnda?[] ondas = [null, .. Enum.GetValues<Onda>().Select(o => new EstadoDaOnda(o, FaseDaOnda.Pico, 1, 1))];
+        // Cada onda em cada fase dela, com a cara da fase (tabela 4.4), como o núcleo a põe: a cara paranoica com o suor
+        // da paranoia por cima, por exemplo.
+        (EstadoDaOnda Onda, Expressao Cara)[] fasesComCara =
+        [
+            .. Enum.GetValues<Onda>().SelectMany(o => Enum.GetValues<FaseDaOnda>()
+                .Where(f => f != FaseDaOnda.Queda || TabelaDoTamagotchi.DaOnda(o).Queda is not null)
+                .Select(f => (new EstadoDaOnda(o, f, 1, 1), TabelaDoTamagotchi.DaOnda(o).Cara(f)))),
+        ];
         foreach (Estado estado in Enum.GetValues<Estado>())
         {
             Gesto[] gestos = estado == Estado.Idle ? Enum.GetValues<Gesto>() : [Gesto.Nenhum];
@@ -209,6 +226,8 @@ internal sealed class PoseTestes
                                     yield return PoseDoPersonagem.Escolher(R(estado, direcao, expressao, gesto, relogio), p, dinamica);
                                 foreach (EstadoDaOnda? onda in ondas)
                                     yield return PoseDoPersonagem.Escolher(R(estado, direcao, Expressao.Bebado, gesto, relogio) with { Onda = onda }, p, dinamica);
+                                foreach ((EstadoDaOnda onda, Expressao cara) in fasesComCara)
+                                    yield return PoseDoPersonagem.Escolher(R(estado, direcao, cara, gesto, relogio) with { Onda = onda }, p, dinamica);
                             }
         }
 

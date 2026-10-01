@@ -84,7 +84,7 @@ internal static class ChaveLigadaTestes
 
     // Invariante 27 com a física do aplicativo e a chave ligada, com itens e ondas: as duas execuções, com a emoção
     // automática e com a dominante escolhida pela carga, recebem os mesmos eventos (10 minutos de agenda livre por semente,
-    // com itens invocados, soltos sobre ele, o que começa, soma, combina e refresca ondas, ou longe, largados e recolhidos, e
+    // com itens invocados, soltos sobre ele, o que começa, soma, combina e alivia ondas, ou longe, largados e recolhidos, e
     // com ele posto no chão, no ar, na parede, no cipó e no esconderijo, pausado ou não). Evento a evento: as mesmas
     // transições, os mesmos efeitos e o mesmo estado, inclusive o gerador, os itens, o uso e as ondas, a não ser a cara e
     // a própria emoção.

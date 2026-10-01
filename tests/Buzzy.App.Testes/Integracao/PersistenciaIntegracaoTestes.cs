@@ -63,28 +63,15 @@ internal sealed class PersistenciaIntegracaoTestes
     }
 
     /// <summary>
-    /// O que se vê de fora dos arquivos REAIS do usuário, na pasta do Buzzy: o principal, a reserva, o temporário e a cópia
-    /// de diagnóstico, cada um ausente ou com o tamanho e as datas de criação e de escrita. Só metadados da pasta: o
-    /// conteúdo nunca é aberto nem lido.
+    /// Roda o cenário e confere que os arquivos reais do usuário ficaram como estavam, por fora (<see cref="ArquivosReais"/>,
+    /// só metadados). A integração inteira também confere, antes e depois de todos os testes (Programa).
     /// </summary>
-    private static string FotoDosArquivosReais()
-    {
-        string buzzy = Afirmar.NaoNulo(PastaDeDados.DoBuzzy(), "pasta do Buzzy");
-        return string.Join("; ", ArquivoDeConfiguracoes.Nomes.Select(nome =>
-        {
-            var info = new FileInfo(Path.Combine(buzzy, nome));
-            return info.Exists
-                ? string.Create(CultureInfo.InvariantCulture, $"{nome}: {info.Length} bytes, criado {info.CreationTimeUtc:O}, escrito {info.LastWriteTimeUtc:O}")
-                : $"{nome}: ausente";
-        }));
-    }
-
-    /// <summary>Roda o cenário e confere que os arquivos reais do usuário ficaram como estavam, por fora.</summary>
     private static void SemTocarNosArquivosReais(Action cenario)
     {
-        string antes = FotoDosArquivosReais();
+        Afirmar.NaoNulo(PastaDeDados.DoBuzzy(), "pasta do Buzzy");
+        string antes = ArquivosReais.Foto();
         cenario();
-        Afirmar.Igual(antes, FotoDosArquivosReais(), "os arquivos reais do usuário, em %LOCALAPPDATA%\\Buzzy, continuam como estavam");
+        Afirmar.Igual(antes, ArquivosReais.Foto(), "os arquivos reais do usuário, em %LOCALAPPDATA%\\Buzzy, continuam como estavam");
     }
 
     /// <summary>
@@ -193,13 +180,68 @@ internal sealed class PersistenciaIntegracaoTestes
             using (BuzzyEmTeste b = BuzzyEmTeste.Iniciar(perfil: Perfil, limpar: false))
             {
                 EventoDoLog partida = b.Esperar(e => e.Chave == "CONFIG" && e.Campos.ContainsKey("lido"), 5000, "a leitura das configurações na partida");
-                Afirmar.Igual(("principal", "Valido", "3"), (partida["lido"], partida["principal"], partida["versao"]), "reaberto, lê o principal");
+                Afirmar.Igual(("principal", "Valido", "atual"), (partida["lido"], partida["principal"], partida["versao"]), "reaberto, lê o principal, da versão atual do esquema");
                 EventoDoLog carga = b.Esperar(e => e.Chave == "NUCLEO" && e["evento"] == "Loaded" && e["de"] == "Booting", 5000, "a carga");
                 Afirmar.Igual("BOOTING: configurações e topologia carregadas; posição salva restaurada pela chave", carga["regra"], "restaurada pela chave");
                 b.Esperar(e => e.Chave == "NUCLEO" && e["evento"] == "Loaded" && e["de"] == "Settling" && e["para"] == "Idle", 5000, "de pé no chão");
                 b.EsperarRetangulo(esperado, 3000, "no mesmo retângulo em que foi solto");
                 Afirmar.Sequencia(["sem mudanca/CmdExit"], FecharEGravar(b).Select(e => $"{e["gravado"]}/{e["motivo"]}"), "nada mudou: nada regravado");
             }
+        });
+    }
+
+    // A regra do gesto (L5 da crítica) ligada na raiz (revisão de correção do bloco P6-P9, achado 5): soltar o personagem
+    // pede a gravação com atraso (2 s); pressionado de novo antes disso e segurado, o disparo chega no meio do gesto. Ele não
+    // grava nem rearma a espera (uma linha adiado=gesto, por mais que o botão fique pressionado: nada periódico, nem com o
+    // ClickLock), e o fim do gesto (o clique) grava. Os gestos são mensagens postadas às janelas do próprio Buzzy.
+    [Teste]
+    public void DisparoDaGravacaoNoMeioDoGesto_EsperaOFimSemRearmar_EOFimDoGestoGrava()
+    {
+        SemTocarNosArquivosReais(() =>
+        {
+            PontoPx destino;
+            using (BuzzyEmTeste b = BuzzyEmTeste.Iniciar(perfil: Perfil))
+            {
+                b.Esperar(e => e.Chave == "NUCLEO" && e["evento"] == "Loaded" && e["para"] == "Idle", 5000, "núcleo carregado");
+                RetanguloPx inicio = b.RetanguloDaJanela();
+                PontoPx ancoraInicial = Ancora(inicio);
+                destino = new PontoPx(ancoraInicial.X - 300, ancoraInicial.Y);
+                RetanguloPx esperado = SpriteEm(destino, inicio.Tamanho);
+
+                (long marca, EventoDoLog soltou) = Arrastar(b, destino, inicio.Tamanho);
+                Nucleo(b, marca, "DragEnd", "Settling", "Idle", 3000, "no chão, 300 px à esquerda");
+                b.EsperarRetangulo(esperado, 3000, "no lugar do soltar");
+                EsperarDesde(b, marca, e => e.Chave == "CONFIG" && e["pedido"] == "posicao" && e["evento"] == "DragEnd" && e["imediata"] == "nao", 3000, "o pedido com atraso");
+
+                // De novo no corpo, antes dos 2 s, e segurado.
+                long marcaDoGesto = BuzzyEmTeste.MarcaDoLog();
+                var corpo = new PontoPx(destino.X, destino.Y - esperado.Altura / 3);
+                b.PostarMouse(NativoTeste.WM_LBUTTONDOWN, NativoTeste.MK_LBUTTON, corpo);
+                Nucleo(b, marcaDoGesto, "Press", "Idle", "Pressed", 3000, "pressionado de novo");
+                EventoDoLog adiado = EsperarDesde(b, marcaDoGesto, e => e.Chave == "CONFIG" && e["adiado"] == "gesto", 5000, "o disparo adiado pelo gesto");
+                double ms = (adiado.Instante - soltou.Instante).TotalMilliseconds;
+                Afirmar.Verdadeiro(ms >= 1900 && ms < 4000, $"o disparo, 2 s depois do soltar: {ms:0} ms");
+                Afirmar.Igual("atraso", adiado["motivo"], "era o disparo do atraso");
+
+                // Segura mais 2,5 s: nada grava e nada rearma.
+                Thread.Sleep(2500);
+                List<EventoDoLog> noGesto = [.. BuzzyEmTeste.EventosDesde(marcaDoGesto).Where(e => e.Chave == "CONFIG")];
+                Afirmar.Igual(1, noGesto.Count(e => e["adiado"] == "gesto"), "adiado uma vez, sem rearmar a espera");
+                Afirmar.Falso(noGesto.Any(e => e.Campos.ContainsKey("gravado")), "nada gravado no meio do gesto");
+
+                // Soltar sem mover é um clique: o fim do gesto grava, uma vez.
+                long marcaDoFim = BuzzyEmTeste.MarcaDoLog();
+                b.PostarMouse(NativoTeste.WM_LBUTTONUP, 0, corpo);
+                Nucleo(b, marcaDoFim, "Click", "Pressed", "Reacting", 3000, "o clique");
+                EventoDoLog gravado = EsperarDesde(b, marcaDoFim, e => e.Chave == "CONFIG" && e.Campos.ContainsKey("gravado"), 3000, "a gravação no fim do gesto");
+                Afirmar.Igual(("sim", "fimDoGesto"), (gravado["gravado"], gravado["motivo"]), "gravado pelo fim do gesto");
+
+                List<EventoDoLog> saida = FecharEGravar(b);
+                Afirmar.Sequencia(["sem mudanca/CmdExit"], saida.Select(e => $"{e["gravado"]}/{e["motivo"]}"), "a saída não regrava o que o fim do gesto gravou");
+            }
+
+            PosicaoDoPersonagem salva = Afirmar.NaoNulo(LerDoPerfil().Configuracoes.Posicao, "posição salva");
+            Afirmar.Igual(destino, salva.AncoraAbsoluta, "o arquivo do perfil tem o lugar do soltar");
         });
     }
 
@@ -297,7 +339,7 @@ internal sealed class PersistenciaIntegracaoTestes
                 Afirmar.Igual("Feliz", exibindo["emocaoMarcada"], "o menu mostra a emoção restaurada");
                 var dono = (nint)long.Parse(exibindo["dono"], CultureInfo.InvariantCulture);
                 Afirmar.Igual((uint)b.Processo.Id, NativoTeste.PidDe(dono), "o dono do menu é deste Buzzy");
-                Afirmar.Verdadeiro(NativoTeste.PostMessage(dono, NativoTeste.WM_CANCELMODE, 0, 0), "WM_CANCELMODE ao dono do menu");
+                Afirmar.Verdadeiro(b.Postar(dono, NativoTeste.WM_CANCELMODE, 0, 0, "WM_CANCELMODE"), "WM_CANCELMODE ao dono do menu");
                 EsperarDesde(b, marca, e => e.Chave == "MENU" && e.Campos.ContainsKey("fechado"), 3000, "menu fechado");
                 Afirmar.Igual(0, b.FecharPorWmClose());
             }

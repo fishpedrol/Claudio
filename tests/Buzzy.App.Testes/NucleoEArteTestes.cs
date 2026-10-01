@@ -50,7 +50,7 @@ internal sealed class NucleoEArteTestes
     public void ExpressaoCobreOsRostosDeHumorEDeEfeito()
     {
         Afirmar.Sequencia(Rostos.DeHumor, Expressoes.DeHumor.Select(PoseDoPersonagem.NomeDaExpressao), "as 14 de humor, na ordem de expressoes.png");
-        Afirmar.Sequencia(Rostos.DeEfeito, Expressoes.DeEfeito.Select(PoseDoPersonagem.NomeDaExpressao), "as 7 de efeito, na ordem do fim do enum");
+        Afirmar.Sequencia(Rostos.DeEfeito, Expressoes.DeEfeito.Select(PoseDoPersonagem.NomeDaExpressao), "as 8 de efeito, na ordem do fim do enum (a paranoico por último)");
         Afirmar.Sequencia(Enum.GetValues<Expressao>(), Expressoes.DeHumor.Concat(Expressoes.DeEfeito), "o enum inteiro é humor e efeito, nessa ordem");
         foreach (Expressao expressao in Enum.GetValues<Expressao>())
             Afirmar.Verdadeiro(Rostos.Expressoes.ContainsKey(PoseDoPersonagem.NomeDaExpressao(expressao)), $"{expressao}: rosto na arte");
@@ -60,10 +60,10 @@ internal sealed class NucleoEArteTestes
     }
 
     [Teste]
-    public void OsSeisGestosNovosSaoAsPosesDosGestosDaArte()
+    public void OsOitoGestosNovosSaoAsPosesDosGestosDaArte()
     {
         Gesto[] daOnda = [.. Enum.GetValues<Gesto>().Where(g => g > Gesto.Brincar)];
-        Afirmar.Igual(6, daOnda.Length, "seis gestos da onda no fim do enum");
+        Afirmar.Igual(8, daOnda.Length, "oito gestos da onda no fim do enum (os dois da paranoia por último)");
         Afirmar.Sequencia(PosesPixel.DosGestos.Select(p => p.Nome), daOnda.Select(PoseDoPersonagem.NomeDoGesto), "os nomes e a ordem do fim de Gesto");
         foreach (Gesto gesto in daOnda)
             Afirmar.Verdadeiro(PosesPixel.PorNome(PoseDoPersonagem.NomeDoGesto(gesto)) is not null, $"{gesto}: a pose é achada pelo nome");

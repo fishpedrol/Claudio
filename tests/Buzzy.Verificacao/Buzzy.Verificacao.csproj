@@ -39,6 +39,8 @@
     <Compile Include="..\Buzzy.App.Testes\Integracao\PerfilDeTeste.cs" Link="Compartilhado\PerfilDeTeste.cs" />
     <!-- A leitura do log que atravessa a rotação (marca com assinatura), a mesma dos testes de integração. -->
     <Compile Include="..\Buzzy.App.Testes\Integracao\LeituraDoLog.cs" Link="Compartilhado\LeituraDoLog.cs" />
+    <!-- A foto, só por fora, dos arquivos reais de configuração do usuário, antes e depois: a mesma da integração. -->
+    <Compile Include="..\Buzzy.App.Testes\Integracao\ArquivosReais.cs" Link="Compartilhado\ArquivosReais.cs" />
   </ItemGroup>
 
   <!--

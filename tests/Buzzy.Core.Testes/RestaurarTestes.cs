@@ -407,11 +407,10 @@ internal static class RestaurarTestes
         Afirmar.Igual(Ret(1920, 0, 4480, 1440), escondido.TelaDoMonitor, "tela nova ao esconder");
     }
 
-    // Com o botão pressionado, TOPOLOGY_CHANGED só atualiza o cache; o CLICK valida, porque o monitor do
-    // personagem mudou: ficou mais largo (2560x1080), com o mesmo chão. A âncora continua válida na área útil
-    // nova, no mesmo monitor, e então a validação mantém a posição de antes do gesto, trocando só a âncora e a
-    // tela, que passa a ser a nova. É o único caminho em que a tela antiga chega à validação. Esconder durante a
-    // reação grava essa tela, e não a de antes do gesto.
+    // Com o botão pressionado, TOPOLOGY_CHANGED não move a janela nem interrompe o gesto, mas a posição acompanha a
+    // topologia (passo P8, DEC-030): o monitor ficou mais largo (2560x1080), com o mesmo chão, e a posição passa a
+    // ter a tela nova e a âncora da mesma fração na área útil nova. O CLICK valida a partir dela, porque o monitor do
+    // personagem mudou. Esconder durante a reação grava a tela nova, e as frações gravadas descrevem o lugar validado.
     [Teste]
     public static void CliqueDepoisDeOMonitorMudarNoGesto_GravaATelaNova()
     {
@@ -420,17 +419,15 @@ internal static class RestaurarTestes
 
         Topologia maisLargo = ComMonitor(UmMonitor, Display1, m => m with { Tela = Ret(0, 0, 2560, 1080), AreaUtil = Ret(0, 0, 2560, 1032) });
         c.Aplicar(new TopologyChanged(maisLargo)).Esta(Estado.Pressed, "o gesto não é interrompido");
-        Afirmar.Igual(Ret(0, 0, 1920, 1080), Afirmar.NaoNulo(c.Atual.Posicao).TelaDoMonitor, "no gesto, só o cache muda");
+        Afirmar.Igual(Cenario.AncoraInicial, c.Ancora, "a janela não se move no gesto");
+        AfirmarPosicao(Display1, 0.85, 1, new PontoPx(2176, 1032), Ret(0, 0, 2560, 1080), Afirmar.NaoNulo(c.Atual.Posicao), "no gesto, a posição acompanha: 0,85 · 2560");
 
         c.Aplicar(new Click()).Percorreu(Estado.Pressed, Estado.Reacting);
-        Afirmar.Igual(Cenario.AncoraInicial, c.Ancora, "a âncora continua válida na área útil nova");
-        Afirmar.Igual(Ret(0, 0, 2560, 1080), Afirmar.NaoNulo(c.Atual.Posicao).TelaDoMonitor, "validada no clique, com a tela nova");
+        Afirmar.Igual(new PontoPx(2176, 1032), c.Ancora, "validada no clique a partir da posição que acompanhou");
+        Afirmar.Igual(Ret(0, 0, 2560, 1080), Afirmar.NaoNulo(c.Atual.Posicao).TelaDoMonitor, "com a tela nova");
 
         c.Aplicar(new CmdHide()).EstaEscondido(MotivoDoOcultamento.PorUsuario);
-        PosicaoDoPersonagem gravada = c.Efeito<GravarPosicao>().Posicao;
-        Afirmar.Igual(Display1, gravada.ChaveMonitor, "no mesmo monitor");
-        Afirmar.Igual(Cenario.AncoraInicial, gravada.AncoraAbsoluta, "onde ele estava");
-        Afirmar.Igual(Ret(0, 0, 2560, 1080), gravada.TelaDoMonitor, "grava a tela nova");
+        AfirmarPosicao(Display1, 0.85, 1, new PontoPx(2176, 1032), Ret(0, 0, 2560, 1080), c.Efeito<GravarPosicao>().Posicao, "grava onde ele está, com a tela nova");
     }
 
     // ---------------------------------------------------------------- auxiliares

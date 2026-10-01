@@ -182,6 +182,9 @@ internal static class Programa
         }
         rel.Linha($"Sem input do usuário há {Nativo.OciosoMs() / 1000.0:0.0} s; começando.");
 
+        // Os arquivos reais de configuração do usuário, vistos só por fora (existência, tamanho e datas), antes e depois: os
+        // Buzzy abertos usam o perfil de teste e nunca podem mudá-los (revisão de segurança do bloco P6-P9, achado 8).
+        string fotoAntes = Buzzy.App.Testes.Integracao.ArquivosReais.Foto();
         var v = new Verificacao(exeBuzzy, exeProprio, resultados, rel, ultimoInputDoUsuario);
         Sumario s = fase switch
         {
@@ -190,12 +193,17 @@ internal static class Programa
             "tamagotchi" => v.ExecutarTamagotchi(semente),
             _ => v.Executar(),
         };
+        string fotoDepois = Buzzy.App.Testes.Integracao.ArquivosReais.Foto();
+        bool reaisIntocados = fotoDepois == fotoAntes;
+        rel.Linha(reaisIntocados
+            ? "Arquivos reais do usuário (%LOCALAPPDATA%\\Buzzy), vistos só por fora: intocados."
+            : $"FALHA: os arquivos reais do usuário (%LOCALAPPDATA%\\Buzzy) mudaram durante a verificação, vistos só por fora. Antes: {fotoAntes}. Depois: {fotoDepois}.");
         string simulados = s.Simulados.Count == 0 ? "nenhum" : string.Join(" | ", s.Simulados);
         string naoExercitados = s.NaoExercitados.Count == 0 ? "nenhum" : string.Join(" | ", s.NaoExercitados);
         rel.Linha($"==== Resultado: {(s.Falhas == 0 ? "sem falhas" : $"{s.Falhas} falha(s)")} — {s.Ok} OK, {s.NaoAplicavel} N/A, {s.Simulados.Count} SIMULADO " +
                   $"(input SINTÉTICO; nada disto é gesto humano). SIMULADO, pendente de verificação manual real: {simulados}. " +
                   $"Não exercitado, pendente de verificação manual real: {naoExercitados} ====");
-        return s.Falhas == 0 ? 0 : 1;
+        return s.Falhas == 0 && reaisIntocados ? 0 : 1;
     }
 
     private static int Uso(string motivo)

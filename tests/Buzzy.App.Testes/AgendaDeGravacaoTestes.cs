@@ -131,7 +131,7 @@ internal sealed class AgendaDeGravacaoTestes : IDisposable
         Afirmar.Verdadeiro(agenda.Ligada, "gravação ligada");
         Afirmar.Falso(agenda.Pendente, "o disco já tem o lido: nada pendente");
         string partida = Afirmar.NaoNulo(Linhas("lido").SingleOrDefault(), "uma linha CONFIG na partida");
-        Afirmar.Igual("lido=principal|principal=Valido|reserva=-|versao=3|avisos=0|tentativas=1|gravacao=liberada|pasta=perfil", partida, "a linha da partida");
+        Afirmar.Igual("lido=principal|principal=Valido|reserva=-|versao=atual|avisos=0|tentativas=1|gravacao=liberada|pasta=perfil", partida, "a linha da partida");
 
         Loaded carga = agenda.Lidas.ParaACarga(TopologiaDeUmMonitor());
         Afirmar.Igual((NaParede, LadoDoEsconderijo.Direita, true), (carga.PosicaoSalva, carga.Esconderijo, carga.PresoPeloUsuario), "a carga leva a posição com a tela e a postura");
@@ -304,6 +304,47 @@ internal sealed class AgendaDeGravacaoTestes : IDisposable
         agenda.Pedir(Gravar(NaParede, preso: true), new DragEnd(default));
         _agendador.Disparar();
         Afirmar.Igual(new ConfiguracoesSalvas(NaParede, Preferencias.Padrao) { PresoPeloUsuario = true }, NoDisco(pasta), "o próximo pedido grava");
+    }
+
+    // Um pedido novo zera as falhas (revisão de correção do bloco P6-P9, achado 5, mutação P7c): a série 2, 10 e 60 s
+    // recomeça do primeiro passo, em vez de continuar de onde a série do pedido anterior parou.
+    [Teste]
+    public void Falhas_UmPedidoNovoRecomecaASerieDeNovasTentativas()
+    {
+        string pasta = NovaPasta();
+        Afirmar.Verdadeiro(new ArquivoDeConfiguracoes(pasta).Gravar(new ConfiguracoesSalvas(NoChao, Preferencias.Padrao)).Gravou, "arquivo preparado");
+        AgendaDeGravacao agenda = Nova(new ArquivoDeConfiguracoes(pasta));
+        string principal = Path.Combine(pasta, ArquivoDeConfiguracoes.NomePrincipal);
+        using (new FileStream(principal, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            agenda.Pedir(Gravar(NaParede, preso: true), new DragEnd(default));
+            _agendador.Disparar();
+            _agendador.Disparar();
+            Afirmar.Igual<TimeSpan?>(PoliticaDeGravacao.EsperasDeNovaTentativa[1], _agendador.Pendente, "a série andou: a segunda espera");
+            agenda.Pedir(Gravar(NoChao, LadoDoEsconderijo.Baixo), new DragEnd(default));
+            Afirmar.Igual<TimeSpan?>(PoliticaDeGravacao.Atraso, _agendador.Pendente, "o pedido novo, com o atraso de sempre");
+            _agendador.Disparar();
+            Afirmar.Igual<TimeSpan?>(PoliticaDeGravacao.EsperasDeNovaTentativa[0], _agendador.Pendente, "a série recomeça: a primeira espera, e não a terceira");
+        }
+        _agendador.Disparar();
+        Afirmar.Igual(new ConfiguracoesSalvas(NoChao, Preferencias.Padrao) { Esconderijo = LadoDoEsconderijo.Baixo }, NoDisco(pasta), "liberado, grava o último pedido");
+    }
+
+    // A versão do arquivo é um valor lido dele, que qualquer um edita: a linha CONFIG da partida, que só leva enums,
+    // contagens e tempos (DEC-029, item 12), a leva como atual, anterior ou futura (revisão de segurança do bloco P6-P9,
+    // achado 2).
+    [Teste]
+    public void LinhaConfigDaPartida_AVersaoDoArquivoVaiComoAtualAnteriorOuFutura()
+    {
+        int atual = EsquemaDeConfiguracoes.VersaoAtual;
+        foreach ((int? versao, string esperado) in new (int?, string)[]
+        {
+            (null, "-"), (1, "anterior"), (atual - 1, "anterior"), (atual, "atual"), (atual + 1, "futura"), (int.MaxValue, "futura"), (0, "anterior"), (-7, "anterior"),
+        })
+        {
+            var lida = new LeituraDoArquivo(ConfiguracoesSalvas.Padrao, OrigemDasConfiguracoes.Principal, EstadoDoArquivo.Valido, null, false, versao, 0, 1);
+            Afirmar.Igual(esperado, AgendaDeGravacao.CamposDaLeitura(lida, perfil: true).Single(c => c.Campo == "versao").Valor?.ToString(), $"versão {versao}");
+        }
     }
 
     // Descarregar (encerrar, erro não tratado): grava o pendente na hora, com as tentativas do caminho imediato, e cancela

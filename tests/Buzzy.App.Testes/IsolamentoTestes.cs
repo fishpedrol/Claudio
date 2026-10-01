@@ -203,6 +203,61 @@ internal sealed class IsolamentoTestes : IDisposable
     }
 
     [Teste]
+    public void TestesDoAplicativo_SoMexemNasJanelasDoBuzzyComOPidConferido()
+    {
+        // SECURITY.md 3.2 (ferramentas de teste): os testes só postam mensagens às janelas do Buzzy que abriram, com o PID
+        // conferido antes de cada uma (revisão de segurança do bloco P6-P9, achado 3): se o Buzzy cair no meio do teste e o
+        // HWND for reaproveitado, nada vai para a janela de outro programa. Só as portas de BuzzyEmTeste chamam o
+        // PostMessage, o SendMessageTimeout, o SetWindowPos e o ShowWindow de NativoTeste, e cada uma confere o PID logo
+        // antes. A outra exceção é o envio síncrono à janela de item que o próprio processo de testes cria e fecha
+        // (JanelaDoItemTestes): ela não é do Buzzy aberto.
+        string pasta = Path.Combine(Caminhos.Raiz, "tests", "Buzzy.App.Testes");
+        var chamada = new Regex(@"NativoTeste\.(PostMessage|SendMessageTimeout|SetWindowPos|ShowWindow)\(");
+        Dictionary<string, string> fontes = FontesCs(pasta)
+            .Where(f => Path.GetFileName(f) != "IsolamentoTestes.cs")
+            .ToDictionary(f => Path.GetRelativePath(pasta, f), File.ReadAllText, StringComparer.Ordinal);
+        Afirmar.Sequencia([@"Integracao\BuzzyEmTeste.cs", "JanelaDoItemTestes.cs"],
+            fontes.Where(f => chamada.IsMatch(f.Value)).Select(f => f.Key).Order(StringComparer.Ordinal), "quem age sobre janelas");
+        Afirmar.Sequencia(["SendMessageTimeout"], chamada.Matches(fontes["JanelaDoItemTestes.cs"]).Select(m => m.Groups[1].Value).Distinct(),
+            "na janela de item do próprio processo de testes, só o envio síncrono");
+
+        // Em BuzzyEmTeste, cada chamada fica num método que confere o PID antes dela.
+        string buzzy = fontes[@"Integracao\BuzzyEmTeste.cs"];
+        MatchCollection achadas = chamada.Matches(buzzy);
+        Afirmar.Verdadeiro(achadas.Count >= 6, $"as portas: {achadas.Count} chamadas");
+        foreach (Match m in achadas)
+        {
+            int metodo = new[] { "\n    internal ", "\n    public ", "\n    private " }.Max(d => buzzy.LastIndexOf(d, m.Index, StringComparison.Ordinal));
+            string antes = buzzy[metodo..m.Index];
+            Afirmar.Contem("ExigirDesteProcesso(", antes, $"a chamada {m.Value} da linha {buzzy[..m.Index].Count(c => c == '\n') + 1} confere o PID antes");
+        }
+        Afirmar.Verdadeiro(Regex.IsMatch(buzzy, @"NativoTeste\.PidDe\(Janela\) == \(uint\)Processo\.Id && Postar\(Janela, NativoTeste\.WM_CLOSE"),
+            "o Dispose confere o PID antes do WM_CLOSE, sem lançar");
+    }
+
+    [Teste]
+    public void ArquivosReais_FotoSoPorFora_EOsNomesSaoOsDoArquivoDeConfiguracoes()
+    {
+        // A foto dos arquivos reais (revisão de segurança do bloco P6-P9, achado 8) vê só metadados: existência, tamanho e
+        // datas, nunca o conteúdo. Os nomes são os do ArquivoDeConfiguracoes, que a verificação de tela não compila.
+        Afirmar.Sequencia(ArquivoDeConfiguracoes.Nomes, ArquivosReais.Nomes, "os mesmos quatro nomes");
+        string pasta = Path.Combine(_raiz, "fotos");
+        Directory.CreateDirectory(pasta);
+        string vazia = ArquivosReais.Foto(pasta);
+        Afirmar.Igual(string.Join("; ", ArquivoDeConfiguracoes.Nomes.Select(n => $"{n}: ausente")), vazia, "sem arquivos");
+
+        string principal = Path.Combine(pasta, ArquivoDeConfiguracoes.NomePrincipal);
+        File.WriteAllText(principal, "{\"segredo\":\"nao-pode-aparecer\"}");
+        string com = ArquivosReais.Foto(pasta);
+        Afirmar.Contem("settings.json: 31 bytes, criado ", com);
+        Afirmar.Falso(com.Contains("segredo", StringComparison.Ordinal) || com.Contains("nao-pode-aparecer", StringComparison.Ordinal), "o conteúdo nunca aparece");
+        File.SetLastWriteTimeUtc(principal, File.GetLastWriteTimeUtc(principal).AddSeconds(5));
+        Afirmar.Diferente(com, ArquivosReais.Foto(pasta), "uma escrita muda a foto");
+        File.Delete(principal);
+        Afirmar.Igual(vazia, ArquivosReais.Foto(pasta), "apagado, volta a ausente");
+    }
+
+    [Teste]
     public void MedirDesempenho_AbreOBuzzyComOPerfilDeTesteLimpo()
     {
         string[] linhas = File.ReadAllLines(Path.Combine(Caminhos.Raiz, "tools", "medir-desempenho.ps1"));
@@ -232,6 +287,28 @@ internal sealed class IsolamentoTestes : IDisposable
         string funcao = string.Join("\n", linhas.Skip(definicoes[0]).TakeWhile(l => l != "}"));
         foreach (string trecho in new[] { "'Buzzy'", "'testes'", "ReparsePoint", "Abortar", "[IO.Directory]::Delete($pasta, $true)" })
             Afirmar.Contem(trecho, funcao, "LimparPerfilDeTeste");
+    }
+
+    [Teste]
+    public void MedirDesempenho_ConfereOsArquivosReaisAntesEDepois_SoPorFora()
+    {
+        // Revisão de segurança do bloco P6-P9, achado 8: a medição tira a foto dos arquivos reais (só metadados, como
+        // ArquivosReais.cs) antes de abrir o Buzzy e no fim, e falha se mudaram.
+        string[] linhas = File.ReadAllLines(Path.Combine(Caminhos.Raiz, "tools", "medir-desempenho.ps1"));
+        int[] Linhas(string trecho) => [.. linhas.Select((l, i) => (l, i)).Where(x => x.l.Contains(trecho, StringComparison.Ordinal)).Select(x => x.i)];
+        int abrir = Linhas("[Diagnostics.Process]::Start($infoPartida)").Single();
+        int[] antes = Linhas("$fotoAntes = FotoDosArquivosReais"), depois = Linhas("$fotoDepois = FotoDosArquivosReais");
+        Afirmar.Verdadeiro(antes.Length == 1 && antes[0] < abrir, "a foto de antes, antes de abrir o Buzzy");
+        Afirmar.Verdadeiro(depois.Length == 1 && depois[0] > abrir, "a foto do fim, depois");
+        Afirmar.Contem("if ($fotoDepois -ne $fotoAntes) {", linhas[depois[0] + 1]);
+        Afirmar.Contem("exit 1", linhas[depois[0] + 3], "mudou: a medição falha");
+
+        int funcao = Linhas("function FotoDosArquivosReais {").Single();
+        string corpo = string.Join("\n", linhas.Skip(funcao).TakeWhile(l => l != "}"));
+        string nomes = Regex.Match(corpo, @"@\(('[^']+'(, )?)+\)").Value;
+        Afirmar.Igual("@(" + string.Join(", ", ArquivoDeConfiguracoes.Nomes.Select(n => $"'{n}'")) + ")", nomes, "os quatro nomes do ArquivoDeConfiguracoes");
+        foreach (string proibido in new[] { "Get-Content", "ReadAll", "OpenRead", "StreamReader" })
+            Afirmar.Falso(corpo.Contains(proibido, StringComparison.Ordinal), $"só metadados: {proibido}");
     }
 
     [Teste]
@@ -332,6 +409,35 @@ internal sealed class IsolamentoTestes : IDisposable
                 if (Directory.Exists(juncao)) Directory.Delete(juncao);
             }
             Afirmar.Verdadeiro(File.Exists(importante), $"{ondeFicaAJuncao}: desfeita a junção, o outro lado continua");
+        }
+    }
+
+    [Teste]
+    public void PerfilDeTeste_LimparRecusaJuncaoMesmoSemAPastaDoPerfil()
+    {
+        // Revisão de segurança do bloco P6-P9, achado 5: a recusa vinha depois de "a pasta do perfil não existe, nada a
+        // apagar". Com a pasta do Buzzy ou a dos testes como junção para um lugar sem a pasta do perfil, nada era recusado, e o
+        // Buzzy de teste (que grava desde o passo P7) e o próprio teste gravavam do outro lado, fora da pasta do Buzzy.
+        foreach (string ondeFicaAJuncao in new[] { "Buzzy", @"Buzzy\testes" })
+        {
+            string caso = Path.Combine(_raiz, $"sem-perfil-{ondeFicaAJuncao.Count(c => c == '\\')}");
+            string buzzy = Path.Combine(caso, "Buzzy");
+            string juncao = Path.Combine(caso, ondeFicaAJuncao);
+            string fora = Path.Combine(caso, "fora");
+            Directory.CreateDirectory(fora);
+            Directory.CreateDirectory(Path.GetDirectoryName(juncao)!);
+            CriarJuncao(juncao, fora);
+            try
+            {
+                Afirmar.Falso(Directory.Exists(PerfilDeTeste.Pasta("integracao", buzzy)), $"{ondeFicaAJuncao}: premissa, a pasta do perfil não existe");
+                InvalidOperationException recusa = Afirmar.Lanca<InvalidOperationException>(() => PerfilDeTeste.Limpar("integracao", buzzy), ondeFicaAJuncao);
+                Afirmar.Contem("junção", recusa.Message, ondeFicaAJuncao);
+                Afirmar.Sequencia([], Directory.GetFileSystemEntries(fora), $"{ondeFicaAJuncao}: nada criado do outro lado");
+            }
+            finally
+            {
+                if (Directory.Exists(juncao)) Directory.Delete(juncao);
+            }
         }
     }
 

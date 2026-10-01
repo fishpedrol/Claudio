@@ -20,7 +20,10 @@ internal enum OrigemDaChave
     /// <summary>Do caminho do dispositivo, lido nesta consulta: a chave estável.</summary>
     Caminho,
 
-    /// <summary>Da última consulta boa, para o mesmo nome GDI com a mesma tela: a consulta desta vez falhou.</summary>
+    /// <summary>
+    /// De uma consulta boa anterior, para o mesmo nome GDI com uma tela do mesmo tamanho (transladada ou não): desta vez a
+    /// consulta falhou, ou não trouxe o caminho desse monitor.
+    /// </summary>
     Cache,
 
     /// <summary>Do nome GDI (<c>gdi:</c>): sem caminho nem cache que valham.</summary>
@@ -30,7 +33,7 @@ internal enum OrigemDaChave
 /// <summary>A chave dada a um monitor enumerado, com o nome GDI dele e a origem.</summary>
 internal readonly record struct ChaveAtribuida(string NomeGdi, string Chave, OrigemDaChave Origem);
 
-/// <summary>Uma chave lida do caminho numa consulta boa e a tela do monitor naquela leitura.</summary>
+/// <summary>A chave de um nome GDI numa leitura com a consulta boa e a tela do monitor naquela leitura.</summary>
 internal readonly record struct ChaveConhecida(string Chave, RetanguloPx Tela);
 
 /// <summary>
@@ -39,7 +42,8 @@ internal readonly record struct ChaveConhecida(string Chave, RetanguloPx Tela);
 /// A chave é <c>mon:</c> seguido de 16 dígitos hexadecimais, os 8 primeiros bytes do SHA-256 do caminho do
 /// dispositivo do monitor em maiúsculas. É tão estável quanto o caminho, tem tamanho fixo, só usa ASCII sem espaço,
 /// <c>;</c>, <c>,</c>, <c>|</c> ou <c>=</c>, e não grava nem registra o identificador do hardware. Quando o caminho não
-/// pode ser lido, vale a chave da última consulta boa para o mesmo nome GDI com a mesma tela; sem ela, a reserva
+/// pode ser lido, vale a chave da última consulta boa para o mesmo nome GDI com uma tela do mesmo tamanho, mesmo
+/// transladada (uma troca de principal ou um rearranjo move as telas sem trocar os monitores); sem ela, a reserva
 /// <c>gdi:</c> seguida do nome GDI. Os prefixos separam os dois espaços de chaves. Para o núcleo a chave continua opaca:
 /// ele só a compara por igualdade.
 /// </summary>
@@ -92,7 +96,11 @@ internal static class ChavesDeMonitor
     /// A chave de cada monitor enumerado, na mesma ordem:
     /// <list type="number">
     /// <item>a do caminho, se o nome GDI está no <paramref name="mapa"/> (nulo quando a consulta falhou);</item>
-    /// <item>senão, a do <paramref name="cache"/>, se o nome GDI está lá com a mesma tela;</item>
+    /// <item>senão, a do <paramref name="cache"/>, se o nome GDI está lá com uma tela do mesmo tamanho, transladada ou não.
+    /// A troca de principal e o rearranjo movem as telas sem trocar os monitores: exigir a mesma tela punha todos na
+    /// reserva justamente quando a consulta é negada (sessão bloqueada ou remota), e o apelido por retângulo do núcleo
+    /// levava o personagem ao monitor que passou a ocupar a tela antiga. Com outro tamanho, o nome GDI pode ter ido para
+    /// outro monitor. O DPI não conta: é a escala que o usuário escolhe, e um monitor que só mudou de escala é o mesmo;</item>
     /// <item>senão, a reserva <c>gdi:</c>.</item>
     /// </list>
     /// Nenhuma chave se repete. As do caminho são da consulta atual e são distribuídas primeiro; uma chave do cache
@@ -117,12 +125,12 @@ internal static class ChavesDeMonitor
                 chaves[i] = new ChaveAtribuida(nome, chave, OrigemDaChave.Caminho);
         }
 
-        // 2. Do cache, com a mesma tela, e 3. a reserva.
+        // 2. Do cache, com uma tela do mesmo tamanho, e 3. a reserva.
         for (int i = 0; i < enumerados.Count; i++)
         {
             if (chaves[i] is not null) continue;
             (string nome, RetanguloPx tela) = enumerados[i];
-            chaves[i] = cache.TryGetValue(nome, out ChaveConhecida conhecida) && conhecida.Tela == tela && usadas.Add(conhecida.Chave)
+            chaves[i] = cache.TryGetValue(nome, out ChaveConhecida conhecida) && MesmoTamanho(conhecida.Tela, tela) && usadas.Add(conhecida.Chave)
                 ? new ChaveAtribuida(nome, conhecida.Chave, OrigemDaChave.Cache)
                 : Reserva(nome, usadas);
         }
@@ -130,8 +138,10 @@ internal static class ChavesDeMonitor
     }
 
     /// <summary>
-    /// O cache depois de uma leitura com a consulta boa: só as chaves lidas do caminho, com a tela de cada monitor
-    /// naquela leitura. Um caminho que não pôde ser lido desta vez não entra.
+    /// O cache depois de uma leitura com a consulta boa: as chaves lidas do caminho e as que continuaram pelo cache (o
+    /// monitor ainda enumerado cujo caminho a consulta não trouxe desta vez, por estar marcado como indisponível ou por
+    /// uma falha ao ler o nome), com a tela de cada monitor naquela leitura. Sem isso, uma consulta boa sem um alvo
+    /// apagava a chave dele, e a próxima consulta negada o punha na reserva. A reserva nunca entra.
     /// </summary>
     internal static IReadOnlyDictionary<string, ChaveConhecida> NovoCache(
         IReadOnlyList<(string NomeGdi, RetanguloPx Tela)> enumerados, IReadOnlyList<ChaveAtribuida> chaves)
@@ -143,11 +153,14 @@ internal static class ChavesDeMonitor
         var cache = new Dictionary<string, ChaveConhecida>(StringComparer.OrdinalIgnoreCase);
         for (int i = 0; i < chaves.Count; i++)
         {
-            if (chaves[i].Origem == OrigemDaChave.Caminho)
+            if (chaves[i].Origem is OrigemDaChave.Caminho or OrigemDaChave.Cache)
                 cache[enumerados[i].NomeGdi] = new ChaveConhecida(chaves[i].Chave, enumerados[i].Tela);
         }
         return cache;
     }
+
+    /// <summary>Se as duas telas têm a mesma largura e a mesma altura, em qualquer lugar do desktop virtual.</summary>
+    private static bool MesmoTamanho(RetanguloPx a, RetanguloPx b) => a.Largura == b.Largura && a.Altura == b.Altura;
 
     private static ChaveAtribuida Reserva(string nome, HashSet<string> usadas)
     {

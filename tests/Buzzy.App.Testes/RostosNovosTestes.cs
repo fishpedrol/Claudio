@@ -4,11 +4,11 @@ using Buzzy.Visual.Pixel;
 namespace Buzzy.App.Testes;
 
 /// <summary>
-/// Caras novas do tamagotchi (DEC-028, passo A2): as 7 caras de efeito, com as chaves que o núcleo
-/// gera a partir do enum <c>Expressao</c> (o nome em minúsculas: "eletrico", não "acelerado"), e as
-/// 7 caras passageiras das poses de uso, que só existem nos rostos. As 14 caras de humor continuam
-/// iguais e na ordem de expressoes.png. O chapéu torto do bêbado e o rubor forte ou verde ficam no
-/// quadro em todas as poses.
+/// Caras novas do tamagotchi (DEC-028, passo A2): as 8 caras de efeito, com as chaves que o núcleo
+/// gera a partir do enum <c>Expressao</c> (o nome em minúsculas: "eletrico", não "acelerado"; a
+/// "paranoico", da onda Paranoico, adicional de 2026-10-01, por último), e as 7 caras passageiras das
+/// poses de uso, que só existem nos rostos. As 14 caras de humor continuam iguais e na ordem de
+/// expressoes.png. O chapéu torto do bêbado e o rubor forte ou verde ficam no quadro em todas as poses.
 /// </summary>
 internal sealed class RostosNovosTestes
 {
@@ -16,7 +16,7 @@ internal sealed class RostosNovosTestes
         ["neutro", "feliz", "rindo", "curioso", "surpreso", "assustado", "sonolento", "bocejando", "dormindo", "travesso", "entediado", "pensativo", "empolgado", "determinado"];
 
     /// <summary>Ordem do fim do enum <c>Expressao</c> do núcleo (DEC-028), em minúsculas.</summary>
-    private static readonly string[] Efeito = ["bebado", "enjoado", "chapado", "eletrico", "apaixonado", "tonto", "viajando"];
+    private static readonly string[] Efeito = ["bebado", "enjoado", "chapado", "eletrico", "apaixonado", "tonto", "viajando", "paranoico"];
 
     private static readonly string[] Passageiras = ["mordendo", "mastigando", "engolindo", "tragando", "soltando", "fungando", "tossindo"];
 
@@ -31,7 +31,7 @@ internal sealed class RostosNovosTestes
     }
 
     [Teste]
-    public void AsSeteCarasDeEfeitoTemAsChavesDoNucleo()
+    public void AsOitoCarasDeEfeitoTemAsChavesDoNucleo()
     {
         Afirmar.Sequencia(Efeito, Rostos.DeEfeito);
         foreach (string chave in Efeito) Afirmar.Verdadeiro(Rostos.Expressoes.ContainsKey(chave), $"'{chave}' existe nos rostos");

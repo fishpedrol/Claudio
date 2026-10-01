@@ -21,37 +21,43 @@ internal static class TabelasDoDesenho
         [VerboDeUso.Inalar] = 120,
     };
 
-    // 4.1, com o verbo do coordenador: item | verbo | cara durante | onda | intensidade | duração sozinho (s).
+    // 4.1, com o verbo do coordenador e a classe do alívio (pedido do usuário de 2026-10-01: a comida e a bebida sem álcool
+    // são de alívio; os outros itens, de substância): item | verbo | cara durante | onda | intensidade | duração sozinho (s) |
+    // classe.
     private static readonly string[] Itens =
     [
-        "Banana | Comer | Feliz | Satisfeito | 1 | 63",
-        "Agua | Beber | Feliz | - | 0 | -",
-        "Vodka | Beber | Determinado | Bebado | 2 | 320.5",
-        "Cerveja | Beber | Feliz | Bebado | 1 | 198",
-        "Baseado | Fumar | Pensativo | Chapado | 2 | 342.5",
-        "Cigarro | Fumar | Pensativo | Relaxado | 1 | 63",
-        "Cocaina | Cheirar | Surpreso | Eletrico | 2 | 265.5",
-        "Md | Engolir | Travesso | Euforico | 2 | 385",
-        "LancaPerfume | Inalar | Surpreso | Tonto | 2 | 43.5",
-        "Cafe | Beber | Determinado | Ligado | 1 | 125",
-        "Energetico | Beber | Empolgado | Ligado | 2 | 211.25",
-        "Cogumelo | Comer | Curioso | Viajando | 2 | 375",
-        "Bala | Engolir | Feliz | Alegre | 1 | 62",
+        "Banana | Comer | Feliz | Satisfeito | 1 | 63 | alivio",
+        "Agua | Beber | Feliz | - | 0 | - | alivio",
+        "Vodka | Beber | Determinado | Bebado | 2 | 320.5 | substancia",
+        "Cerveja | Beber | Feliz | Bebado | 1 | 198 | substancia",
+        "Baseado | Fumar | Pensativo | Chapado | 2 | 342.5 | substancia",
+        "Cigarro | Fumar | Pensativo | Relaxado | 1 | 63 | substancia",
+        "Cocaina | Cheirar | Surpreso | Eletrico | 2 | 265.5 | substancia",
+        "Md | Engolir | Travesso | Euforico | 2 | 385 | substancia",
+        "LancaPerfume | Inalar | Surpreso | Tonto | 2 | 43.5 | substancia",
+        "Cafe | Beber | Determinado | Ligado | 1 | 125 | alivio",
+        "Energetico | Beber | Empolgado | Ligado | 2 | 211.25 | alivio",
+        "Cogumelo | Comer | Curioso | Viajando | 2 | 375 | substancia",
+        "Bala | Engolir | Feliz | Alegre | 1 | 62 | alivio",
     ];
 
-    // 4.2: onda | precedência | subida (s) | cada nível do pico (s) | queda base (s) | cara na subida | cara no pico | cara na queda.
+    // 4.2, com a classe do alívio (a onda de substância é a que a comida e a bebida sem álcool acalmam; a leve, só a água):
+    // onda | precedência | subida (s) | cada nível do pico (s) | queda base (s) | cara na subida | cara no pico | cara na
+    // queda | classe. A última é a paranoia (decisão do coordenador para a DEC-028, pedido do usuário de 2026-10-01), que
+    // nenhum item começa: precedência 4, maior que todas, e de substância.
     private static readonly string[] Ondas =
     [
-        "Satisfeito | 1 | 3 | 60 | - | Feliz | Feliz | -",
-        "Alegre | 1 | 2 | 40 | 20 | Empolgado | Empolgado | Entediado",
-        "Relaxado | 1 | 3 | 60 | - | Pensativo | Pensativo | -",
-        "Ligado | 2 | 5 | 75 | 45 | Surpreso | Determinado | Sonolento",
-        "Bebado | 3 | 8 | 100 | 90 | Feliz | Bebado | Enjoado",
-        "Chapado | 3 | 10 | 110 | 90 | Pensativo | Chapado | Sonolento",
-        "Eletrico | 3 | 3 | 75 | 90 | Surpreso | Eletrico | Entediado",
-        "Euforico | 3 | 15 | 110 | 120 | Feliz | Apaixonado | Entediado",
-        "Tonto | 3 | 1 | 15 | 10 | Surpreso | Tonto | Sonolento",
-        "Viajando | 3 | 20 | 140 | 60 | Curioso | Viajando | Pensativo",
+        "Satisfeito | 1 | 3 | 60 | - | Feliz | Feliz | - | leve",
+        "Alegre | 1 | 2 | 40 | 20 | Empolgado | Empolgado | Entediado | leve",
+        "Relaxado | 1 | 3 | 60 | - | Pensativo | Pensativo | - | substancia",
+        "Ligado | 2 | 5 | 75 | 45 | Surpreso | Determinado | Sonolento | leve",
+        "Bebado | 3 | 8 | 100 | 90 | Feliz | Bebado | Enjoado | substancia",
+        "Chapado | 3 | 10 | 110 | 90 | Pensativo | Chapado | Sonolento | substancia",
+        "Eletrico | 3 | 3 | 75 | 90 | Surpreso | Eletrico | Entediado | substancia",
+        "Euforico | 3 | 15 | 110 | 120 | Feliz | Apaixonado | Entediado | substancia",
+        "Tonto | 3 | 1 | 15 | 10 | Surpreso | Tonto | Sonolento | substancia",
+        "Viajando | 3 | 20 | 140 | 60 | Curioso | Viajando | Pensativo | substancia",
+        "Paranoico | 4 | 1 | 40 | 15 | Assustado | Paranoico | Sonolento | substancia",
     ];
 
     // 4.3, pico ("a/b/c" = níveis 1, 2 e 3; a subida usa o nível 1): onda | intervalo | descanso | andar | escalar | pular |
@@ -68,6 +74,7 @@ internal static class TabelasDoDesenho
         "Euforico | 60 | 50 | 120 | 100 | 150 | 30 | 250 | 150 | 120 | 0 | perfil | 120",
         "Tonto | 50 | 100 | 50 | 0 | 0 | 100 | 300 | 200 | 60 | 100 | 0 | 100",
         "Viajando | 130 | 120 | 80 | 80 | 60 | 100 | 200 | 250 | 70 | 0 | 20 | 100",
+        "Paranoico | 60 | 30 | 50 | 0 | 0 | 0 | 300 | 150 | 70 | 0 | 0 | 100",
     ];
 
     // 4.3, queda (não depende do nível; altura do pulo 100 e foguete do perfil, salvo onde indicado), mesmas colunas.
@@ -81,6 +88,7 @@ internal static class TabelasDoDesenho
         "Euforico | 140 | 150 | 70 | 60 | 50 | 200 | 80 | 100 | 85 | 0 | perfil | 100",
         "Tonto | 100 | 100 | 80 | 50 | 50 | 120 | 80 | 100 | 80 | 0 | perfil | 100",
         "Viajando | 120 | 120 | 80 | 70 | 60 | 150 | 100 | 150 | 85 | 0 | perfil | 100",
+        "Paranoico | 120 | 150 | 80 | 50 | 50 | 150 | 100 | 100 | 85 | 0 | perfil | 100",
     ];
 
     // 4.4: onda | gestos no pico | caras no pico | gestos na queda | caras na queda. Na subida, os gestos são os do pico e
@@ -97,18 +105,20 @@ internal static class TabelasDoDesenho
         "Euforico | Danca 4, Brincar 1 | Apaixonado 3, Empolgado 2, Feliz 1, Rindo 1 | Espreguicar 1, OlharAoRedor 1 | Entediado 2, Pensativo 2, Sonolento 1",
         "Tonto | Gargalhada 2, OlharAoRedor 1 | Tonto 4, Rindo 2 | OlharAoRedor 1 | Sonolento 1, Surpreso 1, Neutro 1",
         "Viajando | OlharAoRedor 2, Danca 1, Espiar 1 | Viajando 4, Surpreso 1, Pensativo 1, Curioso 1, Rindo 1 | OlharAoRedor 2, Espiar 1 | Pensativo 3, Curioso 1, Sonolento 1",
+        "Paranoico | OlharProTeto 4, Agachar 3, Tremedeira 2, OlharAoRedor 2, Espiar 1 | Paranoico 5, Assustado 2, Surpreso 1 | OlharAoRedor 2, Espreguicar 1 | Sonolento 2, Pensativo 1, Neutro 1",
     ];
 
-    /// <summary>Uma linha da tabela 4.1.</summary>
-    public sealed record ItemEsperado(Item Item, VerboDeUso Verbo, Expressao CaraDurante, Onda? Onda, int Intensidade, TimeSpan? DuracaoSozinho);
+    /// <summary>Uma linha da tabela 4.1; <paramref name="Alivio"/> diz se o item é de alívio (senão, de substância).</summary>
+    public sealed record ItemEsperado(Item Item, VerboDeUso Verbo, Expressao CaraDurante, Onda? Onda, int Intensidade, TimeSpan? DuracaoSozinho, bool Alivio);
 
     /// <summary>
     /// Uma onda das tabelas 4.2 a 4.4: tempos, caras e os perfis esperados já na linha canônica de
-    /// <see cref="Descrever(PerfilDaOnda)"/> (um por nível do pico e o da queda, nulo sem queda).
+    /// <see cref="Descrever(PerfilDaOnda)"/> (um por nível do pico e o da queda, nulo sem queda), e se é de substância
+    /// (senão, leve).
     /// </summary>
     public sealed record OndaEsperada(
         Onda Onda, int Precedencia, TimeSpan Subida, TimeSpan NivelDoPico, TimeSpan? QuedaBase,
-        Expressao CaraDaSubida, Expressao CaraDoPico, Expressao? CaraDaQueda, IReadOnlyList<string> PicoPorNivel, string? Queda)
+        Expressao CaraDaSubida, Expressao CaraDoPico, Expressao? CaraDaQueda, IReadOnlyList<string> PicoPorNivel, string? Queda, bool DeSubstancia)
     {
         /// <summary>A linha canônica do perfil da subida: o do nível 1 do pico, com a cara da subida só.</summary>
         public string Subir => PicoPorNivel[0][..PicoPorNivel[0].IndexOf(" caras=", StringComparison.Ordinal)] + $" caras=[{CaraDaSubida} 1]";
@@ -132,7 +142,8 @@ internal static class TabelasDoDesenho
         .. Itens.Select(Celulas).Select(c => new ItemEsperado(
             Enum.Parse<Item>(c[0]), Enum.Parse<VerboDeUso>(c[1]), Enum.Parse<Expressao>(c[2]),
             c[3] == "-" ? null : Enum.Parse<Onda>(c[3]), int.Parse(c[4], CultureInfo.InvariantCulture),
-            c[5] == "-" ? null : TimeSpan.FromMilliseconds(double.Parse(c[5], CultureInfo.InvariantCulture) * 1000))),
+            c[5] == "-" ? null : TimeSpan.FromMilliseconds(double.Parse(c[5], CultureInfo.InvariantCulture) * 1000),
+            Classe(c[6], "alivio", "substancia"))),
     ];
 
     /// <summary>As ondas das tabelas 4.2 a 4.4, na ordem do desenho.</summary>
@@ -170,7 +181,15 @@ internal static class TabelasDoDesenho
         return new OndaEsperada(
             onda, int.Parse(c[1], CultureInfo.InvariantCulture), Segundos(c[2]), Segundos(c[3]), c[4] == "-" ? null : Segundos(c[4]),
             Enum.Parse<Expressao>(c[5]), Enum.Parse<Expressao>(c[6]), c[7] == "-" ? null : Enum.Parse<Expressao>(c[7]),
-            porNivel, queda is null ? null : PerfilNoNivel(queda, 1, conjuntos[3], conjuntos[4]));
+            porNivel, queda is null ? null : PerfilNoNivel(queda, 1, conjuntos[3], conjuntos[4]), Classe(c[8], "substancia", "leve"));
+    }
+
+    /// <summary>Uma célula de classe: verdadeiro em <paramref name="sim"/>, falso em <paramref name="nao"/>; outra coisa é erro de transcrição.</summary>
+    private static bool Classe(string celula, string sim, string nao)
+    {
+        if (celula == sim) return true;
+        if (celula == nao) return false;
+        throw new InvalidOperationException($"Classe desconhecida na transcrição: {celula}.");
     }
 
     private static string Linha(int intervalo, int descanso, int andar, int escalar, int pular, int descansar, int gesto, int troca,

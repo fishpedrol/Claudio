@@ -36,6 +36,8 @@ internal static class ReproducaoTestes
         "05-movimento-e-fisica.txt",
         // A 06 é da Fase 5 (crítica de integração do tamagotchi, F15).
         "07-tamagotchi.txt",
+        // A paranoia (pedido do usuário de 2026-10-01).
+        "08-paranoia.txt",
     ];
 
     private const string VariavelDeAtualizacao = "BUZZY_ATUALIZAR_REFERENCIAS";

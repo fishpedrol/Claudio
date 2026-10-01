@@ -249,12 +249,14 @@ public static class PosesPixel
     ];
 
     /// <summary>
-    /// Poses provisórias dos seis gestos da onda do tamagotchi (DEC-028; crítica, L11), com os nomes que o
-    /// núcleo gera do enum <c>Gesto</c> em minúsculas, na ordem dele: a dança é o "brincando", a gargalhada
-    /// é o "reagindo", a tremedeira é o parado deslocado 1 pixel (a apresentação alterna as duas) e o
+    /// Poses dos gestos da onda do tamagotchi (DEC-028; crítica, L11), com os nomes que o núcleo gera do enum
+    /// <c>Gesto</c> em minúsculas, na ordem dele. As seis primeiras são provisórias: a dança é o "brincando", a
+    /// gargalhada é o "reagindo", a tremedeira é o parado deslocado 1 pixel (a apresentação alterna as duas) e o
     /// soluço, a tosse e o espirro são o parado com a cara e o efeito do gesto (a fumaça da tosse sai da
-    /// boca; o espirro solta a poeira do nariz). Ficam fora de <see cref="Todas"/>, como as poses de uso:
-    /// a folha nativa e as prévias das poses não mudam. <see cref="PorNome"/> acha as três listas.
+    /// boca; o espirro solta a poeira do nariz). As duas últimas são da paranoia (adicional de 2026-10-01, "os cara
+    /// tá no teto"), desenhadas para ela, com a cara "paranoico": o "olharproteto" aponta para o teto e o "agachar"
+    /// segura o chapéu com as duas mãos. Ficam fora de <see cref="Todas"/>, como as poses de uso: a folha nativa e
+    /// as prévias das poses não mudam. <see cref="PorNome"/> acha as três listas.
     /// </summary>
     public static readonly IReadOnlyList<PosePixel> DosGestos = CriarGestos();
 
@@ -271,6 +273,45 @@ public static class PosesPixel
             parado with { Nome = "espirro", Estado = "gesto: espirrar", Expressao = "tossindo", EfeitoDaPose = EfeitoVisual.Poeira },
             parado with { Nome = "tosse", Estado = "gesto: tossir", Expressao = "tossindo", EfeitoDaPose = EfeitoVisual.Fumaca },
             parado with { Nome = "tremedeira", Estado = "gesto: tremer", Expressao = "eletrico", QuadrilX = parado.QuadrilX + 1 },
+            // Paranoia: de joelhos dobrados, olha para cima e aponta o teto com o indicador, reto para cima; o braço sobe
+            // pela frente da orelha, longe do rosto, com o punho à direita da ponta da aba (o dedo não encosta nela), e a
+            // outra mão aperta o peito. De frente, o boneco não inclina a cabeça para trás: o pescoço estica 1 pixel,
+            // esticando-se para ver o teto (revisão da paranoia, achados 4 e 5).
+            parado with
+            {
+                Nome = "olharproteto",
+                Estado = "gesto: olhar pro teto",
+                QuadrilY = 49.1,
+                CabecaDescida = -1,
+                PernaA = new(-20, 8),
+                PernaB = new(20, -8),
+                BracoA = new(-25, 120),
+                MaoA = Mao.Fechada,
+                BracoB = new(130, 145),
+                MaoB = Mao.Apontando,
+                BracoBNaFrente = true,
+                Cauda = Cauda.Alta,
+                Expressao = "paranoico",
+            },
+            // Paranoia: agachado, com a cabeça encolhida entre os ombros, segura a aba com os dois punhos e espia para
+            // cima; os cotovelos abrem para fora e os antebraços sobem ao lado dos olhos, sem cobrir o rosto. (Abertas e
+            // de dedos para cima, acima da aba, as mãos pareciam orelhas.)
+            parado with
+            {
+                Nome = "agachar",
+                Estado = "gesto: agachar",
+                QuadrilY = 52.5,
+                CabecaDescida = 3,
+                PernaA = new(-70, 15),
+                PernaB = new(70, -15),
+                BracoA = new(-135, 174),
+                BracoB = new(135, -174),
+                MaoA = Mao.Fechada,
+                MaoB = Mao.Fechada,
+                BracoANaFrente = true,
+                BracoBNaFrente = true,
+                Expressao = "paranoico",
+            },
         ];
     }
 

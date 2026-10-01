@@ -318,6 +318,49 @@ internal sealed class BuzzyEmTeste : IDisposable
             throw new InvalidOperationException($"PostMessage WM_CHAR '{c}' à janela {janela} do Buzzy falhou.");
     }
 
+    // As únicas portas dos testes para mexer nas janelas do Buzzy (SECURITY.md 3.2: o PID conferido antes de cada mensagem).
+    // Um teste de fonte (IsolamentoTestes.TestesDoAplicativo_SoMexemNasJanelasDoBuzzyComOPidConferido) proíbe chamar o
+    // PostMessage, o SendMessageTimeout, o SetWindowPos e o ShowWindow de NativoTeste fora daqui: se o Buzzy cair no meio de
+    // um teste e o HWND for reaproveitado por outro programa, nada vai para a janela dele.
+
+    /// <summary>
+    /// Posta uma mensagem a uma janela DESTE Buzzy (a de serviço, a do personagem, a de um item ou a dona de um menu), com o
+    /// PID conferido imediatamente antes. Devolve se o Windows aceitou.
+    /// </summary>
+    internal bool Postar(nint janela, int mensagem, nint wParam, nint lParam, string oQue)
+    {
+        ExigirDesteProcesso(janela, oQue);
+        return NativoTeste.PostMessage(janela, mensagem, wParam, lParam);
+    }
+
+    /// <summary>
+    /// Envia, sem esperar um Buzzy travado (SendMessageTimeout, 2 s), uma mensagem do sistema que leva ponteiro e não pode ser
+    /// postada a outro processo (WM_SETTINGCHANGE), a uma janela deste Buzzy, com o PID conferido imediatamente antes.
+    /// Devolve o que o SendMessageTimeout devolveu (0 se falhou).
+    /// </summary>
+    internal nint Enviar(nint janela, int mensagem, nint wParam, nint lParam, string oQue)
+    {
+        ExigirDesteProcesso(janela, oQue);
+        return NativoTeste.SendMessageTimeout(janela, mensagem, wParam, lParam, NativoTeste.SMTO_ABORTIFHUNG, 2000, out _);
+    }
+
+    /// <summary>
+    /// Move ou reordena "por fora", como outro agente faria, uma janela DESTE Buzzy (SetWindowPos, sempre sem ativar e sem
+    /// mudar o tamanho), com o PID conferido imediatamente antes. Devolve se o Windows aceitou.
+    /// </summary>
+    internal bool MoverPorFora(nint janela, nint depoisDe, int x, int y, uint flags, string oQue)
+    {
+        ExigirDesteProcesso(janela, oQue);
+        return NativoTeste.SetWindowPos(janela, depoisDe, x, y, 0, 0, flags | NativoTeste.SWP_NOSIZE | NativoTeste.SWP_NOACTIVATE);
+    }
+
+    /// <summary>Minimiza "por fora", sem ativar (SW_SHOWMINNOACTIVE), uma janela deste Buzzy, com o PID conferido imediatamente antes.</summary>
+    internal void MinimizarPorFora(nint janela, string oQue)
+    {
+        ExigirDesteProcesso(janela, oQue);
+        NativoTeste.ShowWindow(janela, NativoTeste.SW_SHOWMINNOACTIVE);
+    }
+
     /// <summary>Lê um HWND registrado no log (de um item, do dono de um menu) e confere que a janela é deste processo.</summary>
     internal nint JanelaDoLog(string texto, string chave) => JanelaDesteProcesso(texto, chave);
 
@@ -347,10 +390,10 @@ internal sealed class BuzzyEmTeste : IDisposable
         }
     }
 
-    /// <summary>Fecha pelo WM_CLOSE da janela do personagem e devolve o código de saída.</summary>
+    /// <summary>Fecha pelo WM_CLOSE da janela do personagem, com o PID conferido antes, e devolve o código de saída.</summary>
     internal int FecharPorWmClose(int limiteMs = 5000)
     {
-        NativoTeste.PostMessage(Janela, NativoTeste.WM_CLOSE, 0, 0);
+        Postar(Janela, NativoTeste.WM_CLOSE, 0, 0, "WM_CLOSE");
         if (!Processo.WaitForExit(limiteMs))
             throw new TimeoutException("O Buzzy não encerrou depois de WM_CLOSE.");
         return Processo.ExitCode;
@@ -358,8 +401,8 @@ internal sealed class BuzzyEmTeste : IDisposable
 
     /// <summary>
     /// Fecha o Buzzy que ESTE teste abriu: WM_CLOSE à janela do personagem, só se ela já foi
-    /// conferida como deste processo; espera; se preciso, encerra só este processo. Não lança,
-    /// para não esconder a falha que levou até aqui.
+    /// conferida como deste processo e o PID dela ainda é o dele; espera; se preciso, encerra só este
+    /// processo. Não lança, para não esconder a falha que levou até aqui.
     /// </summary>
     public void Dispose()
     {
@@ -367,8 +410,8 @@ internal sealed class BuzzyEmTeste : IDisposable
         {
             if (!Processo.HasExited)
             {
-                if (Janela != 0) NativoTeste.PostMessage(Janela, NativoTeste.WM_CLOSE, 0, 0);
-                if (!Processo.WaitForExit(Janela != 0 ? 5000 : 1000))
+                bool postou = Janela != 0 && NativoTeste.PidDe(Janela) == (uint)Processo.Id && Postar(Janela, NativoTeste.WM_CLOSE, 0, 0, "WM_CLOSE");
+                if (!Processo.WaitForExit(postou ? 5000 : 1000))
                     Console.WriteLine("         limpeza: " + EncerrarAForca(Processo, "Buzzy aberto pelo teste"));
             }
         }

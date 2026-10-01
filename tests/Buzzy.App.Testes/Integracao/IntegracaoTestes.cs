@@ -90,7 +90,7 @@ internal sealed class IntegracaoTestes
         using BuzzyEmTeste b = BuzzyEmTeste.Iniciar();
 
         // Minimizar sem ativar nada: o Buzzy deve se esconder (Q-03: minimizar esconde).
-        NativoTeste.ShowWindow(b.Janela, NativoTeste.SW_SHOWMINNOACTIVE);
+        b.MinimizarPorFora(b.Janela, "SW_SHOWMINNOACTIVE");
         b.Esperar(e => e.Chave == "VISIVEL" && e["visivel"] == "nao", 3000, "escondido ao ser minimizado");
         Afirmar.Falso(NativoTeste.IsWindowVisible(b.Janela), "escondido depois de minimizado");
 
@@ -119,8 +119,8 @@ internal sealed class IntegracaoTestes
         // A topologia real não mudou, então a releitura precisa concluir "mudou=nao".
         // WM_DISPLAYCHANGE pode ser postada; WM_SETTINGCHANGE leva ponteiro e só vai por envio
         // síncrono, como o próprio Windows faz na difusão.
-        Afirmar.Verdadeiro(NativoTeste.PostMessage(b.Servico, NativoTeste.WM_DISPLAYCHANGE, 32, (nint)(1920 | (1080 << 16))), "WM_DISPLAYCHANGE postada");
-        nint enviada = NativoTeste.SendMessageTimeout(b.Servico, NativoTeste.WM_SETTINGCHANGE, NativoTeste.SPI_SETWORKAREA, 0, NativoTeste.SMTO_ABORTIFHUNG, 2000, out _);
+        Afirmar.Verdadeiro(b.Postar(b.Servico, NativoTeste.WM_DISPLAYCHANGE, 32, (nint)(1920 | (1080 << 16)), "WM_DISPLAYCHANGE"), "WM_DISPLAYCHANGE postada");
+        nint enviada = b.Enviar(b.Servico, NativoTeste.WM_SETTINGCHANGE, NativoTeste.SPI_SETWORKAREA, 0, "WM_SETTINGCHANGE");
         Afirmar.Verdadeiro(enviada != 0, "WM_SETTINGCHANGE(SPI_SETWORKAREA) entregue");
 
         b.Esperar(e => e.Chave == "TOPOLOGIA" && e["motivo"].Contains("WM_DISPLAYCHANGE", StringComparison.Ordinal), 3000, "releitura da topologia");
@@ -143,23 +143,87 @@ internal sealed class IntegracaoTestes
     public void Bandeja_IconeERecriadoQuandoABarraDeTarefasReinicia()
     {
         using BuzzyEmTeste b = BuzzyEmTeste.Iniciar();
+        b.Esperar(e => e.Chave == "NUCLEO" && e["evento"] == "Loaded" && e["de"] == "Settling" && e["para"] == "Idle", 5000, "posição inicial acomodada pelo núcleo");
         long marca = BuzzyEmTeste.MarcaDoLog();
         int taskbarCreated = NativoTeste.RegisterWindowMessage("TaskbarCreated");
         Afirmar.Verdadeiro(taskbarCreated != 0, "mensagem TaskbarCreated registrada");
 
-        NativoTeste.PostMessage(b.Servico, taskbarCreated, 0, 0);
+        Afirmar.Verdadeiro(b.Postar(b.Servico, taskbarCreated, 0, 0, "TaskbarCreated"), "TaskbarCreated postada");
 
-        var fim = DateTime.UtcNow.AddSeconds(3);
-        List<EventoDoLog> depois = [];
-        while (DateTime.UtcNow < fim)
-        {
-            depois = BuzzyEmTeste.EventosDesde(marca);
-            if (depois.Any(e => e.Chave == "BANDEJA" && e.Campos.ContainsKey("adicionado"))) break;
-            Thread.Sleep(100);
-        }
-        Afirmar.Verdadeiro(depois.Any(e => e.Chave == "BANDEJA" && e["barraDeTarefasRecriada"] == "sim"), "reagiu a TaskbarCreated");
-        Afirmar.Verdadeiro(depois.Any(e => e.Chave == "BANDEJA" && e["adicionado"] == "True"), "ícone adicionado de novo");
+        // O ícone volta na hora. A topologia, que pode ter mudado com a barra (a área útil, o DPI do principal), vai ao núcleo
+        // pela releitura agrupada, como as outras mensagens (Fase 5, passo P9; crítica, C12): antes, a raiz a relia sem
+        // avisar o núcleo.
+        EventoDoLog releitura = EsperarDesde(b, marca, e => e.Chave == "TOPOLOGIA" && Motivos(e).Contains("TaskbarCreated"), 3000, "releitura da topologia pedida pela TaskbarCreated");
+        EsperarDesde(b, marca, e => e.Chave == "BANDEJA" && e["adicionado"] == "True", 3000, "ícone adicionado de novo");
+        List<EventoDoLog> depois = BuzzyEmTeste.EventosDesde(marca);
+        int recriada = depois.FindIndex(e => e.Chave == "BANDEJA" && e["barraDeTarefasRecriada"] == "sim");
+        int adicao = depois.FindIndex(e => e.Chave == "BANDEJA" && e.Campos.ContainsKey("adicionado"));
+        int mensagem = depois.FindIndex(e => e.Chave == "MENSAGEM" && e["tipo"] == "TaskbarCreated");
+        int topologia = depois.FindIndex(e => e.Linha == releitura.Linha);
+        Afirmar.Verdadeiro(recriada >= 0, "reagiu a TaskbarCreated");
+        Afirmar.Verdadeiro(adicao > recriada, "o ícone volta na hora, antes da releitura");
+        Afirmar.Verdadeiro(mensagem > adicao && topologia > mensagem, $"a mensagem crua no log (MENSAGEM|tipo=TaskbarCreated) e depois a releitura (índices {adicao}, {mensagem}, {topologia})");
+        Afirmar.Igual("nao", releitura["mudou"], "topologia real igual");
+        double ms = (releitura.Instante - depois[mensagem].Instante).TotalMilliseconds;
+        Afirmar.Verdadeiro(ms >= 250, $"a releitura espera o agrupamento de 300 ms: {ms} ms");
 
         Afirmar.Igual(0, b.FecharPorWmClose());
+    }
+
+    [Teste]
+    public void Topologia_RajadaSemFim_ReleNoTetoDeUmSegundoSemEsperarOFimDela_ECadaMensagemVaiAoLog()
+    {
+        using BuzzyEmTeste b = BuzzyEmTeste.Iniciar();
+        b.Esperar(e => e.Chave == "NUCLEO" && e["evento"] == "Loaded" && e["de"] == "Settling" && e["para"] == "Idle", 5000, "posição inicial acomodada pelo núcleo");
+        Thread.Sleep(1000); // uma releitura da partida (WM_DPICHANGED ao mostrar) já saiu
+        long marca = BuzzyEmTeste.MarcaDoLog();
+
+        // Uma rajada sem fim: WM_DISPLAYCHANGE a cada 100 ms, por 2,5 s, sempre a menos de 300 ms da anterior. Sem o teto
+        // (crítica, C11), a releitura esperaria o fim da rajada; com ele, sai 1 s depois da primeira mensagem, e a mensagem
+        // seguinte começa outra rajada. A topologia real não muda.
+        const int Mensagens = 26;
+        var relogio = Stopwatch.StartNew();
+        for (int i = 0; i < Mensagens; i++)
+        {
+            while (relogio.ElapsedMilliseconds < i * 100L) Thread.Sleep(5);
+            Afirmar.Verdadeiro(b.Postar(b.Servico, NativoTeste.WM_DISPLAYCHANGE, 32, (nint)(1920 | (1080 << 16)), "WM_DISPLAYCHANGE"), "WM_DISPLAYCHANGE postada");
+        }
+        // A última rajada relê 300 ms depois da última mensagem; depois, nada mais (nenhuma releitura sem mensagem).
+        Thread.Sleep(2000);
+
+        List<EventoDoLog> ev = BuzzyEmTeste.EventosDesde(marca);
+        Afirmar.Verdadeiro(ev.Where(e => e.Chave == "MENSAGEM").All(e => e.Campos.Count == 1 && e.Campos.ContainsKey("tipo")), "MENSAGEM leva só o tipo da mensagem");
+        List<EventoDoLog> mensagens = [.. ev.Where(e => e.Chave == "MENSAGEM" && e["tipo"] == "WM_DISPLAYCHANGE")];
+        Afirmar.Igual(Mensagens, mensagens.Count, "cada mensagem crua vai ao log (MENSAGEM|tipo=WM_DISPLAYCHANGE)");
+        List<EventoDoLog> releituras = [.. ev.Where(e => e.Chave == "TOPOLOGIA" && e.Campos.ContainsKey("mudou"))];
+        string resumo = string.Join(" | ", releituras.Select(r => $"{(r.Instante - mensagens[0].Instante).TotalMilliseconds:0} ms: {Motivos(r).Length} mensagem(ns)"));
+        Console.WriteLine($"         releituras desde a primeira mensagem (a última em {(mensagens[^1].Instante - mensagens[0].Instante).TotalMilliseconds:0} ms): {resumo}");
+        Afirmar.Verdadeiro(releituras.Count >= 2, $"mais de uma releitura numa rajada de 2,5 s: {resumo}");
+        Afirmar.Verdadeiro(releituras[0].Instante < mensagens[^1].Instante, $"a primeira releitura sai no meio da rajada, pelo teto, sem esperar a última mensagem: {resumo}");
+        double primeira = (releituras[0].Instante - mensagens[0].Instante).TotalMilliseconds;
+        Afirmar.Verdadeiro(primeira >= 250 && primeira <= 1600, $"a primeira releitura, até o teto de 1 s (com folga para a fila): {primeira:0} ms");
+        Afirmar.Igual(Mensagens, releituras.Sum(r => Motivos(r).Count(m => m == "WM_DISPLAYCHANGE")), $"cada mensagem numa releitura só: {resumo}");
+        Afirmar.Verdadeiro(releituras.All(r => r["mudou"] == "nao"), "a topologia real não mudou");
+        double ultima = (releituras[^1].Instante - mensagens[^1].Instante).TotalMilliseconds;
+        Afirmar.Verdadeiro(ultima >= 250 && ultima <= 1300, $"a última releitura, no agrupamento depois da última mensagem: {ultima:0} ms");
+
+        Afirmar.Igual(0, b.FecharPorWmClose());
+    }
+
+    /// <summary>Os motivos de uma linha TOPOLOGIA (as mensagens agrupadas, separadas por vírgula).</summary>
+    private static string[] Motivos(EventoDoLog e) => e["motivo"].Split(',');
+
+    /// <summary>O primeiro evento depois da <paramref name="marca"/> que satisfaz a condição.</summary>
+    private static EventoDoLog EsperarDesde(BuzzyEmTeste b, long marca, Func<EventoDoLog, bool> condicao, int limiteMs, string oQue)
+    {
+        var fim = DateTime.UtcNow.AddMilliseconds(limiteMs);
+        while (true)
+        {
+            EventoDoLog? achado = BuzzyEmTeste.EventosDesde(marca).FirstOrDefault(condicao);
+            if (achado is not null) return achado;
+            if (b.Processo.HasExited) throw new InvalidOperationException($"O Buzzy encerrou antes de registrar: {oQue}.");
+            if (DateTime.UtcNow > fim) throw new TimeoutException($"Tempo esgotado esperando no log: {oQue}.");
+            Thread.Sleep(50);
+        }
     }
 }

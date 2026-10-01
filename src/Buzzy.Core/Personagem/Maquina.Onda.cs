@@ -8,12 +8,27 @@ namespace Buzzy.Core.Personagem;
 /// do núcleo. A onda avança só nos disparos únicos do próprio temporizador (<see cref="AgendarOnda"/> e
 /// <see cref="ItemEffectTimer"/>), sem relógio de passo fixo, e muda pesos, intervalos, gestos, caras e as três
 /// velocidades, com o cambaleio (exceção documentada ao invariante 12). Só a onda da frente vale; a de fundo fica
-/// congelada até a da frente acabar (4.5).
+/// congelada até a da frente acabar (4.5). Comer e beber algo sem álcool acalmam a onda da frente aos poucos, um passo
+/// por item (o alívio, pedido do usuário de 2026-10-01). E quem usa muitas substâncias seguidas fica paranoico, de
+/// desenho animado, achando que tem alguém no teto (a paranoia, outro pedido do mesmo dia): na 4ª do episódio, a onda
+/// <see cref="Onda.Paranoico"/> vai para a frente.
 /// </summary>
 public static partial class Maquina
 {
     /// <summary>Passos de uma volta do cambaleio: 0,8 s a 60 passos por segundo.</summary>
     public const int PassosDoCambaleio = 48;
+
+    /// <summary>
+    /// A carga que leva à paranoia (<see cref="EstadoDoNucleo.Carga"/>): da 4ª substância do episódio em diante, a paranoia
+    /// começa ou sobe um nível.
+    /// </summary>
+    public const int CargaDaParanoia = 4;
+
+    /// <summary>
+    /// Quanto dura o olhar pro teto do começo da paranoia (<see cref="Gesto.OlharProTeto"/>), em passos do relógio: 1,5 s a
+    /// 60 por segundo, fixo, sem sorteio.
+    /// </summary>
+    public const int PassosDoOlharProTeto = 90;
 
     /// <summary>
     /// O perfil da fase da onda em curso (tabelas 4.3 e 4.4), ou nulo: sem onda, ou com o tamagotchi desligado, em que
@@ -113,7 +128,10 @@ public static partial class Maquina
 
     private sealed partial class Passo
     {
-        /// <summary>Uma fase nova, ou outro nível, começou neste evento: o temporizador da onda recomeça.</summary>
+        /// <summary>
+        /// Uma fase começou ou recomeçou neste evento, ou o temporizador levou o pico a outro nível (<see cref="IniciarFase"/>):
+        /// o temporizador da onda recomeça. O alívio que só baixa o nível, na mesma fase, não o recomeça.
+        /// </summary>
         private bool _reagendarOnda;
 
         /// <summary>A física em vigor: com onda, as três velocidades da fase (D10).</summary>
@@ -149,19 +167,33 @@ public static partial class Maquina
         }
 
         /// <summary>
-        /// A combinação (4.5), quando ele usa um item. A água (sem onda) refresca (<see cref="Refrescar"/>). Sem onda, a do
-        /// item começa na subida, no nível da intensidade. Do mesmo tipo da da frente, os níveis somam até 3 e a fase recomeça
-        /// (a queda volta ao pico). Do mesmo tipo da de fundo, os níveis dela somam, e ela continua congelada. De precedência
-        /// maior ou igual à da frente, vai para a frente e a da frente fica atrás, congelada (a de fundo anterior é
-        /// descartada: só cabem duas). De precedência menor, é absorvida: nem a onda nem o temporizador mudam.
+        /// O que o item usado faz nas ondas: primeiro a combinação (4.5), com o alívio (<see cref="Combinar"/>); depois, a
+        /// carga da paranoia (<see cref="SomarACarga"/>). Devolve o texto da paranoia para a regra do soltar (vazio sem ela)
+        /// e se ela começou neste uso.
         /// </summary>
-        private void AplicarNaOnda(DadosDoItem dados)
+        private (string Paranoia, bool Comecou) AplicarNaOnda(DadosDoItem dados)
         {
-            if (dados.Onda is not { } tipo)
+            Combinar(dados);
+            return SomarACarga(dados);
+        }
+
+        /// <summary>
+        /// A combinação (4.5), quando ele usa um item. Primeiro, o alívio (<see cref="Alivia"/>): a água, com qualquer onda
+        /// na frente, e a comida e a bebida sem álcool, com uma onda de substância na frente, a aliviam um passo
+        /// (<see cref="Aliviar"/>), sem começar onda nenhuma. Sem onda própria e sem alívio (a água sem onda), nada. Sem
+        /// onda, a do item começa na subida, no nível da intensidade. Do mesmo tipo da da frente, os níveis somam até 3 e a
+        /// fase recomeça (a queda volta ao pico). Do mesmo tipo da de fundo, os níveis dela somam, e ela continua congelada.
+        /// De precedência maior ou igual à da frente, vai para a frente e a da frente fica atrás, congelada (a de fundo
+        /// anterior é descartada: só cabem duas). De precedência menor, é absorvida: nem a onda nem o temporizador mudam.
+        /// </summary>
+        private void Combinar(DadosDoItem dados)
+        {
+            if (Alivia(dados))
             {
-                Refrescar();
+                Aliviar();
                 return;
             }
+            if (dados.Onda is not { } tipo) return;
             int intensidade = Math.Clamp(dados.Intensidade, 1, 3);
             EstadoDaOnda? frente = _s.Onda, fundo = _s.OndaDeFundo;
             if (frente is null)
@@ -177,6 +209,52 @@ public static partial class Maquina
             }
         }
 
+        /// <summary>
+        /// Se o item alivia a onda da frente (o alívio, pedido do usuário de 2026-10-01): só um item de alívio, e só com
+        /// onda na frente. Sem onda própria, a água alivia qualquer onda, de substância ou leve; com onda própria, a comida
+        /// e a bebida sem álcool só aliviam uma onda de substância, e com uma onda leve na frente combinam como sempre.
+        /// </summary>
+        private bool Alivia(DadosDoItem dados)
+            => dados.Alivio && _s.Onda is { } frente && (dados.Onda is null || _cfg.TabelaDeOndas(frente.Tipo).DeSubstancia);
+
+        /// <summary>
+        /// O alívio: comer ou beber algo sem álcool acalma a onda da frente um passo (<see cref="UmPassoAbaixo"/>). Só o
+        /// nível caiu: a fase e o temporizador em curso continuam, e nada é reagendado. Na queda que começa: a duração cheia
+        /// dela, pelo pior nível, e a cara dela. No fim da onda: a de fundo volta, como no fim pelo temporizador
+        /// (<see cref="FimDaFrente"/>). A de fundo nunca é tocada.
+        /// </summary>
+        private void Aliviar()
+        {
+            if (_s.Onda is not { } onda) return;
+            if (UmPassoAbaixo(onda) is not { } seguinte) FimDaFrente();
+            else if (seguinte.Fase == onda.Fase) _s = _s with { Onda = seguinte };
+            else IniciarFase(seguinte);
+        }
+
+        /// <summary>
+        /// Um passo do alívio: na subida ou no pico acima do nível 1, um nível abaixo, na mesma fase; no nível 1, a queda
+        /// (nível 1, com o mesmo pior), ou nulo, o fim, se a onda não tem queda; na queda, nulo, o fim.
+        /// </summary>
+        private EstadoDaOnda? UmPassoAbaixo(EstadoDaOnda onda) => onda switch
+        {
+            { Fase: FaseDaOnda.Queda } => null,
+            { Nivel: > 1 } => onda with { Nivel = onda.Nivel - 1 },
+            _ when _cfg.TabelaDeOndas(onda.Tipo).Queda is not null => onda with { Fase = FaseDaOnda.Queda, Nivel = 1 },
+            _ => null,
+        };
+
+        /// <summary>
+        /// O que o alívio do item fará na onda da frente, para a regra da transição do uso, sem dado pessoal:
+        /// "; alivia Bebado/Pico/2 -> Bebado/Pico/1", "-> fim" ou "-> fim; a de fundo volta: …". Vazio sem alívio.
+        /// </summary>
+        private string DescreverOAlivio(DadosDoItem dados)
+        {
+            if (!Alivia(dados) || _s.Onda is not { } frente) return "";
+            string depois = UmPassoAbaixo(frente) is { } passo ? Descrever(passo)
+                : _s.OndaDeFundo is { } fundo ? $"fim; a de fundo volta: {Descrever(fundo)}" : "fim";
+            return $"; alivia {Descrever(frente)} -> {depois}";
+        }
+
         /// <summary>A mesma onda com mais níveis, até 3: o pior nível acompanha, e a queda volta ao pico; a subida continua subida.</summary>
         private static EstadoDaOnda Somada(EstadoDaOnda onda, int intensidade)
         {
@@ -184,29 +262,61 @@ public static partial class Maquina
             return onda with { Nivel = nivel, Pior = Math.Max(onda.Pior, nivel), Fase = onda.Fase == FaseDaOnda.Subida ? FaseDaOnda.Subida : FaseDaOnda.Pico };
         }
 
+        // ---------------------------------------------------------------- a paranoia (pedido do usuário de 2026-10-01)
+
         /// <summary>
-        /// A água (4.5) refresca a onda da frente: na queda, ou na subida do nível 1, a onda acaba; no pico do nível 1, vai
-        /// para a queda (ou acaba, sem queda); nos outros casos, baixa um nível, sem mexer no temporizador. Sem onda, nada.
-        /// A de fundo não muda, e volta se a da frente acabar.
+        /// A paranoia, depois da combinação: um item de substância (todo item que não é de alívio) soma 1 à carga do episódio
+        /// (<see cref="EstadoDoNucleo.Carga"/>). Da <see cref="CargaDaParanoia"/>ª em diante: sem a paranoia na frente, ela
+        /// começa na frente, na subida do nível 1, e a frente vai para o fundo, congelada (a de fundo anterior é descartada),
+        /// como manda a precedência dela, a maior de todas; com ela na frente, sobe um nível (até 3), o pior acompanha e a
+        /// fase recomeça, como no mesmo tipo (<see cref="Somada"/>: a queda volta ao pico; a subida continua subida). Nenhum
+        /// sorteio. Devolve o texto da regra do soltar ("; a paranoia começa: Paranoico/Subida/1" ou "; a paranoia sobe:
+        /// Paranoico/Pico/1 -> Paranoico/Pico/2"; vazio sem paranoia) e se ela começou.
         /// </summary>
-        private void Refrescar()
+        private (string Texto, bool Comecou) SomarACarga(DadosDoItem dados)
         {
-            if (_s.Onda is not { } onda) return;
-            switch (onda.Fase)
+            if (dados.Alivio) return ("", false);
+            _s = _s with { Carga = _s.Carga + 1 };
+            if (_s.Carga < CargaDaParanoia) return ("", false);
+            if (_s.Onda is { Tipo: Onda.Paranoico } paranoia)
             {
-                case FaseDaOnda.Queda:
-                case FaseDaOnda.Subida when onda.Nivel <= 1:
-                    FimDaFrente();
-                    break;
-                case FaseDaOnda.Pico when onda.Nivel <= 1:
-                    if (_cfg.TabelaDeOndas(onda.Tipo).Queda is not null) IniciarFase(onda with { Fase = FaseDaOnda.Queda, Nivel = 1 });
-                    else FimDaFrente();
-                    break;
-                default:
-                    _s = _s with { Onda = onda with { Nivel = onda.Nivel - 1 } };
-                    break;
+                EstadoDaOnda subiu = Somada(paranoia, 1);
+                IniciarFase(subiu);
+                return ($"; a paranoia sobe: {Descrever(paranoia)} -> {Descrever(subiu)}", false);
             }
+            var comeca = new EstadoDaOnda(Onda.Paranoico, FaseDaOnda.Subida, 1, 1);
+            _s = _s with { OndaDeFundo = _s.Onda };
+            IniciarFase(comeca);
+            return ($"; a paranoia começa: {Descrever(comeca)}", true);
         }
+
+        /// <summary>
+        /// O começo da paranoia, com ele livre. Ela começa no soltar do item, com ele já usando (<see cref="Uso.ComecouAParanoia"/>):
+        /// no fim desse uso, se a acomodação o devolve a IDLE sem gesto e a paranoia continua na frente, ele olha pro teto na
+        /// hora (<see cref="Gesto.OlharProTeto"/>, por <see cref="PassosDoOlharProTeto"/> passos), sem sorteio. Em qualquer
+        /// outro estado (na parede ou no cipó, preso ou não; escondido; no ar), nada especial: a agenda e as caras da fase
+        /// fazem o resto.
+        /// </summary>
+        private void OlharProTetoNoComecoDaParanoia()
+        {
+            if (!ComOnda || _s.Onda?.Tipo != Onda.Paranoico || _s.Estado != Estado.Idle || _s.Gesto != Gesto.Nenhum) return;
+            _s = _s with { Gesto = Gesto.OlharProTeto, PassosDoGesto = PassosDoOlharProTeto };
+            _transicoes.Add(new Transicao(Estado.Idle, Estado.Idle, $"IDLE: a paranoia começou, gesto {Gesto.OlharProTeto}"));
+        }
+
+        /// <summary>
+        /// No fim de todo evento, a carga da paranoia volta a 0 se nem a onda da frente nem a de fundo é de substância: o
+        /// episódio acabou. A paranoia é de substância, então a carga dura enquanto ela durar. Com o tamagotchi desligado,
+        /// nada muda.
+        /// </summary>
+        private void ZerarACargaSemSubstancia()
+        {
+            if (_cfg.Tamagotchi && _s.Carga > 0 && !DeSubstancia(_s.Onda) && !DeSubstancia(_s.OndaDeFundo))
+                _s = _s with { Carga = 0 };
+        }
+
+        /// <summary>Se a onda existe e é de substância, pela tabela (<see cref="DadosDaOnda.DeSubstancia"/>).</summary>
+        private bool DeSubstancia(EstadoDaOnda? onda) => onda is not null && _cfg.TabelaDeOndas(onda.Tipo).DeSubstancia;
 
         /// <summary>
         /// A onda entra numa fase, ou noutro nível: o temporizador recomeça com a duração dela, e a cara da fase entra na
@@ -269,8 +379,9 @@ public static partial class Maquina
         }
 
         /// <summary>
-        /// O gesto da agenda, num único sorteio (D12): com onda, um dos gestos da fase, pelos pesos (os seis do fim do
-        /// enum só saem daqui); sem onda, de <see cref="Gesto.Espiar"/> a <see cref="Gesto.Brincar"/>, como antes.
+        /// O gesto da agenda, num único sorteio (D12): com onda, um dos gestos da fase, pelos pesos (os oito do fim do
+        /// enum só saem daqui, além do olhar pro teto do começo da paranoia, sem sorteio); sem onda, de
+        /// <see cref="Gesto.Espiar"/> a <see cref="Gesto.Brincar"/>, como antes.
         /// </summary>
         private (Gesto Gesto, Aleatorio Proximo) SortearGesto()
         {

@@ -27,6 +27,9 @@ internal interface IJanelaDoItem
     /// <summary>Posiciona e dimensiona em pixels físicos, sem ativar nem mudar a ordem Z.</summary>
     void AplicarRetangulo(RetanguloPx retangulo);
 
+    /// <summary>Onde a janela está de fato, em pixels físicos; nulo se o Windows não informar.</summary>
+    RetanguloPx? RetanguloReal();
+
     /// <summary>Mostra sem ativar.</summary>
     void Mostrar();
 
@@ -58,11 +61,14 @@ internal interface IJanelaDoItem
 /// Ordem Z, sempre por evento, nunca por timer (SECURITY.md 2): o item fica logo abaixo do personagem; no gesto sobre ele,
 /// vai para o topo (<see cref="ComecarGesto"/>), para não sumir atrás do personagem justamente quando vai ser solto sobre
 /// ele, e volta para baixo no fim (<see cref="TerminarGesto"/>). Quando o personagem reaparece no topo,
-/// <see cref="ReordenarAbaixoDoPersonagem"/> reafirma a ordem. No encerramento, <see cref="FecharTodas"/>.
+/// <see cref="ReordenarAbaixoDoPersonagem"/> reafirma a ordem. Depois de uma releitura da topologia e na conferência tardia
+/// dela, <see cref="ReafirmarLugares"/> reafirma só o lugar, sem mexer na ordem Z (Fase 5, passo P9; revisão do bloco
+/// P6-P9). No encerramento, <see cref="FecharTodas"/>.
 ///
 /// Diagnóstico (só com <c>--diagnostico</c>, sem dado pessoal): linhas ITEM de mostrado (com os pontos de teste), movido
-/// (uma vez por pouso no chão, por <see cref="RegistrarPousos"/>), escondido, removido (com o motivo), captura liberada e
-/// janelas fechadas no encerramento; um Id desconhecido leva <c>desconhecido=sim</c>. Só na thread da interface.
+/// (uma vez por pouso no chão, por <see cref="RegistrarPousos"/>), escondido, removido (com o motivo), reaplicado (com o
+/// motivo, depois de uma releitura da topologia), captura liberada e janelas fechadas no encerramento; um Id desconhecido
+/// leva <c>desconhecido=sim</c>. Só na thread da interface.
 /// </summary>
 internal sealed class GerenteDosItens
 {
@@ -192,6 +198,31 @@ internal sealed class GerenteDosItens
     {
         foreach (Registro r in _janelas.Values.Where(r => r.Visivel && !r.Janela.Capturando)) ColocarAbaixoDoPersonagem(r);
         foreach (Registro r in _janelas.Values.Where(r => r.Visivel && r.Janela.Capturando)) r.Janela.TrazerParaFrente();
+    }
+
+    /// <summary>
+    /// Depois de uma releitura da topologia publicada e na conferência tardia dela (Fase 5, passo P9; D14 do desenho dos
+    /// monitores): cada janela à vista, fora de um gesto, que não está onde o núcleo a pôs (o Windows a levou de volta a um
+    /// monitor reconectado, ou a moveu ao trocar o DPI) volta ao último lugar aplicado, que é o do núcleo, sem mudar a ordem Z
+    /// (<see cref="IJanelaDoItem.AplicarRetangulo"/>). A ordem Z não é reafirmada aqui: ela só muda quando o item aparece, no
+    /// gesto sobre ele e quando o personagem reaparece (DEC-028, item 22; SECURITY.md 2), e a conferência tardia é um
+    /// temporizador (revisão do bloco P6-P9). A janela do gesto em curso fica onde o cursor a pôs. Uma linha
+    /// <c>ITEM|reaplicado=Id</c> por janela reaplicada, com o motivo, o retângulo em que ela estava e o do núcleo (só com
+    /// <c>--diagnostico</c>). Devolve os Ids reaplicados, em ordem.
+    /// </summary>
+    internal IReadOnlyList<int> ReafirmarLugares(string motivo)
+    {
+        List<int>? reaplicados = null;
+        foreach ((int id, Registro r) in _janelas)
+        {
+            if (!r.Visivel || r.Janela.Capturando || r.Lugar is not { } lugar) continue;
+            RetanguloPx? real = r.Janela.RetanguloReal();
+            if (real == lugar.Retangulo) continue;
+            r.Janela.AplicarRetangulo(lugar.Retangulo);
+            (reaplicados ??= []).Add(id);
+            Diagnostico.Evento("ITEM", ("reaplicado", id), ("motivo", motivo), ("real", real), ("nucleo", lugar.Retangulo));
+        }
+        return reaplicados ?? [];
     }
 
     /// <summary>

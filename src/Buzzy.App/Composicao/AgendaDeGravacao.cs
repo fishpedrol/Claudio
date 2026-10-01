@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Globalization;
 using System.Windows.Threading;
 using Buzzy.App.Plataforma;
 using Buzzy.Core.Persistencia;
@@ -204,30 +203,13 @@ internal sealed class AgendaDeGravacao
     /// dispara mais.
     /// </summary>
     internal static Action AgendarNoDispatcher(TimeSpan espera, Action acao)
-    {
-        ArgumentNullException.ThrowIfNull(acao);
-        var temporizador = new DispatcherTimer(DispatcherPriority.Background) { Interval = espera > TimeSpan.Zero ? espera : TimeSpan.FromMilliseconds(1) };
-        bool encerrado = false;
-        EventHandler aoDisparar = null!;
-        aoDisparar = (_, _) =>
-        {
-            temporizador.Stop();
-            temporizador.Tick -= aoDisparar;
-            if (encerrado) return;
-            encerrado = true;
-            acao();
-        };
-        temporizador.Tick += aoDisparar;
-        temporizador.Start();
-        return () =>
-        {
-            encerrado = true;
-            temporizador.Stop();
-            temporizador.Tick -= aoDisparar;
-        };
-    }
+        => DisparoUnico.NoDispatcher(espera, acao, DispatcherPriority.Background);
 
-    /// <summary>Os campos da linha CONFIG da partida: de onde vieram as configurações, os estados dos arquivos e contagens.</summary>
+    /// <summary>
+    /// Os campos da linha CONFIG da partida: de onde vieram as configurações, os estados dos arquivos e contagens. A versão do
+    /// arquivo é um valor lido dele: vai como <c>atual</c>, <c>anterior</c> ou <c>futura</c>, comparada com a do esquema, e
+    /// nunca o número (DEC-029, item 12; revisão de segurança do bloco P6-P9, achado 2).
+    /// </summary>
     internal static (string Campo, object? Valor)[] CamposDaLeitura(LeituraDoArquivo lida, bool perfil)
     {
         ArgumentNullException.ThrowIfNull(lida);
@@ -236,7 +218,13 @@ internal sealed class AgendaDeGravacao
             ("lido", lida.Origem switch { OrigemDasConfiguracoes.Principal => "principal", OrigemDasConfiguracoes.Reserva => "reserva", _ => "padroes" }),
             ("principal", lida.Principal.ToString()),
             ("reserva", lida.Reserva?.ToString() ?? "-"),
-            ("versao", lida.Versao?.ToString(CultureInfo.InvariantCulture) ?? "-"),
+            ("versao", lida.Versao switch
+            {
+                null => "-",
+                EsquemaDeConfiguracoes.VersaoAtual => "atual",
+                > EsquemaDeConfiguracoes.VersaoAtual => "futura",
+                _ => "anterior",
+            }),
             ("avisos", lida.Avisos),
             ("tentativas", lida.TentativasNoPrincipal),
             ("gravacao", lida.GravacaoBloqueada ? "bloqueada" : "liberada"),

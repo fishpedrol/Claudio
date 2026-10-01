@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Buzzy.Core.Personagem;
 
 /// <summary>Resultado de aplicar um evento: o novo estado, os efeitos em ordem e as transições percorridas.</summary>
@@ -168,24 +170,77 @@ public static partial class Maquina
                 SairDoMonitorOcupado("BOOTING: carga sobre um monitor ocupado pela tela cheia");
         }
 
+        /// <summary>
+        /// TOPOLOGY_CHANGED (DEC-030). As posições guardadas (a do personagem e o retorno da tela cheia) e os itens fora da mão
+        /// acompanham a topologia em qualquer estado, sem mover a janela (<see cref="Posicionador.Rebasear"/>): escondido, ele
+        /// continua ligado à chave do monitor dele. Nos estados que revalidam, vale o que aconteceu com o monitor do personagem:
+        /// <list type="bullet">
+        /// <item>a geometria dele não mudou (só outros monitores mudaram, ele só foi transladado no desktop virtual ou só a chave
+        /// mudou): o estado continua (<see cref="ContinuarNoMonitor"/>). Com a toon force (DEC-023), a lateral da área útil
+        /// continua sendo parede, então nenhum apoio deixa de existir;</item>
+        /// <item>a geometria mudou: SETTLING na mesma posição relativa, com o texto de sempre;</item>
+        /// <item>ele sumiu: SETTLING no sobrevivente mais próximo, medido nas coordenadas antigas.</item>
+        /// </list>
+        /// USING é tratado como REACTING: continua nos dois primeiros casos e acaba numa revalidação (a onda continua). No
+        /// gesto, nada é validado: em PRESSED, toda saída parte da posição acompanhada (<see cref="ReancorarOGesto"/>); em
+        /// DRAGGING, o lugar do arraste anda com o monitor em que está, como a janela e o cursor.
+        /// </summary>
         private void MudarTopologia(Topologia nova)
         {
-            bool mesma = _s.Topologia is not null && _s.Topologia.MesmaConfiguracao(nova);
+            Topologia? antiga = _s.Topologia;
             _s = _s with { Topologia = nova };
-            if (mesma) return;
+            if (antiga is null || antiga.MesmaConfiguracao(nova)) return;
 
-            // Os itens fora da mão (DEC-028) são reacomodados em qualquer estado, como o personagem.
-            ReacomodarItens(nova);
+            ReacomodarItens(antiga, nova);
+            if (_s.Posicao is { } posicao)
+                _s = _s with { Posicao = Posicionador.Rebasear(antiga, nova, posicao, _cfg.Tamanho) };
+            if (_s.RetornoDaTelaCheia is { } retorno)
+                _s = _s with { RetornoDaTelaCheia = Posicionador.Rebasear(antiga, nova, retorno, _cfg.Tamanho) };
 
-            // PRESSED, DRAGGING, BOOTING, HIDDEN e EXITING só atualizam o cache: a validação
-            // acontece ao soltar, ao reaparecer ou ao terminar de carregar. Em USING, a revalidação acaba
-            // o uso, como a reação (a onda continua).
+            // No arraste, a janela segue o cursor, e o Windows leva os dois com o monitor físico quando a origem muda: o lugar do
+            // arraste anda com o monitor em que está, sem validar. Soltar, esconder ou sair antes do próximo DRAG_MOVE fica no
+            // mesmo monitor físico (revisão do bloco P6-P9, achado 2).
+            if (_s.Estado == Estado.Dragging && _s.Lugar is { } arrastado)
+                _s = _s with { Lugar = LugarLivre(nova, Posicionador.AcompanharPonto(antiga, nova, arrastado.Ancora)) };
+
+            // PRESSED, DRAGGING, BOOTING, HIDDEN e EXITING só atualizam o cache e as posições: a validação acontece ao soltar,
+            // ao clicar, ao reaparecer ou ao terminar de carregar.
             GrupoDoEstado grupo = _s.Estado.Grupo();
             bool revalida = grupo is GrupoDoEstado.Autonomo or GrupoDoEstado.Fisico || _s.Estado is Estado.Reacting or Estado.Using;
-            if (!revalida || _s.Posicao is null) return;
+            if (!revalida || _s.Posicao is null || _s.Lugar is not { } lugar) return;
+
+            MonitorDoDesktop? correspondente = Posicionador.MonitorCorrespondente(antiga, nova, lugar.Monitor.Chave, lugar.Monitor.Tela);
+            if (correspondente is not null && Posicionador.SoTranslacao(lugar.Monitor, correspondente, out int dx, out int dy))
+            {
+                ContinuarNoMonitor(correspondente, dx, dy);
+                return;
+            }
 
             (Posicionamento r, PosicaoDoPersonagem p) = Posicionador.Reacomodar(nova, _s.Posicao, _cfg.Tamanho);
-            Acomodar(r.Ancora, "TOPOLOGY_CHANGED", p);
+            Acomodar(r.Ancora, correspondente is null ? "TOPOLOGY_CHANGED: o monitor do personagem foi desconectado" : "TOPOLOGY_CHANGED", p);
+        }
+
+        /// <summary>
+        /// O monitor do personagem continua com a mesma geometria, no máximo transladado em (<paramref name="dx"/>,
+        /// <paramref name="dy"/>): o estado continua, com o que estiver em curso (a caminhada, a escalada, o pulo, a reação, o uso,
+        /// o esconderijo e o preso), e a âncora, a posição fina e a janela andam juntas. A posição passa a descrever o lugar
+        /// novo, para não divergir 1 px da âncora por arredondamento. O relógio e a agenda não mudam; uma transição para o
+        /// mesmo estado registra o que aconteceu, sem a chave (que vai ao log).
+        /// </summary>
+        private void ContinuarNoMonitor(MonitorDoDesktop novo, int dx, int dy)
+        {
+            Posicionamento antes = _s.Lugar!;
+            var ancora = new PontoPx(antes.Ancora.X + dx, antes.Ancora.Y + dy);
+            var lugar = new Posicionamento(novo, ancora, antes.Tamanho, antes.Retangulo.Deslocado(dx, dy));
+            _s = _s with { Lugar = lugar, Posicao = Posicionador.Descrever(lugar) };
+            // A posição fina só vale nos estados de movimento; nos outros, quem entra num deles parte da âncora (IrPara).
+            if (_s.Estado.EmMovimento())
+                _s = _s with { Movimento = _s.Movimento with { X = _s.Movimento.X + dx, Y = _s.Movimento.Y + dy } };
+
+            string regra = dx == 0 && dy == 0
+                ? (novo.Chave == antes.Monitor.Chave ? "TOPOLOGY_CHANGED: o monitor do personagem não mudou" : "TOPOLOGY_CHANGED: o monitor do personagem mudou de chave")
+                : string.Create(CultureInfo.InvariantCulture, $"TOPOLOGY_CHANGED: o monitor do personagem foi transladado ({dx},{dy})");
+            _transicoes.Add(new Transicao(_s.Estado, _s.Estado, regra));
         }
 
         // ---------------------------------------------------------------- ação direta
@@ -219,17 +274,29 @@ public static partial class Maquina
             _s = _s with { TelaCheiaMudouNoGesto = false };
         }
 
+        /// <summary>
+        /// R14 em toda saída de PRESSED (DEC-030; revisão do bloco P6-P9, achados 2 e 3): com o botão pressionado,
+        /// TOPOLOGY_CHANGED só acompanha a posição (<see cref="Posicionador.Rebasear"/>), e o lugar de antes do gesto fica nas
+        /// coordenadas antigas. Se o monitor dele mudou ou sumiu, o lugar passa a ser o que a posição acompanhada descreve, como
+        /// ele estaria parado (<see cref="Posicionador.Reacomodar"/>): a mesma posição relativa no monitor correspondente ou, sem
+        /// ele, no mais próximo da âncora acompanhada; validado, sem sair do gesto. As frações continuam descrevendo o lugar
+        /// validado. Senão, nada muda. Vale para CLICK, DOUBLE_CLICK, DRAG_CANCEL e DRAG_START.
+        /// </summary>
+        private void ReancorarOGesto()
+        {
+            if (_s.Estado != Estado.Pressed || _s.Lugar is not { } lugar || _s.Topologia is not { } topologia || _s.Posicao is not { } posicao
+                || Equals(topologia.PorChave(lugar.Monitor.Chave), lugar.Monitor)) return;
+            (Posicionamento acompanhado, PosicaoDoPersonagem descrita) = Posicionador.Reacomodar(topologia, posicao, _cfg.Tamanho);
+            (Posicionamento validado, PosicaoDoPersonagem validada, _) = Validar(acompanhado.Ancora, descrita);
+            _s = _s with { Lugar = validado, Posicao = validada };
+        }
+
         private void Clicar()
         {
             if (_s.Estado != Estado.Pressed) return;
-            // Com o botão pressionado, TOPOLOGY_CHANGED só atualiza o cache; "a validação acontece
-            // ao soltar". Se o monitor do personagem mudou ou sumiu, valida já no CLICK, sem sair
-            // da reação; senão, a reação começa no mesmo lugar.
-            if (_s.Lugar is { } lugar && _s.Topologia is { } topologia && !Equals(topologia.PorChave(lugar.Monitor.Chave), lugar.Monitor))
-            {
-                (Posicionamento validado, PosicaoDoPersonagem posicao, _) = Validar(lugar.Ancora, _s.Posicao);
-                _s = _s with { Lugar = validado, Posicao = posicao };
-            }
+            // Se o monitor do personagem mudou ou sumiu no gesto, valida já no CLICK, sem sair da reação, a partir da posição
+            // que acompanhou a topologia; senão, a reação começa no mesmo lugar.
+            ReancorarOGesto();
             FimDoGestoDoUsuario(escolheuPosicao: false);
             _s = _s with { PassosRestantes = _cfg.PassosDaReacao, Expressao = Expressao.Feliz, Sinal = Sinal.FoiClicado };
             IrPara(Estado.Reacting, "CLICK");
@@ -238,6 +305,8 @@ public static partial class Maquina
         private void CliqueDuplo()
         {
             Estado de = _s.Estado;
+            // A partir de PRESSED, o lugar do gesto no referencial atual (R14): é dele que ele se esconde ou fica.
+            ReancorarOGesto();
             if (_cfg.EsconderijoNoCliqueDuplo)
             {
                 if (de is Estado.Pressed or Estado.Idle or Estado.Reacting or Estado.Peeking) AlternarEsconderijo(de);
@@ -336,6 +405,8 @@ public static partial class Maquina
         private void IniciarArraste()
         {
             if (_s.Estado != Estado.Pressed) return;
+            // O arraste parte do lugar do gesto no referencial atual (R14): um cancelamento antes do primeiro DRAG_MOVE fica lá.
+            ReancorarOGesto();
             // Invariante 9: iniciar um arraste fecha o painel de energia.
             FecharPainelSeAberto();
             // Arrastar tira o personagem do esconderijo (DEC-025).
@@ -373,6 +444,7 @@ public static partial class Maquina
             }
             else if (_s.Estado == Estado.Pressed)
             {
+                ReancorarOGesto();
                 FimDoGestoDoUsuario(escolheuPosicao: false);
                 Acomodar(_s.Lugar.Ancora, "DRAG_CANCEL em PRESSED (captura perdida antes do limiar)");
             }
@@ -1665,7 +1737,9 @@ public static partial class Maquina
                 _s = _s with { DecisaoAgendada = false };
             }
 
-            // Onda do tamagotchi (DEC-028): o próprio temporizador único, depois do da agenda.
+            // Onda do tamagotchi (DEC-028): o próprio temporizador único, depois do da agenda. Antes, sem onda de substância, a
+            // carga da paranoia volta a 0 (pedido do usuário de 2026-10-01).
+            ZerarACargaSemSubstancia();
             EfeitosDaOnda(tempo);
 
             var efeitos = new List<Efeito>(_antes.Count + janela.Count + tempo.Count + _depois.Count);

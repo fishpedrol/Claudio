@@ -15,6 +15,12 @@ internal enum Categoria
     PersistenciaEscondida,
     CodigoDinamico,
     Manifesto,
+
+    /// <summary>
+    /// Alterar a configuração global do Windows (AGENTS.md; regra dura do projeto): só o usuário muda vídeo, energia e
+    /// sessão. Fica no fim do enum para não renumerar as outras (revisão de segurança do bloco P6-P9, achado 6).
+    /// </summary>
+    ConfiguracaoGlobal,
 }
 
 internal static class Categorias
@@ -31,6 +37,7 @@ internal static class Categorias
         Categoria.PersistenciaEscondida => "Persistência escondida",
         Categoria.CodigoDinamico => "Código dinâmico",
         Categoria.Manifesto => "Manifesto",
+        Categoria.ConfiguracaoGlobal => "Alterar configuração global",
         _ => throw new ArgumentOutOfRangeException(nameof(categoria), categoria, null),
     };
 }
@@ -293,6 +300,14 @@ internal static class ListaProibida
             fonte: ["GetDelegateForFunctionPointer"]),
         Namespace("System.Reflection.Emit", Categoria.CodigoDinamico, "gera código em tempo de execução",
             fonte: ["System.Reflection.Emit", "DynamicMethod", "ILGenerator", "AssemblyBuilder", "PersistedAssemblyBuilder"]),
+
+        // ---- Alterar configuração global --------------------------------------------------
+        // A chave estável do monitor (DEC-030) só LÊ a configuração de vídeo (GetDisplayConfigBufferSizes, QueryDisplayConfig e
+        // DisplayConfigGetDeviceInfo, permitidas); estas a mudam para o sistema todo (revisão de segurança do bloco P6-P9).
+        Funcao("SetDisplayConfig", Categoria.ConfiguracaoGlobal, "muda a topologia, a resolução, a orientação ou o modo de vídeo do sistema todo"),
+        Funcao("DisplayConfigSetDeviceInfo", Categoria.ConfiguracaoGlobal, "muda propriedades de um alvo ou de uma fonte de vídeo (escala, HDR) para o sistema todo"),
+        Funcao("ChangeDisplaySettings", Categoria.ConfiguracaoGlobal, "muda o modo de vídeo do monitor principal para o sistema todo"),
+        Funcao("ChangeDisplaySettingsEx", Categoria.ConfiguracaoGlobal, "muda o modo de vídeo ou a posição de um monitor para o sistema todo"),
     ];
 
     private static readonly Dictionary<string, Regra> FuncoesPorVariante = IndexarFuncoes();

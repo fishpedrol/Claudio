@@ -97,7 +97,7 @@ O asset provisório não determina o formato da arquitetura. A troca futura de a
 
 Pedidos do usuário em 2026-09-30, detalhados em DEC-027 e DEC-028. O estado de implementação fica em PROJECT_CONTEXT.md.
 
-**Emoção dominante.** No menu do botão direito, "Emoção dominante" lista as 14 expressões de `expressoes.png`, cada uma com o rosto dela ao lado do nome, e "Automática", o jeito de sempre. A escolhida vira a cara de base e a mais frequente; o comportamento, a física e a prioridade do usuário não mudam. É uma preferência: deve continuar valendo ao reabrir o app, o que depende da persistência da Fase 5.
+**Emoção dominante.** No menu do botão direito, "Emoção dominante" lista as 14 expressões de `expressoes.png`, cada uma com o rosto dela ao lado do nome, e "Automática", o jeito de sempre. A escolhida vira a cara de base e a mais frequente; o comportamento, a física e a prioridade do usuário não mudam. É uma preferência: continua valendo ao reabrir o app, guardada com as configurações locais (seção [Configurações e dados locais](#configurações-e-dados-locais)).
 
 **Tamagotchi adulto.** Um "tamagotchi virtual adulto", cartunesco e cômico, para o uso privado de um adulto:
 
@@ -125,7 +125,7 @@ Claude pode ser usado como assistente de desenvolvimento nos modelos que o usuá
 
 Persistência local pode guardar configurações, última posição escolhida pelo usuário, monitor preferido, tamanho, nível de energia, a emoção dominante e preferências de comportamento aprovadas. Os itens e os efeitos do tamagotchi não são gravados. A posição temporária usada pelo modo de tela cheia fica só em memória e não substitui essa posição persistida. Opacidade não é uma configuração do MVP. Não há memória de IA nem sincronização em nuvem. O esquema e a localização planejados estão em ARCHITECTURE.md e SECURITY.md.
 
-Ao reabrir, o Buzzy volta onde estava. Se estava escondido, volta escondido no mesmo lado; se o usuário o deixou preso na parede ou no cipó, continua preso lá. O usuário deixou essa escolha com Claude em 2026-09-30 (DEC-029). A preferência de atravessar monitores (Q-05) já tem lugar no arquivo, ligada por padrão, mas só terá efeito quando a travessia entrar, ainda na Fase 5. O estado de implementação fica em PROJECT_CONTEXT.md.
+Ao reabrir, o Buzzy volta onde estava, no mesmo monitor, com a mesma emoção dominante. Se estava escondido na borda, volta escondido no mesmo lado; se o usuário o deixou preso na parede ou no cipó, continua preso lá. O usuário deixou essa escolha com Claude em 2026-09-30 (DEC-029). Se aquele monitor não estiver mais lá, ele aparece na mesma posição relativa de um monitor no mesmo lugar e com o mesmo tamanho ou, sem nenhum, do principal (DEC-030). A preferência de atravessar monitores (Q-05) já tem lugar no arquivo, ligada por padrão, mas só terá efeito quando a travessia entrar, ainda na Fase 5. O estado de implementação fica em PROJECT_CONTEXT.md.
 
 ## Segurança
 

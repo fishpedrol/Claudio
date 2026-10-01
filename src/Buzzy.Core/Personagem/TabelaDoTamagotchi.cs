@@ -2,8 +2,10 @@ namespace Buzzy.Core.Personagem;
 
 /// <summary>
 /// As tabelas do tamagotchi adulto (DEC-028; desenho do núcleo, tabelas 4.1 a 4.4), só dados: os itens na ordem do
-/// menu, o verbo e a duração do uso de cada um, e as ondas, com precedência, tempos, caras e perfis por fase. Tudo é de
-/// desenho animado: os números são de jogo, escolhidos para o comportamento se ler na tela, sem relação com nada real.
+/// menu, o verbo e a duração do uso de cada um, e as ondas, com precedência, tempos, caras e perfis por fase. A classe do
+/// alívio (pedido do usuário de 2026-10-01) também é dado: o item de alívio (a comida e a bebida sem álcool) e a onda de
+/// substância. A paranoia (outro pedido do mesmo dia) é a última onda, que nenhum item começa. Tudo é de desenho
+/// animado: os números são de jogo, escolhidos para o comportamento se ler na tela, sem relação com nada real.
 /// A configuração do núcleo aponta para cá (<see cref="ConfiguracaoDoNucleo.TabelaDeItens"/> e
 /// <see cref="ConfiguracaoDoNucleo.TabelaDeOndas"/>), e os testes podem trocar as tabelas por outras.
 /// </summary>
@@ -43,32 +45,32 @@ public static class TabelaDoTamagotchi
             ? DadosDasOndas[(int)onda]
             : throw new ArgumentOutOfRangeException(nameof(onda), onda, "Onda desconhecida.");
 
-    // 4.1, na ordem do enum: verbo, cara durante o uso, onda e intensidade.
+    // 4.1, na ordem do enum: verbo, cara durante o uso, onda, intensidade e se é de alívio.
     private static readonly DadosDoItem[] DadosDosItens =
     [
-        DeItem(Item.Banana, VerboDeUso.Comer, Expressao.Feliz, Onda.Satisfeito, 1),
-        DeItem(Item.Agua, VerboDeUso.Beber, Expressao.Feliz, null, 0),
-        DeItem(Item.Vodka, VerboDeUso.Beber, Expressao.Determinado, Onda.Bebado, 2),
-        DeItem(Item.Cerveja, VerboDeUso.Beber, Expressao.Feliz, Onda.Bebado, 1),
-        DeItem(Item.Baseado, VerboDeUso.Fumar, Expressao.Pensativo, Onda.Chapado, 2),
-        DeItem(Item.Cigarro, VerboDeUso.Fumar, Expressao.Pensativo, Onda.Relaxado, 1),
-        DeItem(Item.Cocaina, VerboDeUso.Cheirar, Expressao.Surpreso, Onda.Eletrico, 2),
-        DeItem(Item.Md, VerboDeUso.Engolir, Expressao.Travesso, Onda.Euforico, 2),
-        DeItem(Item.LancaPerfume, VerboDeUso.Inalar, Expressao.Surpreso, Onda.Tonto, 2),
-        DeItem(Item.Cafe, VerboDeUso.Beber, Expressao.Determinado, Onda.Ligado, 1),
-        DeItem(Item.Energetico, VerboDeUso.Beber, Expressao.Empolgado, Onda.Ligado, 2),
-        DeItem(Item.Cogumelo, VerboDeUso.Comer, Expressao.Curioso, Onda.Viajando, 2),
-        DeItem(Item.Bala, VerboDeUso.Engolir, Expressao.Feliz, Onda.Alegre, 1),
+        DeItem(Item.Banana, VerboDeUso.Comer, Expressao.Feliz, Onda.Satisfeito, 1, alivio: true),
+        DeItem(Item.Agua, VerboDeUso.Beber, Expressao.Feliz, null, 0, alivio: true),
+        DeItem(Item.Vodka, VerboDeUso.Beber, Expressao.Determinado, Onda.Bebado, 2, alivio: false),
+        DeItem(Item.Cerveja, VerboDeUso.Beber, Expressao.Feliz, Onda.Bebado, 1, alivio: false),
+        DeItem(Item.Baseado, VerboDeUso.Fumar, Expressao.Pensativo, Onda.Chapado, 2, alivio: false),
+        DeItem(Item.Cigarro, VerboDeUso.Fumar, Expressao.Pensativo, Onda.Relaxado, 1, alivio: false),
+        DeItem(Item.Cocaina, VerboDeUso.Cheirar, Expressao.Surpreso, Onda.Eletrico, 2, alivio: false),
+        DeItem(Item.Md, VerboDeUso.Engolir, Expressao.Travesso, Onda.Euforico, 2, alivio: false),
+        DeItem(Item.LancaPerfume, VerboDeUso.Inalar, Expressao.Surpreso, Onda.Tonto, 2, alivio: false),
+        DeItem(Item.Cafe, VerboDeUso.Beber, Expressao.Determinado, Onda.Ligado, 1, alivio: true),
+        DeItem(Item.Energetico, VerboDeUso.Beber, Expressao.Empolgado, Onda.Ligado, 2, alivio: true),
+        DeItem(Item.Cogumelo, VerboDeUso.Comer, Expressao.Curioso, Onda.Viajando, 2, alivio: false),
+        DeItem(Item.Bala, VerboDeUso.Engolir, Expressao.Feliz, Onda.Alegre, 1, alivio: true),
     ];
 
     // 4.2 a 4.4, na ordem do enum.
     private static readonly DadosDaOnda[] DadosDasOndas =
     [
-        Satisfeito(), Alegre(), Relaxado(), Ligado(), Bebado(), Chapado(), Eletrico(), Euforico(), Tonto(), Viajando(),
+        Satisfeito(), Alegre(), Relaxado(), Ligado(), Bebado(), Chapado(), Eletrico(), Euforico(), Tonto(), Viajando(), Paranoico(),
     ];
 
-    private static DadosDoItem DeItem(Item item, VerboDeUso verbo, Expressao caraDurante, Onda? onda, int intensidade)
-        => new(item, verbo, PassosDoUso(verbo), caraDurante, onda, intensidade);
+    private static DadosDoItem DeItem(Item item, VerboDeUso verbo, Expressao caraDurante, Onda? onda, int intensidade, bool alivio)
+        => new(item, verbo, PassosDoUso(verbo), caraDurante, onda, intensidade, alivio);
 
     private static TimeSpan S(int segundos) => TimeSpan.FromSeconds(segundos);
 
@@ -83,7 +85,7 @@ public static class TabelaDoTamagotchi
         PerfilDaOnda pico = P(100, 100, 100, 100, 100, 150, 150, 150, 100, 0, null, 100,
             [(Gesto.Cocar, 2), (Gesto.Espreguicar, 2), (Gesto.Brincar, 1)],
             [(Expressao.Feliz, 4), (Expressao.Rindo, 1), (Expressao.Travesso, 1), (Expressao.Sonolento, 1)]);
-        return new(Onda.Satisfeito, 1, S(3), S(60), TimeSpan.Zero, Expressao.Feliz, Expressao.Feliz, null, [pico, pico, pico], null);
+        return new(Onda.Satisfeito, 1, S(3), S(60), TimeSpan.Zero, Expressao.Feliz, Expressao.Feliz, null, [pico, pico, pico], null, DeSubstancia: false);
     }
 
     private static DadosDaOnda Alegre()
@@ -95,7 +97,7 @@ public static class TabelaDoTamagotchi
             [(Gesto.Espreguicar, 1)],
             [(Expressao.Entediado, 2), (Expressao.Sonolento, 2)]);
         return new(Onda.Alegre, 1, S(2), S(40), S(20), Expressao.Empolgado, Expressao.Empolgado, Expressao.Entediado,
-            [Pico(60, 120), Pico(50, 125), Pico(40, 130)], queda);
+            [Pico(60, 120), Pico(50, 125), Pico(40, 130)], queda, DeSubstancia: false);
     }
 
     private static DadosDaOnda Relaxado()
@@ -103,7 +105,7 @@ public static class TabelaDoTamagotchi
         PerfilDaOnda pico = P(130, 120, 70, 50, 30, 150, 120, 100, 90, 0, null, 100,
             [(Gesto.Espreguicar, 2), (Gesto.Tosse, 1), (Gesto.OlharAoRedor, 1)],
             [(Expressao.Pensativo, 2), (Expressao.Neutro, 2), (Expressao.Sonolento, 1), (Expressao.Feliz, 1)]);
-        return new(Onda.Relaxado, 1, S(3), S(60), TimeSpan.Zero, Expressao.Pensativo, Expressao.Pensativo, null, [pico, pico, pico], null);
+        return new(Onda.Relaxado, 1, S(3), S(60), TimeSpan.Zero, Expressao.Pensativo, Expressao.Pensativo, null, [pico, pico, pico], null, DeSubstancia: true);
     }
 
     private static DadosDaOnda Ligado()
@@ -116,7 +118,7 @@ public static class TabelaDoTamagotchi
             [(Gesto.Espreguicar, 2), (Gesto.Cocar, 1)],
             [(Expressao.Sonolento, 3), (Expressao.Bocejando, 1)]);
         return new(Onda.Ligado, 2, S(5), S(75), S(45), Expressao.Surpreso, Expressao.Determinado, Expressao.Sonolento,
-            [Pico(70, 60, 150, 30, 115, 40, 110), Pico(55, 45, 200, 15, 130, 50, 125), Pico(40, 30, 250, 5, 145, 60, 140)], queda);
+            [Pico(70, 60, 150, 30, 115, 40, 110), Pico(55, 45, 200, 15, 130, 50, 125), Pico(40, 30, 250, 5, 145, 60, 140)], queda, DeSubstancia: false);
     }
 
     private static DadosDaOnda Bebado()
@@ -128,7 +130,7 @@ public static class TabelaDoTamagotchi
             [(Gesto.Soluco, 1), (Gesto.Espreguicar, 1)],
             [(Expressao.Enjoado, 3), (Expressao.Sonolento, 2), (Expressao.Entediado, 1)]);
         return new(Onda.Bebado, 3, S(8), S(100), S(90), Expressao.Feliz, Expressao.Bebado, Expressao.Enjoado,
-            [Pico(80, 60), Pico(70, 90), Pico(60, 120)], queda);
+            [Pico(80, 60), Pico(70, 90), Pico(60, 120)], queda, DeSubstancia: true);
     }
 
     private static DadosDaOnda Chapado()
@@ -140,7 +142,7 @@ public static class TabelaDoTamagotchi
             [(Gesto.Espreguicar, 2)],
             [(Expressao.Sonolento, 3), (Expressao.Bocejando, 2), (Expressao.Pensativo, 1)]);
         return new(Onda.Chapado, 3, S(10), S(110), S(90), Expressao.Pensativo, Expressao.Chapado, Expressao.Sonolento,
-            [Pico(60), Pico(55), Pico(50)], queda);
+            [Pico(60), Pico(55), Pico(50)], queda, DeSubstancia: true);
     }
 
     private static DadosDaOnda Eletrico()
@@ -153,7 +155,7 @@ public static class TabelaDoTamagotchi
             [(Gesto.Espreguicar, 1), (Gesto.Cocar, 1)],
             [(Expressao.Entediado, 3), (Expressao.Sonolento, 2), (Expressao.Pensativo, 1)]);
         return new(Onda.Eletrico, 3, S(3), S(75), S(90), Expressao.Surpreso, Expressao.Eletrico, Expressao.Entediado,
-            [Pico(35, 30, 10, 170, 60, 120), Pico(28, 20, 5, 185, 70, 130), Pico(20, 10, 5, 200, 80, 140)], queda);
+            [Pico(35, 30, 10, 170, 60, 120), Pico(28, 20, 5, 185, 70, 130), Pico(20, 10, 5, 200, 80, 140)], queda, DeSubstancia: true);
     }
 
     private static DadosDaOnda Euforico()
@@ -164,7 +166,7 @@ public static class TabelaDoTamagotchi
         PerfilDaOnda queda = P(140, 150, 70, 60, 50, 200, 80, 100, 85, 0, null, 100,
             [(Gesto.Espreguicar, 1), (Gesto.OlharAoRedor, 1)],
             [(Expressao.Entediado, 2), (Expressao.Pensativo, 2), (Expressao.Sonolento, 1)]);
-        return new(Onda.Euforico, 3, S(15), S(110), S(120), Expressao.Feliz, Expressao.Apaixonado, Expressao.Entediado, [pico, pico, pico], queda);
+        return new(Onda.Euforico, 3, S(15), S(110), S(120), Expressao.Feliz, Expressao.Apaixonado, Expressao.Entediado, [pico, pico, pico], queda, DeSubstancia: true);
     }
 
     private static DadosDaOnda Tonto()
@@ -175,7 +177,7 @@ public static class TabelaDoTamagotchi
         PerfilDaOnda queda = P(100, 100, 80, 50, 50, 120, 80, 100, 80, 0, null, 100,
             [(Gesto.OlharAoRedor, 1)],
             [(Expressao.Sonolento, 1), (Expressao.Surpreso, 1), (Expressao.Neutro, 1)]);
-        return new(Onda.Tonto, 3, S(1), S(15), S(10), Expressao.Surpreso, Expressao.Tonto, Expressao.Sonolento, [pico, pico, pico], queda);
+        return new(Onda.Tonto, 3, S(1), S(15), S(10), Expressao.Surpreso, Expressao.Tonto, Expressao.Sonolento, [pico, pico, pico], queda, DeSubstancia: true);
     }
 
     private static DadosDaOnda Viajando()
@@ -186,6 +188,23 @@ public static class TabelaDoTamagotchi
         PerfilDaOnda queda = P(120, 120, 80, 70, 60, 150, 100, 150, 85, 0, null, 100,
             [(Gesto.OlharAoRedor, 2), (Gesto.Espiar, 1)],
             [(Expressao.Pensativo, 3), (Expressao.Curioso, 1), (Expressao.Sonolento, 1)]);
-        return new(Onda.Viajando, 3, S(20), S(140), S(60), Expressao.Curioso, Expressao.Viajando, Expressao.Pensativo, [pico, pico, pico], queda);
+        return new(Onda.Viajando, 3, S(20), S(140), S(60), Expressao.Curioso, Expressao.Viajando, Expressao.Pensativo, [pico, pico, pico], queda, DeSubstancia: true);
+    }
+
+    /// <summary>
+    /// A paranoia (pedido do usuário de 2026-10-01), de desenho animado: "tem alguém no teto". Precedência 4, maior que a
+    /// de todas, e de substância (comer e beber algo sem álcool a acalmam um passo, como as outras). No pico, igual nos três
+    /// níveis, ele fica quieto e desconfiado: decide mais vezes, gesticula muito (olha pro teto, se agacha, treme), anda
+    /// devagar e nunca escala, pula ou descansa, nem dispara o foguete. Na queda, o cansaço depois do susto.
+    /// </summary>
+    private static DadosDaOnda Paranoico()
+    {
+        PerfilDaOnda pico = P(60, 30, 50, 0, 0, 0, 300, 150, 70, 0, 0, 100,
+            [(Gesto.OlharProTeto, 4), (Gesto.Agachar, 3), (Gesto.Tremedeira, 2), (Gesto.OlharAoRedor, 2), (Gesto.Espiar, 1)],
+            [(Expressao.Paranoico, 5), (Expressao.Assustado, 2), (Expressao.Surpreso, 1)]);
+        PerfilDaOnda queda = P(120, 150, 80, 50, 50, 150, 100, 100, 85, 0, null, 100,
+            [(Gesto.OlharAoRedor, 2), (Gesto.Espreguicar, 1)],
+            [(Expressao.Sonolento, 2), (Expressao.Pensativo, 1), (Expressao.Neutro, 1)]);
+        return new(Onda.Paranoico, 4, S(1), S(40), S(15), Expressao.Assustado, Expressao.Paranoico, Expressao.Sonolento, [pico, pico, pico], queda, DeSubstancia: true);
     }
 }

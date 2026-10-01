@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Buzzy.App.Plataforma;
 using Buzzy.Core;
+using Buzzy.Core.Personagem;
 using Buzzy.Testes;
 
 namespace Buzzy.App.Testes;
@@ -67,6 +68,52 @@ internal sealed class LeitorDeTopologiaTestes
         Afirmar.Contem("nome GDI", falha);
     }
 
+    // ------------------------------------------------------------------ leitura parcial, o último recurso (revisão do bloco P6-P9)
+
+    [Teste]
+    public void Juntar_UmMonitorQueFalha_TornaALeituraIncoerente_SoNaLeituraParcialEleFicaDeFora()
+    {
+        // L3: uma falha de um monitor torna a leitura inteira incoerente (a anterior continua valendo e a releitura tenta de
+        // novo). Revisão de correção do bloco P6-P9, achado 7: com a falha persistente, o Buzzy não partia (5 tentativas) e,
+        // em execução, nenhuma releitura saía: com o monitor do personagem desconectado, ele ficava fora da tela. Depois das
+        // novas tentativas, a leitura parcial deixa de fora só o monitor que falhou, e conta.
+        (MonitorEnumerado? Monitor, string? Falha)[] lidos =
+        [
+            (Principal, null),
+            (null, "GetDpiForMonitor falhou (0x80070057, dpi 0)"),
+            (AEsquerda, null),
+        ];
+        Afirmar.Nulo(LeitorDeTopologia.Juntar(lidos, parcial: false, out int ignorados, out string? erro), "estrita: incoerente");
+        Afirmar.Igual((0, "GetDpiForMonitor falhou (0x80070057, dpi 0)"), (ignorados, erro));
+
+        List<MonitorEnumerado> parcial = Afirmar.NaoNulo(LeitorDeTopologia.Juntar(lidos, parcial: true, out ignorados, out erro), "parcial");
+        Afirmar.Sequencia([Principal, AEsquerda], parcial, "os que foram lidos por inteiro, na ordem");
+        Afirmar.Igual((1, (string?)"GetDpiForMonitor falhou (0x80070057, dpi 0)"), (ignorados, erro), "o que ficou de fora, e por quê");
+
+        List<MonitorEnumerado> todos = Afirmar.NaoNulo(LeitorDeTopologia.Juntar([(Principal, null), (AEsquerda, null)], parcial: true, out ignorados, out erro));
+        Afirmar.Igual((2, 0, (string?)null), (todos.Count, ignorados, erro), "sem falha, a parcial é igual à estrita");
+    }
+
+    [Teste]
+    public void Montar_LeituraParcial_LevaOsIgnorados_ENaoTrocaOCache()
+    {
+        // Com um monitor de fora, o cache não é trocado: a chave dele continua lá para quando ele voltar a ser lido.
+        string chaveA = ChavesDeMonitor.DoCaminho(CaminhoA), chaveB = ChavesDeMonitor.DoCaminho(CaminhoB);
+        var cache = new Dictionary<string, ChaveConhecida>(StringComparer.OrdinalIgnoreCase)
+        {
+            [@"\\.\DISPLAY1"] = new(chaveA, Principal.Tela),
+            [@"\\.\DISPLAY2"] = new(chaveB, AEsquerda.Tela),
+        };
+        var consulta = new ConsultaDeVideo([new AlvoAtivo(@"\\.\DISPLAY1", CaminhoA), new AlvoAtivo(@"\\.\DISPLAY2", CaminhoB)], Erro: null, CaminhosSemNome: 0);
+        LeituraDaTopologia leitura = Afirmar.NaoNulo(LeitorDeTopologia.Montar([Principal], consulta, cache, out var cacheDepois, out string? erro, ignorados: 1, motivoDoIgnorado: "monitor sem nome GDI"), erro);
+        Afirmar.Sequencia([chaveA], leitura.Topologia.Monitores.Select(m => m.Chave), "só o que foi lido");
+        Afirmar.Igual((1, (string?)"monitor sem nome GDI"), (leitura.MonitoresIgnorados, leitura.MotivoDoIgnorado));
+        Afirmar.Verdadeiro(ReferenceEquals(cache, cacheDepois), "a leitura parcial não troca o cache");
+
+        LeituraDaTopologia inteira = Afirmar.NaoNulo(LeitorDeTopologia.Montar([Principal, AEsquerda], consulta, cache, out _, out erro), erro);
+        Afirmar.Igual((0, (string?)null), (inteira.MonitoresIgnorados, inteira.MotivoDoIgnorado), "a estrita não ignora nada");
+    }
+
     // ------------------------------------------------------------------ montagem da topologia com as chaves
 
     [Teste]
@@ -107,10 +154,10 @@ internal sealed class LeitorDeTopologiaTestes
     }
 
     [Teste]
-    public void Montar_CaminhoSemNome_SoAqueleMonitorVaiAoCache()
+    public void Montar_CaminhoSemNome_SoAqueleMonitorVaiAoCache_EContinuaNele()
     {
-        // A consulta deu certo, mas o caminho de um alvo não pôde ser lido: os outros continuam pelo caminho, e o
-        // cache novo fica só com eles.
+        // A consulta deu certo, mas o caminho de um alvo não pôde ser lido: os outros continuam pelo caminho, e esse fica
+        // com a chave do cache. O cache novo guarda as duas: a próxima consulta negada ainda acha a chave dele.
         string chaveA = ChavesDeMonitor.DoCaminho(CaminhoA), chaveB = ChavesDeMonitor.DoCaminho(CaminhoB);
         var cache = new Dictionary<string, ChaveConhecida>(StringComparer.OrdinalIgnoreCase) { [@"\\.\DISPLAY2"] = new(chaveB, AEsquerda.Tela) };
         var consulta = new ConsultaDeVideo([new AlvoAtivo(@"\\.\DISPLAY1", CaminhoA)], Erro: null, CaminhosSemNome: 1);
@@ -119,7 +166,51 @@ internal sealed class LeitorDeTopologiaTestes
         Afirmar.Sequencia([chaveA, chaveB], leitura.Topologia.Monitores.Select(m => m.Chave));
         Afirmar.Sequencia([OrigemDaChave.Caminho, OrigemDaChave.Cache], leitura.Chaves.Select(c => c.Origem));
         Afirmar.Igual(1, leitura.CaminhosSemNome);
-        Afirmar.Sequencia([@"\\.\DISPLAY1"], cacheDepois.Keys, "o cache novo só tem a chave lida do caminho");
+        Afirmar.Sequencia([@"\\.\DISPLAY1", @"\\.\DISPLAY2"], cacheDepois.Keys.Order(StringComparer.Ordinal), "o cache novo guarda as duas");
+
+        var negada = new ConsultaDeVideo([], Erro: "QueryDisplayConfig 5", CaminhosSemNome: 0);
+        LeituraDaTopologia depois = Afirmar.NaoNulo(LeitorDeTopologia.Montar([Principal, AEsquerda], negada, cacheDepois, out _, out erro), erro);
+        Afirmar.Sequencia([chaveA, chaveB], depois.Topologia.Monitores.Select(m => m.Chave), "a consulta negada logo depois acha as duas chaves");
+    }
+
+    [Teste]
+    public void Montar_ConsultaNegadaNaTrocaDePrincipal_OPersonagemFicaNoMesmoMonitorFisico()
+    {
+        // Revisão de correção do bloco P6-P9, achado 1 (teste R5): S2, a consulta da configuração de vídeo é negada (sessão
+        // bloqueada ou remota) e o DISPLAY2 vira o principal. As duas telas andam 1920 px. O personagem, a 85% do DISPLAY1,
+        // continua no DISPLAY1 físico, que foi para (1920,0)-(3840,1080): (3552,1032). Exigir a mesma tela no cache punha
+        // as duas chaves na reserva, e o apelido por retângulo do núcleo o deixava em (1632,1032), já no DISPLAY2.
+        var boa = new ConsultaDeVideo([new AlvoAtivo(@"\\.\DISPLAY1", CaminhoA), new AlvoAtivo(@"\\.\DISPLAY2", CaminhoB)], Erro: null, CaminhosSemNome: 0);
+        LeituraDaTopologia antes = Afirmar.NaoNulo(LeitorDeTopologia.Montar(
+            [Enumerado(@"\\.\DISPLAY1", 0, 0, 1920, 1080, true), Enumerado(@"\\.\DISPLAY2", -1920, 0, 0, 1080, false)], boa, SemCache, out var cache, out string? erro), erro);
+        var negada = new ConsultaDeVideo([], Erro: "QueryDisplayConfig 5", CaminhosSemNome: 0);
+        LeituraDaTopologia depois = Afirmar.NaoNulo(LeitorDeTopologia.Montar(
+            [Enumerado(@"\\.\DISPLAY1", 1920, 0, 3840, 1080, false), Enumerado(@"\\.\DISPLAY2", 0, 0, 1920, 1080, true)], negada, cache, out _, out erro), erro);
+        Afirmar.Sequencia(antes.Topologia.Monitores.Select(m => m.Chave), depois.Topologia.Monitores.Select(m => m.Chave), "as mesmas chaves, pelo cache");
+
+        EstadoDoNucleo s = CarregarParado(antes.Topologia);
+        s = Maquina.Aplicar(s, new TopologyChanged(depois.Topologia), Configuracao).Estado;
+        Afirmar.Igual((@"\\.\DISPLAY1", new PontoPx(3552, 1032)), (depois.NomeGdi(s.Lugar!.Monitor.Chave), s.Lugar.Ancora), "monitor físico e âncora");
+    }
+
+    [Teste]
+    public void Montar_ConsultaNegadaComOPrincipalDesconectado_OSobreviventeMedidoNasCoordenadasAntigas()
+    {
+        // [2][1*][3], a consulta negada, e o 1 sai: o 2 assume e vai para (0,0), e o 3 vai para 3840. Com as chaves do 2 e do
+        // 3 seguras pelo cache, o núcleo acha o sobrevivente medido nas coordenadas antigas (R15c): o 3, a 85% dele.
+        const string CaminhoC = @"\\?\DISPLAY#CCC0003#1&33333333&0&UID3#{e6f07b5f-ee97-4a90-b076-33f57bf4eaa7}";
+        var boa = new ConsultaDeVideo(
+            [new AlvoAtivo(@"\\.\DISPLAY1", CaminhoA), new AlvoAtivo(@"\\.\DISPLAY2", CaminhoB), new AlvoAtivo(@"\\.\DISPLAY3", CaminhoC)], Erro: null, CaminhosSemNome: 0);
+        LeituraDaTopologia antes = Afirmar.NaoNulo(LeitorDeTopologia.Montar(
+            [Enumerado(@"\\.\DISPLAY2", -1920, 0, 0, 1080, false), Enumerado(@"\\.\DISPLAY1", 0, 0, 1920, 1080, true), Enumerado(@"\\.\DISPLAY3", 1920, 0, 3840, 1080, false)],
+            boa, SemCache, out var cache, out string? erro), erro);
+        var negada = new ConsultaDeVideo([], Erro: "QueryDisplayConfig 5", CaminhosSemNome: 0);
+        LeituraDaTopologia depois = Afirmar.NaoNulo(LeitorDeTopologia.Montar(
+            [Enumerado(@"\\.\DISPLAY2", 0, 0, 1920, 1080, true), Enumerado(@"\\.\DISPLAY3", 3840, 0, 5760, 1080, false)], negada, cache, out _, out erro), erro);
+
+        EstadoDoNucleo s = CarregarParado(antes.Topologia);
+        s = Maquina.Aplicar(s, new TopologyChanged(depois.Topologia), Configuracao).Estado;
+        Afirmar.Igual((@"\\.\DISPLAY3", new PontoPx(5472, 1032)), (depois.NomeGdi(s.Lugar!.Monitor.Chave), s.Lugar.Ancora), "no 3, nas coordenadas novas");
     }
 
     [Teste]
@@ -176,6 +267,20 @@ internal sealed class LeitorDeTopologiaTestes
     }
 
     // ------------------------------------------------------------------ apoio
+
+    private static readonly ConfiguracaoDoNucleo Configuracao = ConfiguracaoDoNucleo.DoAplicativo(new TamanhoDip(128, 128));
+
+    /// <summary>Um monitor de 1920 px de largura a 96 DPI, com a barra de 48 px embaixo.</summary>
+    private static MonitorEnumerado Enumerado(string nome, int esquerda, int topo, int direita, int baixo, bool principal)
+        => new(nome, new RetanguloPx(esquerda, topo, direita, baixo), new RetanguloPx(esquerda, topo, direita, baixo - 48), 96, principal);
+
+    /// <summary>O núcleo carregado na topologia, sem posição salva (a 85% do principal, no chão) e parado.</summary>
+    private static EstadoDoNucleo CarregarParado(Topologia topologia)
+    {
+        EstadoDoNucleo s = Maquina.Aplicar(EstadoDoNucleo.Inicial(7), new Loaded(topologia, null, Preferencias.Padrao), Configuracao).Estado;
+        Afirmar.Igual((Estado.Idle, new PontoPx(1632, 1032)), (s.Estado, s.Lugar!.Ancora), "premissa: parado a 85% do principal");
+        return s;
+    }
 
     private static Win32.MONITORINFOEX Info(string nome, int esquerda, int topo, int direita, int baixo, (int E, int T, int D, int B)? trabalho = null, bool principal = false)
     {

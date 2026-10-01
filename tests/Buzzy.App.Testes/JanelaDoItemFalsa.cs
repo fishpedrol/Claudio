@@ -25,13 +25,27 @@ internal sealed class JanelaDoItemFalsa(int id) : IJanelaDoItem
 
     internal int Ouvintes => Ponteiro?.GetInvocationList().Length ?? 0;
 
+    /// <summary>O último retângulo aplicado; nulo antes do primeiro.</summary>
+    internal RetanguloPx? Aplicado { get; private set; }
+
+    /// <summary>Onde outro agente (o Windows, ao reconectar um monitor) pôs a janela depois do último retângulo aplicado.</summary>
+    internal RetanguloPx? MovidaPorFora { get; set; }
+
     public void DefinirSprite(BitmapSource sprite)
     {
         Sprite = sprite;
         Chamadas.Add($"sprite {sprite.PixelWidth}x{sprite.PixelHeight}");
     }
 
-    public void AplicarRetangulo(RetanguloPx retangulo) => Chamadas.Add($"retangulo {retangulo}");
+    public void AplicarRetangulo(RetanguloPx retangulo)
+    {
+        Aplicado = retangulo;
+        MovidaPorFora = null;
+        Chamadas.Add($"retangulo {retangulo}");
+    }
+
+    /// <summary>Consulta, sem entrar nas chamadas: onde a janela foi posta por fora, ou o último retângulo aplicado.</summary>
+    public RetanguloPx? RetanguloReal() => MovidaPorFora ?? Aplicado;
 
     public void Mostrar() => Chamadas.Add("mostrar");
 

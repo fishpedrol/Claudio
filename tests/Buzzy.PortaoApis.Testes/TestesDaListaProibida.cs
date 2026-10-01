@@ -117,7 +117,24 @@ public sealed class TestesDaListaProibida
         Categoria[] categorias = [.. Enum.GetValues<Categoria>().Where(c => c != Categoria.Manifesto)];
         foreach (Categoria categoria in categorias)
             Afirmar.Verdadeiro(ListaProibida.Regras.Any(r => r.Categoria == categoria), $"nenhuma regra para {categoria.Nome()}");
-        Afirmar.Igual(8, categorias.Length);
+        Afirmar.Igual(9, categorias.Length);
+    }
+
+    [Teste]
+    public void ConfiguracaoDeVideo_LerEhPermitido_MudarEhProibido()
+    {
+        // Revisão de segurança do bloco P6-P9, achado 6: o P6 trouxe a família DisplayConfig para a chave estável do monitor,
+        // só de leitura. "Nenhuma configuração global alterada" deixa de depender só de revisão: as funções que mudam o vídeo
+        // do sistema todo reprovam o build, em qualquer grafia.
+        foreach (string funcao in new[] { "SetDisplayConfig", "DisplayConfigSetDeviceInfo", "ChangeDisplaySettings", "ChangeDisplaySettingsA", "ChangeDisplaySettingsW",
+            "ChangeDisplaySettingsEx", "ChangeDisplaySettingsExA", "ChangeDisplaySettingsExW", "setdisplayconfig" })
+        {
+            Regra regra = Afirmar.NaoNulo(ListaProibida.ProcurarNativa("user32.dll", funcao), funcao);
+            Afirmar.Igual(Categoria.ConfiguracaoGlobal, regra.Categoria, funcao);
+        }
+        foreach (string funcao in new[] { "GetDisplayConfigBufferSizes", "QueryDisplayConfig", "DisplayConfigGetDeviceInfo" })
+            Afirmar.Nulo(ListaProibida.ProcurarNativa("user32.dll", funcao), funcao);
+        Afirmar.Igual("Alterar configuração global", Categoria.ConfiguracaoGlobal.Nome());
     }
 
     [Teste]

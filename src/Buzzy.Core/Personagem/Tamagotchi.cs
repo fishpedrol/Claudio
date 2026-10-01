@@ -51,6 +51,12 @@ public enum Onda
     Euforico,
     Tonto,
     Viajando,
+
+    /// <summary>
+    /// A paranoia (pedido do usuário de 2026-10-01), de desenho animado: "tem alguém no teto". Nenhum item a começa; ela
+    /// vem com a 4ª substância do episódio (<see cref="EstadoDoNucleo.Carga"/>), com a maior precedência de todas.
+    /// </summary>
+    Paranoico,
 }
 
 /// <summary>Fase da onda. Cada fase, e cada nível do pico, dura um disparo único do temporizador da onda.</summary>
@@ -68,9 +74,18 @@ public enum FaseDaOnda
 /// <param name="Verbo">Como ele o usa.</param>
 /// <param name="PassosDoUso">Duração do uso, em passos do relógio: a do verbo, igual à soma dos quadros da animação dele.</param>
 /// <param name="CaraDurante">A cara, de humor, nos apoios em que a animação de uso não tem a própria.</param>
-/// <param name="Onda">A onda que o item começa; nula na água, que só refresca a onda que houver.</param>
+/// <param name="Onda">
+/// A onda que o item começa, salvo no alívio (com uma onda de substância na frente, a comida e a bebida sem álcool só a
+/// acalmam, sem começar a delas); nula na água, que só alivia a onda que houver.
+/// </param>
 /// <param name="Intensidade">Quantos níveis o item soma à onda: 1 ou 2, e 0 na água. É ponto de jogo.</param>
-public sealed record DadosDoItem(Item Item, VerboDeUso Verbo, int PassosDoUso, Expressao CaraDurante, Onda? Onda, int Intensidade);
+/// <param name="Alivio">
+/// Se o item é de alívio, comida ou bebida sem álcool (o pedido do usuário de 2026-10-01): a banana, a bala, a água, o
+/// café e o energético. Comer e beber acalmam a onda de desenho animado aos poucos, um passo por item
+/// (<see cref="DadosDaOnda.DeSubstancia"/>). Os outros itens, inclusive o cogumelo, que também se come, são de substância
+/// e combinam as ondas como sempre.
+/// </param>
+public sealed record DadosDoItem(Item Item, VerboDeUso Verbo, int PassosDoUso, Expressao CaraDurante, Onda? Onda, int Intensidade, bool Alivio);
 
 /// <summary>
 /// O perfil de uma fase da onda (desenho do núcleo, 4.3 e 4.4): percentuais sobre o perfil de energia (100 = igual),
@@ -112,7 +127,10 @@ public sealed record PerfilDaOnda(
 /// cada fase e os perfis.
 /// </summary>
 /// <param name="Onda">A onda.</param>
-/// <param name="Precedencia">De 1 a 3: uma onda de precedência maior ou igual vai para a frente da que houver.</param>
+/// <param name="Precedencia">
+/// De 1 a 4: uma onda de precedência maior ou igual vai para a frente da que houver. A 4 é só a da paranoia, maior que a
+/// de todas as ondas dos itens, que vão de 1 a 3.
+/// </param>
 /// <param name="Subida">Duração da subida.</param>
 /// <param name="NivelDoPico">Duração de cada nível do pico: a cada disparo, o nível cai um, até o 1.</param>
 /// <param name="QuedaBase">Duração da queda com o pior nível 1; <see cref="TimeSpan.Zero"/> sem queda.</param>
@@ -121,6 +139,10 @@ public sealed record PerfilDaOnda(
 /// <param name="CaraDaQueda">A cara da queda; nula, a do pico.</param>
 /// <param name="PicoPorNivel">O perfil do pico nos níveis 1, 2 e 3.</param>
 /// <param name="Queda">O perfil da queda, igual em todos os níveis; nulo sem queda (a onda acaba no fim do pico).</param>
+/// <param name="DeSubstancia">
+/// Se é uma onda de substância, que um item de alívio acalma um passo, sem começar a onda dele; senão, é uma onda
+/// leve, e só a água a acalma: os outros itens de alívio a combinam como sempre.
+/// </param>
 public sealed record DadosDaOnda(
     Onda Onda,
     int Precedencia,
@@ -131,7 +153,8 @@ public sealed record DadosDaOnda(
     Expressao CaraDoPico,
     Expressao? CaraDaQueda,
     IReadOnlyList<PerfilDaOnda> PicoPorNivel,
-    PerfilDaOnda? Queda)
+    PerfilDaOnda? Queda,
+    bool DeSubstancia)
 {
     /// <summary>Nenhuma fase dura menos que isto: o temporizador da onda só faz disparos únicos de 1 s ou mais.</summary>
     public static readonly TimeSpan DuracaoMinima = TimeSpan.FromSeconds(1);
@@ -233,7 +256,15 @@ public enum MotivoDaRemocao
 /// O uso em curso, em <see cref="Estado.Using"/>: o item, o verbo, quantos passos ele dura e o apoio em que acontece. O
 /// que falta fica em <see cref="EstadoDoNucleo.PassosRestantes"/>.
 /// </summary>
-public sealed record Uso(Item Item, VerboDeUso Verbo, int Passos, ApoioDoUso Apoio);
+public sealed record Uso(Item Item, VerboDeUso Verbo, int Passos, ApoioDoUso Apoio)
+{
+    /// <summary>
+    /// Se este uso começou a paranoia (pedido do usuário de 2026-10-01): ela começa no soltar, com ele já usando; se o uso
+    /// vai até o fim e o devolve a IDLE sem gesto, ele olha pro teto na hora (<see cref="Gesto.OlharProTeto"/>). Um uso
+    /// interrompido leva a marca junto. Fica fora do construtor posicional.
+    /// </summary>
+    public bool ComecouAParanoia { get; init; }
+}
 
 /// <summary>
 /// Um item na tela (DEC-028), parte do estado do núcleo e só em memória. A âncora é a do personagem: o centro da borda de

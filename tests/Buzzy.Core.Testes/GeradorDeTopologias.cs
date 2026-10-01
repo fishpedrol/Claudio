@@ -108,6 +108,44 @@ internal sealed class GeradorDeTopologias(Random aleatorio)
         return new Topologia(lista);
     }
 
+    /// <summary>
+    /// Uma mudança que muitas vezes conserva a geometria do monitor do personagem (Fase 5, DEC-030): troca de principal, com a
+    /// origem indo para ele; um monitor conectado; um desconectado (se era o principal, outro assume e a origem vai para ele);
+    /// as chaves renomeadas com as mesmas telas, como a reserva <c>gdi:</c> que vira <c>mon:</c>; ou uma mudança qualquer de
+    /// <see cref="Mudar"/>. Fica à parte de <see cref="Mudar"/> para não alterar o fluxo aleatório das propriedades que já o usam.
+    /// </summary>
+    public Topologia MudarComIdentidade(Topologia topologia)
+    {
+        List<MonitorDoDesktop> lista = [.. topologia.Monitores];
+        switch (aleatorio.Next(5))
+        {
+            case 0 when lista.Count > 1:
+                Rebasear(lista, aleatorio.Next(lista.Count));
+                break;
+            case 1 when lista.Count < MaximoDeMonitores && TelaVizinha([.. lista.Select(o => o.Tela)]) is { } nova:
+            {
+                List<int> livres = [.. Enumerable.Range(1, 9).Where(n => lista.All(o => o.Chave != Chave(n)))];
+                int dpi = Dpi();
+                lista.Insert(aleatorio.Next(lista.Count + 1), new MonitorDoDesktop(Chave(livres[aleatorio.Next(livres.Count)]), nova, AreaUtil(nova, dpi), dpi, Principal: false));
+                break;
+            }
+            case 2 when lista.Count > 1:
+            {
+                int k = aleatorio.Next(lista.Count);
+                MonitorDoDesktop saiu = lista[k];
+                lista.RemoveAt(k);
+                if (saiu.Principal) Rebasear(lista, aleatorio.Next(lista.Count));
+                break;
+            }
+            case 3:
+                lista = [.. lista.Select(m => m with { Chave = m.Chave.StartsWith("mon:", StringComparison.Ordinal) ? m.Chave[4..] : "mon:" + m.Chave })];
+                break;
+            default:
+                return Mudar(topologia);
+        }
+        return new Topologia(lista);
+    }
+
     /// <summary>DPI comum (96 a 288, em passos de 25%) ou qualquer valor inteiro entre 96 e 288.</summary>
     public int Dpi() => aleatorio.Next(3) == 0 ? aleatorio.Next(96, 289) : DpisComuns[aleatorio.Next(DpisComuns.Length)];
 

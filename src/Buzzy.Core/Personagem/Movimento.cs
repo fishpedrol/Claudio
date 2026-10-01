@@ -133,7 +133,8 @@ public readonly record struct Superficies(int Esquerda, int Direita, int Chao, i
     /// <summary>
     /// Superfícies do monitor para um sprite do tamanho dado. Uma lateral é passagem quando a tela
     /// de outro monitor encosta nela, na altura da área útil; senão, é parede. Janelas de outros
-    /// aplicativos nunca são superfície (Q-05).
+    /// aplicativos nunca são superfície (Q-05). Com o sprite mais largo que a área útil, as duas
+    /// laterais ficam no meio, onde a validação o põe (<see cref="Posicionador.PrenderNaAreaUtil"/>).
     /// </summary>
     public static Superficies Do(Topologia topologia, MonitorDoDesktop monitor, TamanhoPx tamanho)
     {
@@ -141,7 +142,7 @@ public readonly record struct Superficies(int Esquerda, int Direita, int Chao, i
         ArgumentNullException.ThrowIfNull(monitor);
         RetanguloPx area = monitor.AreaUtil;
         int metade = tamanho.Largura / 2;
-        int esquerda = area.Esquerda + metade;
+        int esquerda = tamanho.Largura <= area.Largura ? area.Esquerda + metade : area.Esquerda + (area.Largura - tamanho.Largura) / 2 + metade;
         int direita = Math.Max(esquerda, area.Direita - (tamanho.Largura - metade));
         int chao = area.Base;
         int teto = Math.Min(chao, area.Topo + tamanho.Altura);
