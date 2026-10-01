@@ -2,31 +2,34 @@
 
 > Esta página separa fatos implementados de desenho planejado. Nenhuma proposta aparece como arquitetura existente. Cada seção planejada carrega `STATUS: PLANNED`; escolhas que aguardam decisão do usuário carregam `STATUS: UNCERTAIN` e apontam para [DECISIONS.md](DECISIONS.md).
 >
-> Última atualização: 2026-09-30
+> Última atualização: 2026-10-01
 
 ## 1. Arquitetura implementada
 
-Código das Fases 1 a 4 em `src/`, organizado pelas três camadas de DEC-007 (detalhes em DEC-016, DEC-020, DEC-021 e DEC-022). O estado de verificação de cada critério está em TODO.md; nada aqui é VERIFIED por estar escrito. O código em `spikes/` continua descartável e não conta como módulo do Buzzy.
+Código das Fases 1 a 4, do bloco A da Fase 5 e da emoção dominante e do tamagotchi (núcleo, arte e app) em `src/`, organizado pelas três camadas de DEC-007 (detalhes em DEC-016, DEC-020 a DEC-022 e DEC-027 a DEC-030). O estado de verificação de cada critério está em TODO.md; nada aqui é VERIFIED por estar escrito. O código em `spikes/` continua descartável e não conta como módulo do Buzzy.
 
 | Projeto ou pasta | Camada | O que existe |
 |---|---|---|
-| `src/Buzzy.Core` | núcleo puro (`net10.0`, sem WPF nem Windows) | Geometria em pixels físicos e DIPs; `Topologia` (monitores, principal, impressão digital, monitor que contém um ponto, monitor mais próximo, prender na área útil); `Posicionador` (âncora no centro da base, posição inicial, reacomodação pela posição relativa quando a topologia muda). `Personagem/` (Fase 2): máquina de estados da seção 2.6 como função pura de (estado, evento) para (estado, efeitos), fila com prioridade, agenda autônoma com semente, perfis de energia, retrato e gravação/reprodução de sequências. `Personagem/Movimento.cs` (Fase 4): superfícies do monitor da âncora (seção 2.5) e parâmetros da física de passo fixo (seção 2.9), aplicada pela máquina de estados. `Entrada/` (Fase 3): árbitro de gestos da seção 2.7. |
-| `src/Buzzy.App/Plataforma` | adaptador de plataforma | Único arquivo com importações do Windows (`Win32.cs`); leitura da topologia; janela de serviço oculta que recebe as mensagens de topologia, bandeja e `TaskbarCreated`; bandeja v4; menu nativo; instância única; log de diagnóstico opcional. |
-| `src/Buzzy.App/Apresentacao` | apresentação e adaptador do ponteiro | Janela WPF do personagem (sem borda, `AllowsTransparency`, não ativa, janela de ferramenta, sempre no topo, do tamanho do sprite; responde `MA_NOACTIVATE` e `WM_GETDPISCALEDSIZE`) e o sprite provisório gerado em código. Converte as mensagens de mouse entregues a ela em eventos de ponteiro em pixels físicos e segura a captura do mouse só durante um gesto começado no personagem (Fase 3). Escolhe a pose provisória da pixel art pelo retrato (`PoseDoPersonagem`, Fase 4) e a renderiza uma vez por pose, espelho, expressão e DPI. |
-| `src/Buzzy.App/Composicao` | raiz de composição | `Aplicacao` liga janela, serviço, bandeja, menu, topologia, arbitragem e núcleo, e executa os efeitos do núcleo. Em repouso, só há timers de disparo único: agrupamento de topologia, novas tentativas da bandeja e a próxima decisão da agenda autônoma. O relógio de passo fixo só corre quando o núcleo pede (reação, pouso, gesto curto e movimento). Enquanto corre, segue os quadros do compositor do WPF (`CompositionTarget.Rendering`): aplica num lote os passos acumulados e move a janela uma vez por quadro. O arraste não usa relógio. |
-| `src/Buzzy.Visual` | apresentação, a partir da Fase 6 | Gerador da identidade em pixel art (`Pixel/`, DEC-018) e o renderizador vetorial da direção anterior, arquivada (DEC-017); ainda não é usado pelo app. |
+| `src/Buzzy.Core` | núcleo puro (`net10.0`, sem WPF nem Windows) | Geometria em pixels físicos e DIPs; `Topologia` (monitores, principal, impressão digital, monitor que contém um ponto, monitor mais próximo, prender na área útil); `Posicionador` (âncora no centro da base, posição inicial, reacomodação pela posição relativa quando a topologia muda e, na Fase 5, restauração da posição salva em cascata, seção 2.8). `Persistencia/` (Fase 5): esquema do `settings.json`, na v2 desde a emoção dominante (DEC-027), e política de gravação (seção 2.12). `Personagem/` (Fase 2): máquina de estados da seção 2.6 como função pura de (estado, evento) para (estado, efeitos), fila com prioridade, agenda autônoma com semente, perfis de energia, retrato e gravação/reprodução de sequências; a emoção dominante (DEC-027) fica em `Maquina.cs`, sem chave. `Personagem/Movimento.cs` (Fase 4): superfícies do monitor da âncora (seção 2.5) e parâmetros da física de passo fixo (seção 2.9), aplicada pela máquina de estados. Tamagotchi (DEC-028): `Personagem/Tamagotchi.cs` (tipos), `TabelaDoTamagotchi.cs` (tabelas), `Maquina.Onda.cs` (a onda) e `Maquina.Itens.cs` (os itens e o estado `USING`), atrás da chave `ConfiguracaoDoNucleo.Tamagotchi`, ligada no aplicativo desde o passo T9 (seção 2.16). `Entrada/` (Fase 3): árbitro de gestos da seção 2.7. |
+| `src/Buzzy.App/Plataforma` | adaptador de plataforma | Único arquivo com importações do Windows (`Win32.cs`); leitura da topologia; janela de serviço oculta que recebe as mensagens de topologia, bandeja e `TaskbarCreated`; bandeja v4; menu nativo, com a lista de entradas separada da montagem e os submenus da emoção dominante e dos itens, com ícones em bitmaps criados e apagados a cada abertura (`MenuNativo`, `BitmapsDoMenu`; seção 2.16); instância única; log de diagnóstico opcional. Na Fase 5: pasta de dados, com os perfis de teste, e arquivo de configurações com gravação atômica (seção 2.12), ainda não usados pela raiz. |
+| `src/Buzzy.App/Apresentacao` | apresentação e adaptador do ponteiro | Janela WPF do personagem (sem borda, `AllowsTransparency`, não ativa, janela de ferramenta, sempre no topo, do tamanho do sprite; responde `MA_NOACTIVATE` e `WM_GETDPISCALEDSIZE`) e o sprite provisório gerado em código. Converte as mensagens de mouse entregues a ela em eventos de ponteiro em pixels físicos e segura a captura do mouse só durante um gesto começado no personagem (Fase 3). Escolhe o quadro da pixel art pelo retrato (`PoseDoPersonagem`, Fase 4; no tamagotchi, também o quadro de uso, os gestos da onda e a sobreposição, seção 2.10) e o renderiza uma vez por quadro e DPI, num cache limitado a 16 MiB (`CacheDeQuadros`). Tamagotchi (DEC-028): uma janela por item (`JanelaDoItem`), com a mesma receita da janela do personagem, e o sprite do item (`SpriteDoItem`). |
+| `src/Buzzy.App/Composicao` | raiz de composição | `Aplicacao` liga janela, serviço, bandeja, menu, topologia, arbitragem e núcleo, e executa os efeitos do núcleo. A parte do tamagotchi fica em `Aplicacao.Itens.cs` e `GerenteDosItens`: as janelas dos itens, um árbitro de gestos só delas e o temporizador da onda (seção 2.3). Em repouso, só há timers de disparo único: agrupamento de topologia, novas tentativas da bandeja, a próxima decisão da agenda autônoma e, com uma onda de item em curso, o próximo disparo dela. O relógio de passo fixo só corre quando o núcleo pede (reação, pouso, gesto curto, movimento, uso de um item e item visível caindo). Enquanto corre, segue os quadros do compositor do WPF (`CompositionTarget.Rendering`): aplica num lote os passos acumulados e move a janela uma vez por quadro. O arraste não usa relógio. |
+| `src/Buzzy.Visual` | apresentação | Gerador da identidade em pixel art (`Pixel/`, DEC-018), que o app usa para as poses provisórias e o ícone. Inclui a arte da emoção dominante e do tamagotchi (DEC-027 e DEC-028): itens, caras novas, poses de uso, sobreposições de efeito e ícones do menu (seção 2.10), que o app usa desde os passos T2, T7 e T8. O renderizador vetorial da direção anterior (DEC-017) está arquivado e sem uso. |
 
 Fluxo implementado:
 
 - **Topologia:** o Windows avisa a janela de serviço; a raiz agrupa as mensagens e lê a topologia; o núcleo revalida a posição. Se a janela tiver saído do lugar do núcleo, a raiz reaplica esse lugar.
 - **Mouse:** a janela do personagem converte o mouse em eventos de ponteiro; a arbitragem produz gestos e diz se a captura continua; o núcleo aplica os gestos e devolve os efeitos.
 - **Efeitos:** a raiz executa os efeitos do núcleo (mover, mostrar, esconder, relógio, agenda, menu adiado para fora do processamento, soltar a captura), no mesmo tratamento da mensagem.
+- **Itens do tamagotchi:** cada janela de item converte o mouse entregue a ela em eventos de ponteiro; o árbitro dos itens produz os gestos, que viram eventos do item; o núcleo decide e devolve os efeitos das janelas dos itens e da onda, que a raiz executa (seções 2.3 e 2.7).
 
-Travessia entre monitores (Fase 5), persistência (Fases 5 e 8), animação (Fase 6), painel de energia e tela cheia (Fase 8) ainda não existem. O núcleo já tem as regras da tabela para eles; o app só liga cada capacidade quando a fase dela chega. Na Fase 4, o app liga todas as ações autônomas, a queda física e o movimento.
+Travessia entre monitores (Fase 5), animação (Fase 6), painel de energia e tela cheia (Fase 8) ainda não existem. A persistência da Fase 5 existe no núcleo e no adaptador, mas a raiz ainda não lê nem grava o arquivo: envia a carga sem posição salva, e os efeitos de gravação só vão para o log (passo P7 da Fase 5). O núcleo já tem as regras da tabela para essas capacidades; o app só liga cada uma quando a fase dela chega. Na Fase 4, o app liga todas as ações autônomas, a queda física e o movimento.
+
+A emoção dominante (DEC-027) vale no núcleo e no esquema e é escolhida pelo menu (passo T2 da seção "Interação" de TODO.md); até o passo P7 da Fase 5, a escolha não sobrevive a reabrir o app. O tamagotchi (DEC-028) está ligado no aplicativo desde o passo T9: o menu invoca os itens, cada um numa janela própria, e a apresentação mostra o uso, as caras de efeito, os gestos e as sobreposições da onda (passos T7 e T8). A regra da calma (seção 2.6; DEC-022, item 4) já valia no app antes da chave e não depende dela. A verificação de tela, com input SINTÉTICO, e o repouso de 10 minutos com uma onda ativa rodaram em 2026-10-01, sem falhas (TODO.md).
 
 ## 2. Arquitetura planejada
 
-STATUS: PLANNED. P1 e P2 foram aceitos nos limites documentados; P3 aguarda validação controlada. WPF/C#/.NET 10 está em DEC-006. As seções 2.1 a 2.12 descrevem o desenho do produto e a seção 2.13 seu encaixe em WPF. DEC-007 a DEC-014 definem o desenho planejado; DEC-015 registra a autorização de execução. P3 é gate antes da Fase 1; P7 é gate antes da Fase 8. P4 foi aposentado porque o produto não terá chat nem campo de texto.
+STATUS: PLANNED. P1 e P2 foram aceitos nos limites documentados; P3 aguarda validação controlada. WPF/C#/.NET 10 está em DEC-006. As seções 2.1 a 2.12 e 2.16 descrevem o desenho do produto e a seção 2.13 seu encaixe em WPF. DEC-007 a DEC-014 definem o desenho planejado; DEC-015 registra a autorização de execução. P3 é gate antes da Fase 1; P7 é gate antes da Fase 8. P4 foi aposentado porque o produto não terá chat nem campo de texto.
 
 ### 2.1 Princípios
 
@@ -75,6 +78,28 @@ Windows --> Adaptador de plataforma --> evento normalizado --> fila do núcleo
 5. Enquanto houver movimento ou animação, o relógio lógico gera eventos de passo fixo. Quando o personagem para e a animação termina, o relógio para.
 
 Prioridade de eventos, da maior para a menor, conforme [PRODUCT_SPEC.md](PRODUCT_SPEC.md): ação direta do usuário sobre o personagem (pressionar, arrastar); menu, bandeja, painel de energia e outras ações explícitas do usuário, incluindo ocultar e pausar; eventos do sistema, incluindo o modo de tela cheia; comportamento autônomo. Um evento de prioridade maior interrompe atividade de prioridade menor. Eventos autônomos que chegam durante um estado controlado pelo usuário são descartados, não enfileirados.
+
+**Efeitos do tamagotchi (DEC-028), que só saem com a chave ligada.** O temporizador da onda tem dois: `AgendarOnda`, um disparo único de 1 s ou mais, que volta como `ITEM_EFFECT_TIMER` com a mesma geração, e `CancelarOnda`. As janelas dos itens têm cinco: `MostrarItem`, `MoverItem`, `EsconderItem`, `RemoverItem`, com o motivo (usado, recolhido ou substituído), e `LiberarCapturaDoItem`. Num evento, os efeitos saem nesta ordem:
+
+1. os de antes: soltar capturas e fechar o painel;
+2. a janela do personagem;
+3. as janelas dos itens: primeiro os removidos e depois, item a item, na ordem do Id, esconder o que deixou de aparecer, mostrar o que passou a aparecer ou mover o que mudou de lugar;
+4. o relógio;
+5. a agenda;
+6. a onda;
+7. os de depois: gravações, menu, painel, configurações e encerrar.
+
+**Na raiz (passo T8; `GerenteDosItens` e `LigacaoDosItens`, em `Aplicacao.Itens.cs`):**
+
+- `MostrarItem` cria a janela do item, já com o sprite no DPI do monitor, ou mostra de novo a escondida; `MoverItem` a leva ao lugar e só redesenha o sprite se o DPI mudou; `EsconderItem` esconde; `RemoverItem` fecha;
+- `LiberarCapturaDoItem`: o árbitro dos itens esquece o gesto sem gerar `ITEM_RELEASE`, e a janela solta o mouse e volta para baixo do personagem; um soltar que chegue depois não vira nada;
+- um `MoverItem` só é pulado quando há outro do mesmo Id adiante no lote, antes de um mostrar, esconder ou remover desse Id; nenhum outro efeito é pulado;
+- mover, esconder, remover ou soltar a captura de um Id que a raiz não conhece é ignorado; os três primeiros vão para o log com `desconhecido=sim`;
+- `AgendarOnda` arma o temporizador da onda, um `DispatcherTimer` de disparo único que se desliga antes de avisar e entrega `ITEM_EFFECT_TIMER` com a geração agendada; `CancelarOnda` o desarma;
+- no fim de cada processamento, só com `--diagnostico`, cada item que acabou de parar no chão ganha uma linha de pouso no log (seção 2.13.4);
+- saindo (`EXITING`), o núcleo não emite efeito de janela de item: ao encerrar, a raiz para o temporizador da onda, esquece o gesto sobre um item e fecha todas as janelas dos itens.
+
+Um efeito que a raiz não conhece continua lançando exceção.
 
 ### 2.4 Coordenadas e desktop virtual
 
@@ -137,6 +162,7 @@ STATUS: PLANNED. Estado de comportamento e expressão são dimensões independen
 | `HIDDEN` | sistema | Escondido. Sem relógio, sem desenho. Guarda **por que** foi escondido: `POR_USUARIO`, `POR_SESSAO`, `POR_SUSPENSAO` ou `POR_TELA_CHEIA`. |
 | `EXITING` | sistema | Grava estado e encerra. |
 | `PEEKING` | autônomo | Escondido atrás da borda de baixo (a barra de tarefas) ou de uma lateral, só com a cabeça e as mãos para fora (DEC-025). Entra e sai pelo clique duplo. Sem relógio; a agenda só troca a cara. |
+| `USING` | usuário | Usa o item que o usuário soltou sobre ele: come, bebe, fuma, cheira, engole ou inala, de desenho animado, por um número fixo de passos, no apoio em que estava (chão, parede, cipó ou esconderijo). O relógio corre, nada autônomo chega e um `PRESS` o segura na hora. Só existe com a chave do tamagotchi ligada (DEC-028). |
 
 **Dimensões da Fase 4 ligadas às escolhas do usuário:**
 
@@ -145,13 +171,21 @@ STATUS: PLANNED. Estado de comportamento e expressão são dimensões independen
 | Preso pelo usuário | sim ou não | O usuário o soltou na lateral ou no cipó: lá fica até o usuário tirá-lo. A agenda só o faz passear pela mesma superfície (DEC-024). |
 | Esconderijo | nenhum, baixo, esquerda ou direita | A borda atrás da qual ele está escondido. Sobrevive ao primeiro clique do clique duplo, a `HIDDEN` e às revalidações (DEC-025). |
 
+**Dimensões da emoção dominante e do tamagotchi (DEC-027, DEC-028):**
+
+| Dimensão | Valores | Efeito |
+|---|---|---|
+| Emoção dominante | automática ou uma das 14 caras de humor | Cara de base e a mais sorteada nas trocas de cara. Nenhum efeito sobre estado, posição, ações ou física. É uma preferência, gravada no `settings.json` (seção 2.12). |
+| Onda do item | nenhuma; ou a da frente (tipo, fase e nível de 1 a 3) e até uma de fundo, congelada | Pesos, intervalos, gestos e caras; por exceção ao invariante 12, as velocidades de andar, escalar e pendurar e o cambaleio. Avança só pelos disparos únicos do próprio temporizador. Só em memória (seção 2.16). |
+| Itens no mundo | até 6, cada um caindo, no chão, segurado ou arrastado | Só em memória. Com um item na mão do usuário, o personagem fica atento: parado onde está, sem decisão autônoma, até o item sair da mão. |
+
 **Dimensões ortogonais.** As informações abaixo acompanham o personagem sem fazer parte do estado de comportamento:
 
 | Dimensão | Valores | Efeito |
 |---|---|---|
-| Expressão | feliz, curioso, sonolento e demais | Nenhum sobre comportamento ou posição |
-| Gesto curto | nenhum, espiar, olhar ao redor, coçar-se, espreguiçar-se, brincar e demais definidos no manifesto | Ação visual de macaquinho com duração limitada, executada na superfície atual (`IDLE`, `CLIMBING` parado ou `HANGING`); não muda estado de comportamento, posição nem superfície; qualquer `PRESS`, `CMD_*` ou evento do sistema a encerra na hora |
-| Autonomia pausada | sim ou não | Definida por `CMD_PAUSE_AUTONOMY`/`CMD_RESUME_AUTONOMY`. Enquanto sim, nenhum `AUTONOMY_TIMER` é agendado; queda ou pouso em curso terminam; arraste, clique, painel, ocultação e modo de tela cheia continuam funcionando |
+| Expressão | as 14 caras de humor (feliz, curioso, sonolento e demais) e as 7 caras de efeito, que só a onda de um item mostra (DEC-028) | Nenhum sobre comportamento ou posição |
+| Gesto curto | nenhum, espiar, olhar ao redor, coçar-se, espreguiçar-se, brincar e demais definidos no manifesto; e os seis da onda de um item (soluço, dança, gargalhada, espirro, tosse e tremedeira), que só ela sorteia, também só em `IDLE` (DEC-028) | Ação visual de macaquinho com duração limitada, executada na superfície atual (`IDLE`, `CLIMBING` parado ou `HANGING`); não muda estado de comportamento, posição nem superfície; qualquer `PRESS`, `CMD_*` ou evento do sistema a encerra na hora |
+| Autonomia pausada | sim ou não | Definida por `CMD_PAUSE_AUTONOMY`/`CMD_RESUME_AUTONOMY`. Enquanto sim, nenhum `AUTONOMY_TIMER` é agendado; queda ou pouso em curso terminam; arraste, clique, painel, ocultação e modo de tela cheia continuam funcionando. Com ela, ou com o painel aberto, quem está agarrado sem estar preso desce ou se solta (regra da calma, DEC-022, item 4), e o disparo da onda de um item só troca a cara (DEC-028) |
 | Painel de energia | aberto ou fechado | Enquanto aberto, pausa a autonomia; o movimento físico em curso pode terminar. Arrastar o mascote fecha o painel. Ele contém somente o seletor Baixa/Média/Alta, sem conversa ou campo de texto. |
 | Motivo do ocultamento | `POR_USUARIO`, `POR_SESSAO`, `POR_SUSPENSAO`, `POR_TELA_CHEIA` | Decide quais eventos podem tirar o personagem de `HIDDEN`; tela cheia não desfaz uma ocultação feita pelo usuário. Precedência (DEC-020): `POR_USUARIO` > `POR_SESSAO` > `POR_SUSPENSAO` > `POR_TELA_CHEIA`; em `HIDDEN`, um motivo só substitui outro de precedência menor |
 | Nível de energia | `BAIXA`, `MEDIA`, `ALTA` | Altera frequência e duração das ações autônomas e a frequência de expressões; padrão `MEDIA` |
@@ -166,15 +200,16 @@ STATUS: PLANNED. Estado de comportamento e expressão são dimensões independen
 | Painel de energia | `ENERGY_PANEL_OPEN`, `ENERGY_SELECTED(nivel)`, `ENERGY_PANEL_CLOSE`; `ENERGY_SELECTED` aceita somente `BAIXA`, `MEDIA` ou `ALTA` |
 | Sistema | `TOPOLOGY_CHANGED(topologia)`, `SESSION_LOCKED`, `SESSION_UNLOCKED`, `SUSPENDING`, `RESUMED`, `SESSION_ENDING` |
 | Adaptador de janela ativa | `FULLSCREEN_TARGETS_CHANGED(monitoresOcupados)`; payload contém somente chaves de monitores, sem HWND, processo, título ou texto |
-| Bandeja e menu | `CMD_HIDE`, `CMD_SHOW`, `CMD_PAUSE_AUTONOMY`, `CMD_RESUME_AUTONOMY`, `CMD_OPEN_SETTINGS`, `CMD_RESET_POSITION`, `CMD_EXIT` |
-| Relógio | `TICK(dt)` com passo fixo, `AUTONOMY_TIMER` |
+| Bandeja e menu | `CMD_HIDE`, `CMD_SHOW`, `CMD_PAUSE_AUTONOMY`, `CMD_RESUME_AUTONOMY`, `CMD_OPEN_SETTINGS`, `CMD_RESET_POSITION`, `CMD_EXIT`; `CMD_SET_DOMINANT_EMOTION(emoção ou automática)` (DEC-027); `CMD_SUMMON_ITEM(item)` e `CMD_CLEAR_ITEMS` (DEC-028) |
+| Ponteiro sobre a janela de um item, por um árbitro de gestos próprio dela (DEC-028) | `ITEM_PRESS(id, p)`, `ITEM_DRAG_START(id)`, `ITEM_DRAG_MOVE(id, p)`, `ITEM_DRAG_END(id, p)` e `ITEM_RELEASE(id)`, este para clique, clique duplo ou gesto cancelado (captura perdida, movimento sem o botão ou outro botão pressionado sem soltar o anterior); o botão direito no item é o `CONTEXT_MENU` de sempre (seção 2.7) |
+| Relógio | `TICK(dt)` com passo fixo, `AUTONOMY_TIMER`; `ITEM_EFFECT_TIMER(geração)`, o disparo da onda de um item, com a prioridade do relógio: não é descartado com o usuário no controle e não encerra um gesto (DEC-028) |
 | Configurações | `SETTINGS_CHANGED(config)` |
 
 **Transições principais**
 
 | De | Evento | Para | Regra |
 |---|---|---|---|
-| `BOOTING` | configurações e topologia carregadas | `SETTLING` | Posição restaurada pela seção 2.8. Só a primeira carga vale; pedidos anteriores a ela (mostrar, esconder, sessão, topologia) ficam guardados e o personagem só aparece com a carga. Se o monitor restaurado estiver ocupado pela tela cheia (monitores em cache), aplica-se a linha de `FULLSCREEN_TARGETS_CHANGED` (DEC-020). |
+| `BOOTING` | configurações e topologia carregadas | `SETTLING` | Posição restaurada pela seção 2.8: com posição salva, `Posicionador.Restaurar` escolhe o monitor pela chave, pela tela do monitor da época ou, sem as duas, o principal, e a regra registrada termina em "posição salva restaurada pela chave", "pelo retângulo do monitor" ou "no monitor principal"; sem posição salva, vale a posição inicial e o texto não muda. O mesmo sufixo vale para "HIDDEN: pedido de mostrar anterior à carga" (DEC-030). Só a primeira carga vale; pedidos anteriores a ela (mostrar, esconder, sessão, topologia) ficam guardados e o personagem só aparece com a carga. Se o monitor restaurado estiver ocupado pela tela cheia (monitores em cache), aplica-se a linha de `FULLSCREEN_TARGETS_CHANGED` (DEC-020). |
 | qualquer autônomo ou físico | `PRESS` sobre pixel opaco | `PRESSED` | Movimento autônomo congela no quadro atual. Vale também no meio de um pulo ou queda. |
 | `PRESSED` | `DRAG_START` | `DRAGGING` | Plano autônomo descartado. |
 | `PRESSED` | `CLICK` | `REACTING` | Reação curta. Depois, `SETTLING` decide o próximo estado. Se o monitor do personagem mudou ou sumiu enquanto o botão estava pressionado, a posição é validada já no `CLICK` (DEC-020). |
@@ -183,7 +218,7 @@ STATUS: PLANNED. Estado de comportamento e expressão são dimensões independen
 | `SETTLING` | com apoio | `IDLE` | Autonomia retomada depois de um intervalo de acomodação, exceto se o painel de energia estiver aberto. |
 | `SETTLING` | com esconderijo marcado | `PEEKING` | Volta ao esconderijo na mesma borda, perto do lugar validado (DEC-025). |
 | `SETTLING` | sem apoio, a mais de 32 DIP do chão, com o topo do sprite a até 96 DIP da borda de cima | `HANGING` agarrado ao cipó | Parado e sem relógio. Se foi o usuário que o soltou ali (`DRAG_END`, `DRAG_CANCEL`), ou se ele já estava preso, fica preso pelo usuário (DEC-024). |
-| `SETTLING` | sem apoio, a mais de 32 DIP do chão, com a âncora a até 64 DIP de uma lateral | `CLIMBING` agarrado à parede | Idem, olhando para a parede. Com as duas bordas perto, vale a mais próxima em proporção ao alcance. |
+| `SETTLING` | sem apoio, a mais de 32 DIP do chão, com a âncora a até 64 DIP de uma lateral | `CLIMBING` agarrado à parede | Idem, olhando para a parede. Com as duas bordas perto, vale a mais próxima em proporção ao alcance. No fim do uso de um item na parede ou no cipó, vale o apoio do uso, mesmo a menos de 32 DIP do chão (DEC-028). |
 | `SETTLING` | sem apoio | `FALLING` | Cai até o chão do monitor. |
 | `PRESSED` (segundo clique), `IDLE`, `REACTING` | `DOUBLE_CLICK` ou menu "Energia" | `SETTLING` se vier de `PRESSED`; senão permanece | A partir da Fase 8, abre o painel compacto somente com o seletor de energia; pausa a autonomia enquanto estiver aberto. Antes da Fase 8, o segundo clique só produz reação não verbal. |
 | qualquer estado visível com painel aberto | `ENERGY_SELECTED(nivel)` | permanece | Atualiza a mesma preferência persistida; o novo nível afeta as próximas decisões autônomas. |
@@ -213,7 +248,7 @@ STATUS: PLANNED. Estado de comportamento e expressão são dimensões independen
 | qualquer estado visível | `CMD_PAUSE_AUTONOMY`, `CMD_RESUME_AUTONOMY` | permanece | Liga ou desliga a dimensão "autonomia pausada"; retomar agenda a próxima decisão após o intervalo de acomodação. |
 | `RESTING`, `CLIMBING` | `PRESS`, `DOUBLE_CLICK`, `CMD_*` | conforme a linha correspondente | Nenhum estado autônomo bloqueia interação do usuário (DEC-004). |
 | `JUMPING`, `FALLING` | contato com o chão | `LANDING`, depois `IDLE` | Vale com o painel aberto ou fechado; o painel não altera a física. |
-| estados autônomos, físicos e `REACTING` | `TOPOLOGY_CHANGED` | `SETTLING` | Revalida a posição. |
+| estados autônomos, físicos, `REACTING` e `USING` | `TOPOLOGY_CHANGED` | `SETTLING` | Revalida a posição. Em `USING`, o uso acaba, e a onda do item continua (DEC-028). |
 | `PRESSED`, `DRAGGING` | `TOPOLOGY_CHANGED` | sem troca de estado | Só atualiza a topologia em cache; a validação acontece ao soltar. |
 | `BOOTING`, `HIDDEN`, `EXITING` | `TOPOLOGY_CHANGED` | sem troca de estado | Só atualiza a topologia em cache. `HIDDEN` valida ao reaparecer; `BOOTING` valida ao terminar de carregar. |
 | qualquer, exceto `EXITING` | `CMD_HIDE` | `HIDDEN(POR_USUARIO)` | Fecha o painel, encerra captura e arraste, grava a posição escolhida pelo usuário (o retorno temporário, se houver; DEC-020). |
@@ -224,28 +259,64 @@ STATUS: PLANNED. Estado de comportamento e expressão são dimensões independen
 | `HIDDEN(POR_SUSPENSAO)` | `RESUMED` ou `CMD_SHOW` | `SETTLING` | Idem, com `RESUMED` no lugar de `SESSION_UNLOCKED`. |
 | `HIDDEN(POR_USUARIO)` | `SESSION_UNLOCKED`, `RESUMED` | `HIDDEN(POR_USUARIO)` | O personagem **não** reaparece: um evento do sistema não desfaz uma ação direta do usuário. |
 | qualquer | `CMD_EXIT`, `SESSION_ENDING` | `EXITING` | Grava configurações e a posição escolhida pelo usuário (o retorno temporário, se houver) e encerra. |
+| `CLIMBING`, `HANGING` agarrados sem estarem presos, com a autonomia pausada ou o painel aberto | fim de qualquer evento | permanece; os passos seguintes o fazem descer ou se soltar | Regra da calma (DEC-022, item 4): deixa de estar agarrado. O preso fica; com um item na mão do usuário, o atento o segura até o item sair da mão. |
+| qualquer carregado, exceto `EXITING` | `CMD_SET_DOMINANT_EMOTION(e)` | permanece, com uma transição para o mesmo estado que só registra a escolha | Grava a preferência. Sem onda e fora de `RESTING`, `REACTING` e `USING`, a cara muda na hora. Fora das 14 caras de humor ou igual à atual, é ignorado (DEC-027). |
+| qualquer visível e carregado | `CMD_SUMMON_ITEM(item)` | permanece | O item nasce ao lado dele, acima do chão, e cai (seção 2.16). Com 6 itens, o mais antigo fora da mão sai. Parado e sem onda, ele fica empolgado. Escondido, antes da carga ou com um item fora do enum, nada acontece. |
+| qualquer | `CMD_CLEAR_ITEMS` | permanece | Todos os itens saem; o da mão do usuário solta a captura antes. |
+| qualquer visível, sobre um item visível | `ITEM_PRESS(id, p)` | `WALKING` e `RESTING` vão a `IDLE`; os outros permanecem | Atento: andando, para; descansando, acorda; na parede e no cipó, fica agarrado, e o foguete apaga; pulo e queda seguem até o chão. Nenhuma decisão autônoma até o item sair da mão. Outro item que estivesse na mão é largado antes, com a captura solta. |
+| qualquer | `ITEM_DRAG_MOVE(id, p)` do item arrastado | permanece | A âncora do item é o cursor menos a pegada, sem prender, como no invariante 2. |
+| `IDLE`, `WALKING`, `CLIMBING`, `HANGING`, `RESTING`, `REACTING`, `LANDING`, `PEEKING` | `ITEM_DRAG_END(id, p)` com o item sobre o personagem | `USING` | O item sai (`RemoverItem`, usado), o uso começa no apoio em que ele está e a onda do item começa (seção 2.16). Descansando, acorda antes; o plano, a reação ou o pouso são cortados. |
+| `JUMPING`, `FALLING`, `USING`, `PRESSED`, `DRAGGING` e os de transição ou sistema (`SETTLING`, `HIDDEN`, `BOOTING`, `EXITING`) | `ITEM_DRAG_END(id, p)` com o item sobre o personagem | permanece | Recusado: o item cai de onde foi solto. `PRESSED` e `DRAGGING` são inalcançáveis com um ponteiro só. |
+| qualquer | `ITEM_DRAG_END` fora do personagem, `ITEM_RELEASE`, ou `ITEM_DRAG_END` de um item só segurado | permanece | O item cai de onde foi solto, ou fica, se já está no chão; nunca é usado. O atento acaba, e a agenda volta depois do intervalo de acomodação. |
+| `USING` | fim dos passos do uso | `SETTLING`, depois `IDLE`, `CLIMBING` agarrado, `HANGING` agarrado ou `PEEKING` | Volta ao mesmo apoio, com a cara de base: quem estava preso continua preso, e quem estava escondido continua escondido. |
+| `USING` | `PRESS` | `PRESSED` | No mesmo evento: o uso acaba, e a onda continua. |
+| `USING` | `TOPOLOGY_CHANGED`, tela cheia, `CMD_HIDE`, sessão, suspensão, `CMD_EXIT` | conforme a linha de cada evento | O uso acaba, e a onda continua; só `EXITING` cancela a onda. |
+| qualquer | `ITEM_EFFECT_TIMER(g)` da geração agendada | permanece | A onda avança uma fase ou um nível; quando acaba, a de fundo volta. A cara da fase entra na hora, exceto em `RESTING`, `REACTING` e `USING`. A agenda não é reagendada: com a autonomia pausada, o disparo só troca a cara. Um disparo de outra geração é ignorado. |
 
 Toda decisão autônoma agendada respeita o intervalo de acomodação, em qualquer estado que decide (DEC-020).
 
+Com a chave do tamagotchi desligada, os eventos dos itens e da onda são descartados antes de qualquer outra regra, inclusive antes de encerrar um gesto: nenhuma linha de item ou de onda acontece (DEC-028). No aplicativo, a chave está ligada desde o passo T9. A linha da emoção dominante não depende da chave.
+
 **Invariantes, verificáveis por teste automático**
 
-1. Em `PRESSED`, `DRAGGING` e `SETTLING`, nenhum evento autônomo muda estado ou posição.
+1. Em `PRESSED`, `DRAGGING`, `SETTLING` e `USING`, nenhum evento autônomo muda estado ou posição.
 2. Em `DRAGGING`, a posição do personagem é sempre o cursor menos o deslocamento da pegada. O personagem não anda, não pula, não foge e não começa escalada.
 3. O painel de energia não recebe nem interpreta texto; teclas locais só alteram seu controle quando ele está focado.
-4. Nenhum comportamento autônomo começa enquanto o painel de energia está aberto.
+4. Nenhum comportamento autônomo começa enquanto o painel de energia está aberto. Começar é entrar no estado: a transição para o mesmo estado, como a que registra a escolha da emoção dominante, não conta (DEC-027).
 5. Depois de `SETTLING`, a âncora está dentro da área útil de algum monitor presente.
 6. A expressão pode mudar em qualquer estado sem alterar estado de comportamento ou posição.
 7. Com a mesma semente e a mesma sequência de eventos, a sequência de retratos é idêntica.
 8. Abrir ou fechar o painel de energia nunca muda a posição do personagem.
 9. Iniciar um arraste fecha o painel de energia; ao soltar, nenhuma preferência de energia é alterada implicitamente.
 10. `SESSION_UNLOCKED` e `RESUMED` nunca fazem o personagem reaparecer quando ele foi escondido pelo usuário.
-11. Todo estado tem pelo menos uma transição de entrada e uma de saída, com duas exceções por construção: `BOOTING`, que só tem saída, e `EXITING`, que só tem entrada.
-12. Um nível de energia mais alto pode aumentar frequência/duração de ações, mas nunca muda colisões, limites de superfície, segurança ou prioridade da ação direta.
+11. Todo estado tem pelo menos uma transição de entrada e uma de saída, com duas exceções por construção: `BOOTING`, que só tem saída, e `EXITING`, que só tem entrada. `USING` entra pelo soltar de um item e sai pelo fim do uso ou por uma interrupção; só aparece com a chave do tamagotchi ligada (DEC-028).
+12. Um nível de energia mais alto pode aumentar frequência/duração de ações, mas nunca muda colisões, limites de superfície, segurança ou prioridade da ação direta. A onda de um item é a exceção documentada para as velocidades (invariante 26, DEC-028); o nível de energia continua sem mudar a física.
 13. O adaptador nunca envia identidade ou conteúdo de outra janela ao núcleo; o modo de tela cheia recebe apenas os monitores cobertos pela janela ativa.
 14. Em `PRESSED` e `DRAGGING`, `FULLSCREEN_TARGETS_CHANGED` não muda estado nem posição. Depois de um arraste ou de `CMD_SHOW` manual durante o modo de tela cheia, o fim da tela cheia não move o personagem.
-15. Um gesto curto nunca muda estado de comportamento, posição ou superfície, e termina ao chegar qualquer evento de prioridade maior.
+15. Um gesto curto nunca muda estado de comportamento, posição ou superfície, e termina ao chegar qualquer evento de prioridade maior. Vale também para os seis gestos da onda de um item (DEC-028).
 16. A posição gravada (`GravarPosicao`) nunca é a posição temporária do modo de tela cheia (DEC-020).
 17. Todo `AgendarDecisao` tem atraso maior ou igual ao intervalo de acomodação (DEC-020).
+18. Todo `GravarPosicao` (DEC-029):
+    - sai só de `DRAG_END`, `DRAG_CANCEL`, `CMD_RESET_POSITION`, `CMD_HIDE`, `SESSION_LOCKED`, `SUSPENDING`, `CMD_EXIT` ou `SESSION_ENDING`; nunca do relógio, do movimento, da agenda autônoma, da troca de expressão, da carga, da topologia, da tela cheia nem das preferências, e por isso não há gravação periódica (DEC-011);
+    - traz uma posição gravável: chave não vazia, frações em [0, 1] e a tela do monitor da época conhecida e não vazia;
+    - volta igual do `settings.json`: escrita e lida pelo esquema (seção 2.12), é válida, sem aviso e sem precisar de normalização.
+
+    É conferido nas sequências aleatórias sem a física e também com a configuração do aplicativo (física, agarrar e esconderijo).
+
+Os números 19 a 21 ficam reservados para a Fase 5. Os invariantes 22 a 29 são da emoção dominante e do tamagotchi (DEC-027, DEC-028; regras exatas na seção 2.16):
+
+22. Sem itens, sem onda e com a emoção automática, retratos, transições e efeitos são idênticos aos de antes; as referências gravadas 01–05 continuam idênticas byte a byte.
+23. Um item só nasce por `CMD_SUMMON_ITEM`, com o próximo Id, que nunca se repete, e só é usado por um `ITEM_DRAG_END` do usuário sobre o personagem, num estado que aceita. Ele só sai usado, recolhido ou substituído pelo sétimo. Nada autônomo, do relógio ou do sistema invoca ou usa um item, e só se entra em `USING` assim.
+24. Em `USING`, `PRESS` leva a `PRESSED` no mesmo evento, e nenhum evento autônomo chega à máquina. O uso dura exatamente os passos do verbo e sai por `SETTLING` para o mesmo apoio, mantendo o preso e o esconderijo. Interrompido, só o uso acaba; a onda continua.
+25. Com onda, fora de `EXITING`, há exatamente um `ITEM_EFFECT_TIMER` pendente, de 1 s ou mais; sem onda, nenhum. O nível fica entre 1 e 3 (na queda, 1), e há no máximo uma onda de fundo, de outro tipo. Sem item novo, a onda da frente acaba em no máximo 2 + nível disparos.
+26. A onda só muda pesos, intervalos, gestos, caras, os tempos na parede e pendurado, as velocidades de andar, escalar e pendurar (de 50% a 200%) e o cambaleio, sempre no chão e entre as laterais. Gravidade, queda máxima, quique, foguete, colisões, limites, apoio e prioridade do usuário ficam intactos.
+27. A emoção dominante é nula ou uma das 14 caras de humor. Com a mesma semente e os mesmos eventos, ligá-la muda só as expressões.
+28. Há no máximo 6 itens. Fora da mão do usuário, todo item tem o sprite inteiro na área útil do monitor dele e, parado, os pés no chão. A janela de um item aparece se e somente se ele é visível: na mão do usuário, sempre; fora dela, só com o personagem visível e fora de um monitor ocupado pela tela cheia. Nenhum item invisível fica caindo.
+29. O relógio corre se e somente se o personagem se move sem estar agarrado, está em `REACTING` ou `USING`, faz um gesto em `IDLE` ou há um item visível caindo.
+
+Os invariantes 22 a 29 são conferidos a cada evento nas sequências aleatórias com a chave ligada, contra regras escritas no teste, à parte do núcleo (`InvariantesTestes`); o 22 e o 27 também com a física e a configuração do aplicativo (`ChaveLigadaTestes`). O mesmo teste confere, a cada evento:
+- que a energia e a emoção dominante só assumem valores das listas fechadas, e que um comando fora delas é ignorado sem gravar (a regra R1 do teste);
+- que não há relógio em `IDLE` sem gesto, `RESTING`, `HIDDEN`, `PRESSED`, `DRAGGING`, `BOOTING` e `EXITING`, a não ser por um item visível caindo (a regra R-b, o critério 3 da Fase 2 com o invariante 29).
 
 ### 2.7 Arbitragem de input, clique, arraste e painel de energia
 
@@ -284,6 +355,25 @@ Regras concretas implementadas na Fase 3 (DEC-021):
 5. O personagem identifica a superfície sob os pés. Com apoio, vai para `IDLE`. Sem apoio, vai para `FALLING` até o chão do monitor. Soltar o personagem junto a uma parede não inicia escalada.
 6. Depois de um intervalo de acomodação, a agenda autônoma volta a funcionar.
 
+**Janelas dos itens do tamagotchi (DEC-028; passo T8, em `JanelaDoItem` e `Aplicacao.Itens.cs`)**
+
+- **Quem recebe o input:** cada item tem uma janela própria, com a receita da janela do personagem (seção 2.13.1). Só os pixels opacos do item recebem clique; a janela nunca é ativada e não tira o foco do aplicativo em uso. `WM_MOUSEMOVE` só é tratado durante um gesto começado no item.
+- **Árbitro próprio:** uma segunda instância do árbitro de gestos, só para os itens, com as mesmas regras do personagem: limiar de arraste do sistema, clique duplo, `MK_LBUTTON`, ClickLock e captura perdida. Cada gesto vira um evento do item em que o botão esquerdo foi pressionado, mesmo que a mensagem chegue por outra janela:
+
+  | Gesto do árbitro | Evento do item |
+  |---|---|
+  | `PRESS` | `ITEM_PRESS` |
+  | `DRAG_START`, `DRAG_MOVE`, `DRAG_END` | `ITEM_DRAG_START`, `ITEM_DRAG_MOVE`, `ITEM_DRAG_END` |
+  | `CLICK`, `DOUBLE_CLICK`, `DRAG_CANCEL` | `ITEM_RELEASE`: o item fica no chão, ou cai de onde está, e nunca é usado |
+  | `CONTEXT_MENU` | o mesmo, sem tradução: abre o menu do personagem |
+
+  Um botão pressionado noutro item, sem o soltar do anterior, larga o anterior antes de pegar o novo, nessa ordem.
+- **Botão direito:** solto num item, fora de um gesto do botão esquerdo, abre o mesmo menu do personagem e da bandeja (Q-03). Tirar um item da tela é pelo "Recolher itens".
+- **Captura:** a janela do item captura o mouse só no gesto e a solta no fim, sem que isso conte como captura perdida. Quando o núcleo encerra o gesto por conta própria (esconder, inclusive pela minimização da janela do personagem, bloquear a sessão, suspender, sair, recolher ou pegar outro item), ele emite `LiberarCapturaDoItem` (seção 2.3).
+- **Entrega:** quem decide se o item foi solto sobre o personagem é o núcleo, pelo retângulo do item já preso na área útil contra o retângulo do personagem encolhido (seção 2.16); a raiz não informa a transparência. Com `--diagnostico`, a raiz refaz o mesmo teste só para o log.
+- **Ordem Z, sempre por evento:** fora de um gesto, a janela do item fica logo abaixo da do personagem. No gesto sobre o item, ela vai ao topo do grupo "sempre no topo", para o item não sumir atrás do personagem justamente quando vai ser solto sobre ele, e volta para baixo no fim. Quando o personagem reaparece no topo, a ordem é reafirmada. Nunca por timer (SECURITY.md 2).
+- **Um ponteiro só:** um gesto num item e outro no personagem não coexistem, porque a captura do mouse é única.
+
 **Foco do painel de energia**
 
 - O painel contém apenas o controle de energia; não há campo de texto nem evento de envio de conteúdo.
@@ -293,9 +383,13 @@ Regras concretas implementadas na Fase 3 (DEC-021):
 
 ### 2.8 Monitores: restauração, conexão e desconexão
 
-STATUS: PLANNED. Proposta registrada em DEC-008.
+STATUS: PLANNED. Proposta registrada em DEC-008. A posição com a tela do monitor e a restauração ao iniciar estão implementadas no núcleo e cobertas por testes automatizados (DEC-030); o app só entrega a posição salva a partir do passo P7 da Fase 5.
 
 **Posição gravada:** chave do monitor, retângulo desse monitor na época, posição relativa da âncora dentro da área útil (frações de 0 a 1) e posição absoluta de reserva.
+
+- *Implementação (`PosicaoDoPersonagem`):* o retângulo é `TelaDoMonitor`, a tela do monitor da chave na última vez em que a posição foi descrita nele; nulo quer dizer desconhecido. É preenchido por `Descrever`, pelos dois casos de `Reacomodar`, pela validação da máquina e por `Restaurar`, sempre com a tela real de um monitor presente. Nunca é deslocado por cálculo, nem quando a posição acompanhar a translação da topologia em execução (passo P8): o arquivo não pode guardar uma tela que nunca existiu.
+- A âncora absoluta vale para a execução. Na partida, a cascata abaixo a recalcula, porque noutra sessão, com outro principal, ela fica noutro referencial.
+- A igualdade de `PosicaoDoPersonagem` inclui a tela: compare posições campo a campo ou obtenha as duas pelas mesmas funções do `Posicionador`.
 
 **Restauração ao iniciar**
 
@@ -305,9 +399,15 @@ STATUS: PLANNED. Proposta registrada em DEC-008.
 4. Em todos os casos, a âncora é presa à área útil e o personagem passa por `SETTLING`.
 5. Se o monitor original voltar depois, o personagem não pula de volta sozinho. A posição só muda por ação do usuário ou por movimento autônomo.
 
+*Implementação (`Posicionador.Restaurar`, DEC-030):*
+- No passo 2 vale o primeiro monitor da topologia com a tela igual à gravada; com monitores clonados ou sobrepostos, a escolha é determinística, mas arbitrária.
+- Nos três passos, as frações são saneadas (NaN vira 0,5; o resto, inclusive ±∞, é preso em [0, 1]), e a âncora absoluta gravada não é usada.
+- A posição nova passa a ter a chave e a tela do monitor escolhido. Restaurar de novo o resultado, na mesma topologia, não move o personagem.
+- Em `SETTLING`, uma posição gravada no ar segue a acomodação de sempre: perto do teto agarra o cipó, junto de uma lateral gruda na parede e, senão, cai (DEC-024).
+
 **Durante a execução**
 
-- O monitor onde o personagem está é desconectado: o personagem vai para o monitor mais próximo da última âncora, na mesma posição relativa, e cai até o chão.
+- O monitor onde o personagem está é desconectado: o personagem vai para o monitor mais próximo do pixel dos pés da última âncora, `(x, y − 1)`, na mesma posição relativa, e cai até o chão. É a mesma convenção do monitor da âncora: com a barra oculta, a âncora no chão fica na base da tela, que já é o primeiro pixel do monitor de baixo (DEC-030).
 - Troca de resolução, escala ou orientação: a posição relativa é mantida e o tamanho físico é recalculado.
 - A barra de tarefas muda de lugar, de tamanho ou se esconde sozinha: as superfícies são recalculadas e o personagem se acomoda.
 - Mudança durante o arraste: a topologia é atualizada, mas a validação só acontece ao soltar. O próprio Windows reposiciona o cursor se o monitor sumir.
@@ -350,6 +450,13 @@ STATUS: PLANNED. O modelo físico detalhado segue as superfícies escolhidas em 
   - **Quique de borracha:** um impacto de pelo menos 600 DIP/s quica. Volta a subir com metade da velocidade vertical, fica com 70% da horizontal e dá no máximo dois quiques; a contagem fica em `EstadoDoMovimento.Quiques`.
   - **Foguete de borracha:** parte das subidas a partir do chão (`EstadoDoMovimento.Foguete`) sobe a 1000 DIP/s até a borda superior. A chance é do perfil de energia (`ChanceDoFoguete`), e a velocidade é a mesma para todos.
   - **Com a autonomia pausada ou o painel aberto:** nem quique nem foguete.
+- **Regra da calma (DEC-022, item 4, nota de 2026-10-01):** com a autonomia pausada ou o painel aberto, quem está agarrado à parede ou ao cipó sem estar preso deixa de estar agarrado, no fim de qualquer evento, e os passos seguintes o fazem descer pela parede ou se soltar do cipó, como quem escala. O preso pelo usuário fica, e o atento a um item na mão do usuário também. Não depende da chave do tamagotchi.
+
+**Implementado com o tamagotchi (DEC-028), só com a chave ligada** (tabelas na seção 2.16):
+
+- **Velocidades da onda:** as velocidades passam pela física efetiva (`Maquina.FisicaEfetiva`) em cinco lugares: andar; escalar e o passeio do preso na parede; pendurado e o passeio do preso no cipó. Ficam de 50% a 200% das de sempre, e o resto da física não muda.
+- **Cambaleio:** nas ondas do bêbado e do tonto, o passo de cada quadro da caminhada é multiplicado por uma onda triangular de 48 passos (`Maquina.FatorDoCambaleio`). Ele fica no chão, preso entre as laterais, e o recuo devolve distância ao percurso.
+- **Itens:** caem com a mesma gravidade e a mesma queda máxima do personagem, presos entre as laterais do monitor deles, e quicam uma vez, de leve. Um item que deixa de aparecer vai direto ao chão.
 
 ### 2.10 Apresentação, assets e expressões
 
@@ -362,6 +469,25 @@ STATUS: PLANNED.
 - **Toon force (DEC-023):** a pose também pode vir achatada (impacto) ou esticada (velocidade), pela dinâmica do movimento (`Dinamica`: velocidade vertical, quiques e foguete). A deformação é da própria pixel art (`Tela.Deformada`, vizinho mais próximo, pés na mesma linha), então a janela, a âncora e a regra do alfa não mudam.
 - **Cipó (DEC-024):** na borda de cima, o personagem aparece pendurado num cipó (`cipo-1` a `cipo-3`). Balança em ciclo quando anda pela borda e fica no quadro do meio quando está agarrado. Agarrado à parede, a pose da escalada fica parada.
 - **Esconderijo (DEC-025):** em `PEEKING`, e também em `PRESSED` e `REACTING` de quem continua escondido, aparece a pose `escondido`, só com o chapéu, a cabeça e as mãos na borda. Nas laterais, ela é girada 90° (`Tela.Girada`, sem perda).
+- **Retrato da emoção dominante e do tamagotchi (DEC-027, DEC-028):** o retrato ganha `EmocaoDominante` (para a marca no menu), `Onda` e `OndaDeFundo` (para as sobreposições), `Uso` e `PassoDoUso` (para o quadro de uso) e `Itens`, inclusive o da mão. A linha canônica das reproduções ganha os trechos `onda=Tipo/Fase/Nível`, `fundo=Tipo/Fase/Nível`, `uso=Item/Verbo/PassodeDuração/Apoio`, `emocao=Nome` e `itens=[Id:Item:Situação:(x,y);…]`, só quando há valor: sem eles, a linha é a de antes.
+- **Arte da emoção dominante e do tamagotchi em `src/Buzzy.Visual/Pixel/`** (passos A1–A4; regras de desenho em [IDENTIDADE_VISUAL.md](IDENTIDADE_VISUAL.md)):
+  - **Chaves:** os nomes dos enums do núcleo em minúsculas, para os itens (`ItensPixel`, 24 × 24 pixels de arte, na densidade do boneco), as 7 caras de efeito (`Rostos.DeEfeito`) e as poses dos 6 gestos da onda (`PosesPixel.DosGestos`). Cada lado confere as mesmas listas nos próprios testes, e `NucleoEArteTestes` (passo T7) compara os enums do núcleo com as listas da arte: itens, verbos, passos do uso, caras e gestos.
+  - **`UsosPixel`:** a sequência de quadros de cada verbo, no chão e de frente (`Sequencia`, só para leitura; `Passos`; `Quadro` pelo passo do uso), com a soma igual à duração do uso no núcleo.
+  - **`PosesPixel.PorNome`** acha qualquer pose: as de estado e gesto (`Todas`), as dos gestos da onda (`DosGestos`) e as de uso (`UsosPixel.Poses`). As duas últimas ficam fora de `Todas`, e a folha nativa não muda.
+  - **`BonecoPixel.Desenhar(pose, expressao, item, efeito, fase)`:** a pose diz como segura o item (`Segura`: nada, na mão B ou, na lança-perfume, o frasco na mão A e o lenço na B). Com um item, o braço que o leva ao rosto se dobra por cinemática inversa de dois ossos (`Alcancar`, `AjustadaAoItem`) até a ponta do item cair na boca ou no nariz. Nas poses de uso, a cara é a da própria pose (expressão nula). `Pontos` dá as mãos, a cabeça, a boca e o nariz da pose, e `ItensColocados`, onde cada item ficou.
+  - **`EfeitosPixel`:** 8 sobreposições em 3 fases; a fase 0 é a parada, para quando não há relógio. Elas nunca cobrem `AreaDoRosto`, um conjunto de pixels com os traços do rosto (olhos, sobrancelhas, nariz, rubor e boca), nem, no cipó, o cipó e a mão que o segura. `Modificar` muda a pose pela onda só quando `Modificavel` é verdadeiro: no chão e fora das poses de uso. A sobreposição de cada onda e os modificadores estão em IDENTIDADE_VISUAL.md, seção 7b.
+  - **`IconesDoMenu`:** o rosto (o recorte de 40 × 32 de `expressoes.png`, pela mesma `Tela.Recortada` da prévia), o item (o desenho do chão), `Fator` pelo DPI, `Ampliar` por vizinho mais próximo, em BGRA com alfa só 0 ou 255, e `DeBaixoParaCima`, que inverte as linhas para um DIB de altura positiva.
+
+- **Na apresentação do tamagotchi (passo T7; `PoseDoPersonagem`, `SpriteProvisorio` e `CacheDeQuadros`):**
+  - **Quadro:** `QuadroDoSprite` ganhou o item na mão (a chave da arte, só nas poses de uso), a sobreposição da onda e a fase dela. O quadro inteiro, com o DPI, é a chave do cache.
+  - **Uso no chão:** o quadro da sequência do verbo no passo do uso (`UsosPixel.Quadro`), com o item na mão e a cara da própria pose (expressão nula); de frente e sem espelho, como as outras poses de frente.
+  - **Uso na parede, no cipó e no esconderijo,** que ainda não têm pose de uso: a pose de quem está ali (`escalando-1` virado para a parede, `cipo-2`, `escondido`, girada nas laterais), sem o objeto, com a cara do retrato, que o núcleo fixa na cara do item durante todo o uso. O apoio do uso decide a pose. No esconderijo, a boca fica fora do quadro, e só os olhos mostram a cara.
+  - **Caras:** as caras de efeito e a emoção dominante chegam pela expressão do retrato, nas poses que mostram a cara dele: andando, pendurado no cipó, parado sem gesto, escondido (`PEEKING`) e nos apoios do uso. Nas outras, vale a cara da pose.
+  - **Gestos da onda:** as poses de `PosesPixel.DosGestos`, pelo nome do gesto em minúsculas, com a cara da própria pose. A tremedeira alterna com o `parado` a cada 4 passos, com a mesma cara nos dois: só o corpo treme.
+  - **Sobreposição:** só a da onda da frente, pela tabela da seção 7b de IDENTIDADE_VISUAL.md, por cima de qualquer pose, inclusive dos quadros de uso; a onda de fundo não desenha nada. A fase é (passos no estado / 12) % 3 com o relógio ligado e 0 com ele parado; sem sobreposição, fica 0, para o cache não guardar o mesmo desenho uma vez por fase. O modificador de pose da onda só vale onde a pose é modificável.
+  - **Cache:** LRU por bytes de pixels, com orçamento de 16 MiB: ler um quadro o renova, os mais antigos saem para caber um novo, e um quadro maior que o orçamento não é guardado. A 100%, cada quadro tem 64 KiB, e cabem 256; a 300%, só 28.
+  - **Chave ausente:** a arte continua lançando exceção para um nome que não conhece. A proteção são testes: `PoseTestes` desenha todo quadro que a escolha pode pedir, com todos os valores dos enums (cerca de 3 mil quadros distintos), e `NucleoEArteTestes` compara os enums com as listas da arte.
+- **Janela de um item (passo T8; `SpriteDoItem`):** o desenho do chão do item, ampliado pelo DPI sem suavização, com alfa só 0 ou 255, num cache próprio de 4 MiB por item e DPI. Os limites opacos e os pontos de teste da janela saem do mesmo desenho.
 - A apresentação só redesenha quando o quadro muda ou quando a posição exige. Um clipe de 10 quadros por segundo gera 10 redesenhos por segundo, não 60.
 - A máscara de clique sai do canal alfa do quadro atual.
 
@@ -382,13 +508,74 @@ Com a mesma semente, nível de energia e sequência de eventos, o núcleo determ
 
 ### 2.12 Configurações, persistência e tempo
 
-STATUS: PLANNED. Decisões registradas em DEC-010 e DEC-011.
+STATUS: PLANNED. Decisões registradas em DEC-010, DEC-011, DEC-027 e DEC-029. O esquema, na v2 desde a emoção dominante, a leitura e a gravação estão implementados e cobertos por testes automatizados (bloco A da Fase 5 e passo T1 da seção "Interação" de TODO.md); a raiz só passa a ler e gravar o arquivo no passo P7.
 
 - **Arquivo:** um JSON com `schemaVersion` na pasta local do usuário. Sem pacote MSIX, a pasta é `%LOCALAPPDATA%\Buzzy`. Com MSIX, é a pasta local do pacote.
-- **Conteúdo proposto:** última posição escolhida pelo usuário (seção 2.8), escala do personagem, sempre no topo, iniciar com o Windows, energia `BAIXA`/`MEDIA`/`ALTA` (padrão `MEDIA`), permitir atravessar monitores, modo de tela cheia ligado por padrão e idioma. Opacidade fica fora do MVP. As decisões de produto correspondentes estão em DEC-013/014 e Q-03 a Q-07, Q-09, Q-12 e Q-23; os campos entram nas fases previstas no TODO.md.
-- **Leitura:** campo desconhecido é ignorado, valor fora da faixa é preso ao limite e arquivo ilegível é trocado pelos valores padrão. Uma cópia do arquivo ilegível é guardada para diagnóstico, no máximo uma.
+- **Conteúdo proposto:** última posição escolhida pelo usuário (seção 2.8), escala do personagem, sempre no topo, iniciar com o Windows, energia `BAIXA`/`MEDIA`/`ALTA` (padrão `MEDIA`), permitir atravessar monitores, modo de tela cheia ligado por padrão e idioma. Opacidade fica fora do MVP. As decisões de produto correspondentes estão em DEC-013/014 e Q-03 a Q-07, Q-09, Q-12 e Q-23; os campos entram nas fases previstas no TODO.md. O esquema v2 guarda a posição, a energia, o modo de tela cheia, atravessar monitores e a emoção dominante (DEC-027).
+- **Leitura:** campo desconhecido é ignorado, valor fora da faixa é preso ao limite e arquivo ilegível é trocado pelo `.bak`, se ele for válido, ou pelos valores padrão (DEC-029). Uma cópia do arquivo ilegível é guardada para diagnóstico, no máximo uma.
 - **Gravação:** escreve em um arquivo temporário e substitui o original de forma atômica, mantendo o último arquivo bom como `.bak`. A gravação acontece com atraso depois de soltar o personagem e sempre ao sair.
 - **Tempo:** o relógio lógico só gera `TICK` enquanto há movimento, animação ou arraste. Em `IDLE` sem animação, em `RESTING` e em `HIDDEN`, não há timer periódico. A agenda autônoma usa um único timer até a próxima decisão. O modo de tela cheia é notificado por eventos limitados do Windows, sem polling global periódico.
+
+**Implementado na Fase 5, bloco A (DEC-029), com a emoção dominante do passo T1 (DEC-027):**
+
+*Esquema, no núcleo (`Buzzy.Core.Persistencia`, sem E/S); a v2 acrescentou a emoção dominante (DEC-027):*
+- **Formato:** JSON em UTF-8 sem BOM, indentação de 2 espaços, fim de linha `\n`, campos em ordem fixa e números no formato mais curto, sem depender da cultura. Campos:
+  - `schemaVersion`, hoje 2;
+  - `posicao`, com `chaveMonitor`, `telaDoMonitor` (`esquerda`, `topo`, `direita`, `base`), `fracaoX`, `fracaoY` e `ancoraAbsoluta` (`x`, `y`);
+  - `preferencias`, com `energia` (`"baixa"`, `"media"` ou `"alta"`), `modoTelaCheia`, `atravessarMonitores` e `emocaoDominante`, sempre escrito: `"automatica"` ou o nome de uma das 14 caras de humor em minúsculas ASCII, como `"feliz"`.
+
+  As amostras de referência são `settings-v1.json` e `settings-v2.json`, em `tests/Buzzy.Core.Testes/Persistencia/Amostras/`. Um arquivo v1, sem a emoção, é lido sem migração e sem aviso, com a emoção automática.
+- **Leitura (`EsquemaDeConfiguracoes.Ler`), que nunca lança.** Só é ilegível o arquivo com mais de 64 KiB contando o BOM, UTF-8 inválido, JSON inválido (comentários e vírgula final são aceitos), mais de 8 níveis contando a raiz, raiz que não é objeto ou `schemaVersion` ausente, não inteiro ou menor que 1. Um escape de surrogate solto num texto lido também torna o arquivo inteiro ilegível.
+- **Campo a campo,** com um aviso por caso:
+  - campo desconhecido é ignorado, e um repetido vale na primeira ocorrência;
+  - valor fora da faixa é preso: frações em [0, 1], coordenadas de −32768 a 32767;
+  - tipo errado vale o padrão do campo;
+  - a posição é tudo ou nada: exige a chave (1 a 1024 caracteres, UTF-16 válido, sem caractere de controle) e as duas frações finitas. Tela inválida vira desconhecida, e âncora inválida vira (0, 0);
+  - a energia só vale pelos três nomes, sem diferenciar maiúsculas;
+  - a emoção dominante só vale pelos 15 nomes (`automatica` e as 14 caras de humor), sem diferenciar maiúsculas e nunca por `Enum.Parse`; `null` ou ausente vale a automática, sem aviso; outro valor vale a automática, com aviso;
+  - os avisos nunca levam valores nem nomes vindos do arquivo.
+- **Versão futura** (`schemaVersion` maior que a atual): lê os campos que conhece e bloqueia a gravação nesta execução. Toda ampliação do esquema incrementa `schemaVersion`: um build da v1 vê um arquivo v2 como versão futura e não grava por cima dele.
+- **Escrita (`Escrever`):** normaliza antes e nunca lança por causa do conteúdo. Frações saneadas e sem `-0`, coordenadas presas, tela vazia omitida, energia fora dos três níveis gravada como `media`, emoção fora das 14 caras de humor gravada como `automatica` e posição com chave inválida omitida. Ler o que foi escrito devolve as configurações normalizadas.
+
+*Arquivos, no adaptador (`Plataforma/ArquivoDeConfiguracoes.cs`):*
+- **Quatro nomes, na mesma pasta, e nenhum outro:**
+  - `settings.json`, o principal;
+  - `settings.json.bak`, a reserva: o principal anterior, válido quando foi substituído;
+  - `settings.json.tmp`, o temporário de uma gravação, nunca lido;
+  - `settings.corrupt.json`, o último principal ilegível substituído, uma cópia só, nunca lida.
+- **Leitura sem efeito colateral:** o principal; se faltar ou não servir, a reserva; senão, os padrões. Não cria, não altera e não impede outro processo de usar nenhum arquivo.
+  - Um arquivo com mais de 64 KiB é ilegível sem ser lido.
+  - Um arquivo preso tem 3 tentativas, com duas pausas de 100 ms (cerca de 200 ms).
+  - Principal inacessível depois delas: vale a reserva ou os padrões, e a gravação fica bloqueada nesta execução, para não sobrescrever o que não se conseguiu ler.
+- **Gravação atômica:** apaga um temporário que tenha sobrado e cria outro do zero (`FileMode.CreateNew`, para nunca gravar através de um link), sem buffer e com `Flush(true)`. Depois confere o principal de novo e troca de uma vez:
+
+  | Principal na hora | Ação |
+  |---|---|
+  | ausente | `File.Move` do temporário |
+  | válido | `File.Replace`, guardando o anterior como `.bak` |
+  | ilegível | `File.Replace`, guardando-o como `settings.corrupt.json`; a reserva fica como estava |
+  | de versão futura | bloqueia a gravação |
+  | inacessível | a tentativa falha |
+
+  Uma queda em qualquer ponto deixa o principal anterior, o novo ou só a reserva, nunca um principal presente e ilegível. Uma falha de E/S é tentada de novo, dentro das tentativas pedidas; o erro leva só o tipo e o código da exceção, nunca o caminho. `File.Replace` exige NTFS local.
+
+*Quando gravar (`PoliticaDeGravacao`, no núcleo; a agenda que a aplica na raiz é do passo P7):*
+- com atraso de 2 s depois do último pedido, reiniciado a cada pedido;
+- na hora quando o pedido vem de `SUSPENDING`, `SESSION_ENDING`, `CMD_EXIT` ou `SESSION_LOCKED`;
+- depois de uma falha, novas tentativas únicas em 2, 10 e 60 s e, depois delas, só no próximo pedido; na hora, até 3 tentativas com 50 ms entre elas;
+- nada é periódico: só eventos do usuário ou do sistema pedem gravação; para a posição, os do invariante 18 (seção 2.6).
+
+*Pasta e perfis de teste (`Plataforma/PastaDeDados.cs`):*
+- **Uma regra só escolhe a pasta da execução, com falha fechada:**
+  - persistência desligada: nenhuma;
+  - com `--perfil-de-teste NOME`: `%LOCALAPPDATA%\Buzzy\testes\NOME`, e nenhuma se o nome for inválido, nunca a pasta real;
+  - sem perfil: `%LOCALAPPDATA%\Buzzy`;
+  - sem a pasta local do usuário: nenhuma.
+
+  Sem pasta, nada é lido nem gravado como configuração.
+- O arquivo só é criado por essa regra (`ArquivoDeConfiguracoes.DaExecucao`), e a pasta só na primeira gravação. As regras do nome estão em SECURITY.md 3.1.
+
+*Fora do arquivo:* a posição temporária da tela cheia, os monitores ocupados e, do tamagotchi, os itens, o uso e a onda, que ficam só em memória (DEC-028). O esconderijo e a marca "preso pelo usuário" entram no passo P7, na v3, porque a v2 já é a da emoção dominante; a versão futura dos testes passa então de 3 a 4 (DEC-029).
 
 ### 2.13 Encaixe na stack recomendada
 
@@ -401,9 +588,10 @@ STATUS: PLANNED. WPF com C# e .NET 10 foi escolhida em DEC-006. P1 e P2 foram ac
 | Personagem | `Window` WPF sem borda, do tamanho do sprite, com `AllowsTransparency`; a imagem tem alfa real e a janela não ativa | WPF usa o caminho layered para transparência por pixel. P1 confirma o click-through exato no Windows alvo |
 | Painel de energia | Janela WPF própria, compacta e ativável, ancorada ao lado do personagem; contém somente três opções | O personagem não ativa; o painel recebe foco após ação explícita de dois cliques ou menu |
 | Configurações | Janela WPF comum, aberta pelo menu | Usa controles e navegação de teclado do framework |
-| Menu de contexto e bandeja | Menu nativo do Windows (`TrackPopupMenuEx`) com janela dona temporária; ícone de bandeja pelo adaptador, com `Shell_NotifyIcon` versão 4 (DEC-016) | Fecha ao clicar fora e devolve o foco mesmo aberto pelo personagem, que não ativa; teclado e leitor de tela prontos; sem dependência de terceiros |
+| Menu de contexto e bandeja | Menu nativo do Windows (`TrackPopupMenuEx`) com janela dona temporária, com os submenus da emoção dominante e dos itens e ícones em bitmap (DEC-027, DEC-028; seção 2.16); ícone de bandeja pelo adaptador, com `Shell_NotifyIcon` versão 4 (DEC-016) | Fecha ao clicar fora e devolve o foco mesmo aberto pelo personagem ou por um item, que não ativam; teclado e leitor de tela prontos; sem dependência de terceiros |
+| Item do tamagotchi (DEC-028) | `Window` WPF sem borda, uma por item, de 48 × 48 DIP, com `AllowsTransparency`, sempre no topo, janela de ferramenta e não ativa (`WS_EX_NOACTIVATE`, `MA_NOACTIVATE`, `ShowActivated` falso); `WM_GETDPISCALEDSIZE` devolve o tamanho do item no DPI novo. Fica logo abaixo do personagem na ordem Z, e no topo só durante o gesto sobre o item (seção 2.7) | A mesma receita da janela do personagem, validada por P1 e P3, numa janela do tamanho do item. Só a raiz a fecha. Minimizada pelo Windows, volta ao normal na hora, sem esconder o personagem; a correção de DPI e a da minimização da Fase 5 (passos P12 e P14) valem também para ela |
 
-A janela do personagem tem o tamanho do sprite, nunca o tamanho da tela. A documentação recomenda que a janela layered seja a menor possível, porque cada atualização copia o bitmap inteiro para a memória do sistema, e há relatos de atraso de mouse no sistema todo com overlay de tela cheia.
+A janela do personagem tem o tamanho do sprite, nunca o tamanho da tela; a de um item, o tamanho do item. A documentação recomenda que a janela layered seja a menor possível, porque cada atualização copia o bitmap inteiro para a memória do sistema, e há relatos de atraso de mouse no sistema todo com overlay de tela cheia.
 
 #### 2.13.2 Onde cada componente da seção 2.2 mora
 
@@ -412,7 +600,7 @@ A janela do personagem tem o tamanho do sprite, nunca o tamanho da tela. A docum
 | Núcleo do personagem, mundo do desktop, arbitragem de input, movimento, personalidade não verbal e esquema de configurações | Biblioteca C# pura sem referência a WPF nem a APIs Windows. Recebe geometria e tempo como entrada e pode ser testada sem abrir janelas |
 | Adaptador de plataforma | Único módulo que traduz eventos WPF e chama APIs Windows quando necessário: captura e foco do mouse, topologia, DPI, bandeja, sessão, energia e caminho dos dados |
 | Apresentação | Janela e composição visual WPF, com imagem transparente dimensionada ao sprite; o desenho não fica ativo quando o estado não muda |
-| Configurações e persistência | Serialização JSON versionada; gravação atômica num adaptador de armazenamento local |
+| Configurações e persistência | Serialização JSON versionada; gravação atômica num adaptador de armazenamento local. *Fase 5:* o esquema fica no núcleo (`Buzzy.Core.Persistencia`), com `JsonDocument` e `Utf8JsonWriter`, sem `JsonSerializer` e sem reflexão; a pasta e o arquivo ficam em `Buzzy.App/Plataforma`, e a agenda de gravação, na raiz (seção 2.12) |
 | Raiz de composição | Inicialização WPF, ligação entre janelas, adaptador e núcleo; agenda trabalho apenas enquanto necessário |
 
 #### 2.13.3 Correspondência com as APIs do Windows
@@ -423,7 +611,7 @@ Cada linha liga uma decisão das seções anteriores ao mecanismo que a realiza.
 |---|---|---|
 | Transparência por pixel e clique que atravessa | 2.7 | `Window.AllowsTransparency` em janela sem borda WPF; framework cria a janela layered. P1 confirma que os pixels alfa 0 deixam o clique passar a outro processo |
 | Modo fantasma, click-through total | Q-21 | Acrescentar o estilo transparente à janela layered. **Não faz parte do MVP**, conforme decisão do usuário; um personagem que não recebe clique poderia ficar inacessível |
-| Não roubar foco | 2.7 | Responder "não ativar" à mensagem de ativação por mouse, com o estilo que evita ativação |
+| Não roubar foco | 2.7 | Responder "não ativar" à mensagem de ativação por mouse, com o estilo que evita ativação, na janela do personagem e nas dos itens |
 | Arraste | 2.7 | `SetCapture` ao pressionar, movimento do mouse, `ReleaseCapture` ao soltar, e a mensagem de mudança de captura como ponto único de término. Nunca o atalho que entrega a janela ao laço de mover do sistema, porque ele congela a física |
 | Clique ou arraste | 2.7 | Retângulo de arraste do sistema, lido para o DPI do monitor, e o tempo de clique duplo do sistema |
 | Coordenadas com sinal | 2.4 | Extrair as coordenadas das mensagens com as macros que preservam o sinal, nunca com as que tratam o valor como sem sinal |
@@ -432,12 +620,15 @@ Cada linha liga uma decisão das seções anteriores ao mecanismo que a realiza.
 | Monitor que contém um ponto | 2.4, 2.7 e 2.8 | Consulta por ponto retornando nulo fora de qualquer monitor, para detectar o vão entre monitores, e a variante que retorna o mais próximo para prender a posição |
 | Identidade estável do monitor | 2.4 | Consulta de configuração de vídeo e leitura do nome do dispositivo de destino, guardando o caminho do dispositivo. Nunca o identificador de execução, o identificador do adaptador nem o nome de vídeo, que não são estáveis |
 | Bandeja | Q-03 | Notificação de ícone na versão 4, identificada por janela e número, com recriação quando a barra de tarefas reinicia |
+| Menu com submenus e ícones | 2.16 | `InsertMenuItemW` com a posição explícita e `MENUITEMINFO` (80 bytes em x64); cada submenu é anexado logo depois de criado, para o `DestroyMenu` do principal destruí-lo junto, e sem `MNS_CHECKORBMP`, para a marca de rádio e o ícone ficarem lado a lado. O ícone é um DIB de 32 bits (`CreateDIBSection` sem DC, `BI_RGB`, `BITMAPINFOHEADER` de 40 bytes, altura positiva, com as linhas invertidas e preenchido por `Marshal.Copy`, sem `BitBlt`, `StretchBlt` nem `CreateDC`), apagado com `DeleteObject` depois do `DestroyMenu`, que não apaga o bitmap de um item. `AppendMenuW` saiu. As três APIs ficam em `Win32.cs` e não estão na lista proibida (SECURITY.md 3.2) |
+| Ordem Z das janelas dos itens | 2.7 | `SetWindowPos` sem ativar: logo abaixo da janela do personagem ou, durante o gesto, `HWND_TOPMOST`. As janelas dos itens não trouxeram P/Invoke novo |
 | Sem botão na barra de tarefas | Q-03 | Estilo de janela de ferramenta |
 | Fim de sessão | 2.6 | Responder sim de imediato à pergunta de encerramento e gravar na mensagem de encerramento, com gravação incremental antes |
 | Bloqueio e desbloqueio de sessão | 2.6 | Registro de notificação de sessão da estação de trabalho, que entrega o bloqueio e o desbloqueio. Junto com a notificação de energia da linha seguinte, é um dos dois itens desta lista que exigem registro explícito; o resto chega nas mensagens comuns da janela |
 | Suspensão e tela desligada | 2.6 | Notificação de suspensão e retomada, e notificação de estado da tela da sessão para parar de desenhar com o monitor desligado |
 | Repouso | 2.12 | A fila de mensagens bloqueia quando não há nada a fazer. Animação com timer que o sistema pode agrupar, nunca elevando a resolução global do timer |
-| Pasta de dados | 2.12 | Consulta de pasta conhecida, sem montar o caminho com texto |
+| Pasta de dados | 2.12 | Consulta de pasta conhecida, sem montar o caminho com texto. *Fase 5:* `Environment.GetFolderPath(LocalApplicationData, DoNotVerify)`; um resultado vazio ou relativo deixa o Buzzy sem pasta, sem configurações e sem log |
+| Gravação atômica | 2.12 | `File.Replace` e `File.Move` da biblioteca base, que usam `ReplaceFileW` e `MoveFileExW`, e `FileStream.Flush(true)`; nenhum P/Invoke novo e nenhuma regra do portão afetada. Exige NTFS local |
 | Mudança da janela em primeiro plano | DEC-013 | Eventos WinEvent de primeiro plano e mudança de geometria, fora do processo observado; filtrar a janela de nível superior ativa e emitir só os monitores que ela cobre. **Risco a medir em P7 (hipótese):** o evento de mudança de geometria assinado para todo o sistema também dispara por movimentos de cursor e de janelas de outros apps, o que pode acordar o Buzzy continuamente enquanto o usuário joga ou digita. Se P7 confirmar, restringir a assinatura de geometria à janela ativa (reassinando a cada troca de primeiro plano) ou revisar o desenho |
 | Janela em tela cheia e monitor ocupado | Q-09 | `GetForegroundWindow`, `GetWindowRect`, `MonitorFromWindow`/`GetMonitorInfo`; comparar o retângulo ativo com os limites do monitor. `SHQueryUserNotificationState` pode ser sinal auxiliar, nunca a única fonte |
 
@@ -448,9 +639,20 @@ WPF apresenta o sprite numa janela layered. O projeto não pressupõe que o fram
 **Implementado na Fase 4 (DEC-022):**
 
 - **Inscrição:** a raiz só se inscreve em `CompositionTarget.Rendering` enquanto o núcleo pede o relógio (`LigarRelogio`) e cancela a inscrição no `DesligarRelogio`. Em repouso, inclusive em `RESTING`, não há inscrição.
-- **Lote por quadro:** a cada quadro, o tempo decorrido vira passos fixos, que entram num lote na fila do núcleo. Só o último `MoverJanela` do lote é aplicado, e o sprite é trocado só quando a pose muda.
+- **Lote por quadro:** a cada quadro, o tempo decorrido vira passos fixos, que entram num lote na fila do núcleo. Só o último `MoverJanela` do lote é aplicado, e o sprite é trocado só quando o quadro muda.
 - **Atraso:** o acumulador recupera no máximo 250 ms; o excesso é descartado e registrado no log.
 - **Log de diagnóstico:** a posição só é registrada quando o personagem para, fora do movimento e do arraste.
+
+**Implementado com o tamagotchi (DEC-027, DEC-028; passos T2 e T7–T9):**
+
+- **Sprite:** troca quando o quadro muda: pose, cara, item, sobreposição, fase, deformação, giro ou DPI. A sobreposição só muda de fase com o relógio ligado; sem relógio, fica na fase 0, e nada no sprite muda sozinho.
+- **Temporizador da onda:** um `DispatcherTimer` de disparo único, ao lado do da agenda, ligado só entre um agendamento e o disparo dele.
+- **Log de diagnóstico**, só com `--diagnostico` e sem dado pessoal (SECURITY.md 6). É contrato dos testes de integração e da verificação de tela:
+  - `MENU|exibindo`, com a emoção marcada (`emocaoMarcada=`, o nome ou `Automatica`) e o número de ícones; `MENU|fechado=`, com o nome do comando de `ComandoDoMenu`, o `argumento=` da emoção ou do item escolhido, `icones`, `bitmapsCriados`, `bitmapsApagados`, `lado` (o rosto), `ladoItem` e `dpi`, gravado depois de apagar os bitmaps; falhas do Windows como `MENU|icone=falhou`, `item`, `submenu` ou `menu`, só com o código;
+  - `ITEM`: `mostrado` (com o HWND da janela, o retângulo, o DPI e os pontos de teste opaco e transparente), `movido=Id|parado=sim` (uma linha por pouso no chão, no fim do processamento, mesmo quando o passo do pouso não move a janela, e depois do `RELOGIO|ligado=nao` do mesmo passo; os testes de integração a exigem, e sem ela falham por tempo esgotado), `escondido`, `removido` com o motivo, `solto` (o fim do gesto, com `sobre`, `usado` e a latência M5 do arraste do item), `clique`, `capturaPerdida`, `capturaLiberada`, `menuPedido`, `minimizado`, `fechadas` no encerramento e `desconhecido=sim` para um Id que a raiz não conhece;
+  - `ONDA`: `agendada` (com o atraso e a geração), `disparada` e `cancelada`;
+  - `SPRITE`: uma linha por quadro desenhado fora do cache, com `item`, `efeito`, `fase`, `bytesEmCache` e `descartados`, além dos campos de antes; `MEMORIA` ganhou `bytesEmCache` e `janelasDeItens`.
+- **Leitura do log nos testes:** o log rotaciona ao passar de 1 MB (DEC-016, item 7). Os testes de integração e a verificação de tela leem pelo mesmo código (`LeituraDoLog`): a marca guarda o deslocamento e uma assinatura dos 64 bytes antes dele, e a leitura reconhece a rotação pelo conteúdo, lendo o resto de `diagnostico.1.log` antes do arquivo novo. Antes, as linhas entre a marca e a rotação podiam se perder. A leitura supõe que só o Buzzy rotaciona ou apaga o log durante uma execução. A medição de desempenho mantém a leitura própria, que avança a cada leitura.
 
 #### 2.13.5 Limites que os protótipos precisam esclarecer
 
@@ -478,6 +680,186 @@ O MVP usa um processo, arquivos locais e módulos de código. Backend, banco de 
 
 STATUS: PLANNED. O aplicativo é um mascote local, determinístico e sem IA. Não haverá conversa, chat, campo de texto, respostas escritas, voz nem reconhecimento de fala. Não integrar nem planejar LLM, RAG, APIs de IA, modelos locais, geração de conteúdo ou memória. Só reabrir o limite de IA por solicitação explícita do usuário (DEC-003).
 
+### 2.16 Emoção dominante e tamagotchi adulto: tabelas e regras
+
+STATUS: PLANNED. Implementado no núcleo e no app e verificado por testes automatizados, de integração e, em 2026-10-01, pela verificação de tela com input SINTÉTICO e pelo repouso de 10 minutos com uma onda ativa (DEC-027 e DEC-028; evidências em TODO.md). Continua PLANNED pelas conferências [MANUAL] e [HW] e pela revisão visual e de tom pelo usuário. O tamagotchi fica atrás da chave `ConfiguracaoDoNucleo.Tamagotchi`, ligada no aplicativo desde o passo T9 da seção "Interação" de TODO.md; a emoção dominante não tem chave. Estados, eventos, transições e invariantes estão na seção 2.6; a execução no app, nas seções 2.3, 2.7, 2.10 e 2.13.
+
+Os números são de jogo, escolhidos para o comportamento se ler na tela, sem relação com nada real (DEC-028). As tabelas ficam em `TabelaDoTamagotchi`, e os testes podem trocá-las (`ConfiguracaoDoNucleo.TabelaDeItens` e `TabelaDeOndas`).
+
+**Itens**, na ordem do menu. Os passos do uso são do relógio, a 60 por segundo, e são os do verbo. A cara durante o uso vale no retrato; no chão, a arte mostra a cara de cada quadro de uso. A intensidade é quantos níveis o item soma à onda.
+
+| Item | Verbo | Passos do uso | Cara durante o uso | Onda | Intensidade |
+|---|---|---|---|---|---|
+| Banana | comer | 150 | Feliz | Satisfeito | 1 |
+| Agua | beber | 120 | Feliz | nenhuma: refresca a que houver | 0 |
+| Vodka | beber | 120 | Determinado | Bebado | 2 |
+| Cerveja | beber | 120 | Feliz | Bebado | 1 |
+| Baseado | fumar | 210 | Pensativo | Chapado | 2 |
+| Cigarro | fumar | 210 | Pensativo | Relaxado | 1 |
+| Cocaina | cheirar | 120 | Surpreso | Eletrico | 2 |
+| Md | engolir | 90 | Travesso | Euforico | 2 |
+| LancaPerfume | inalar | 120 | Surpreso | Tonto | 2 |
+| Cafe | beber | 120 | Determinado | Ligado | 1 |
+| Energetico | beber | 120 | Empolgado | Ligado | 2 |
+| Cogumelo | comer | 150 | Curioso | Viajando | 2 |
+| Bala | engolir | 90 | Feliz | Alegre | 1 |
+
+**Ondas:**
+
+| Onda | Precedência | Subida | Cada nível do pico | Queda base | Cara na subida | Cara no pico | Cara na queda |
+|---|---|---|---|---|---|---|---|
+| Satisfeito | 1 | 3 s | 60 s | — | Feliz | Feliz | — |
+| Alegre | 1 | 2 s | 40 s | 20 s | Empolgado | Empolgado | Entediado |
+| Relaxado | 1 | 3 s | 60 s | — | Pensativo | Pensativo | — |
+| Ligado | 2 | 5 s | 75 s | 45 s | Surpreso | Determinado | Sonolento |
+| Bebado | 3 | 8 s | 100 s | 90 s | Feliz | Bebado | Enjoado |
+| Chapado | 3 | 10 s | 110 s | 90 s | Pensativo | Chapado | Sonolento |
+| Eletrico | 3 | 3 s | 75 s | 90 s | Surpreso | Eletrico | Entediado |
+| Euforico | 3 | 15 s | 110 s | 120 s | Feliz | Apaixonado | Entediado |
+| Tonto | 3 | 1 s | 15 s | 10 s | Surpreso | Tonto | Sonolento |
+| Viajando | 3 | 20 s | 140 s | 60 s | Curioso | Viajando | Pensativo |
+
+*Tempos:*
+- a onda nova começa na subida, no nível da intensidade do item;
+- da subida, vai ao pico; no pico, cada disparo baixa um nível; no nível 1, vai para a queda, também no nível 1, ou acaba, se a onda não tem queda; a queda acaba no disparo seguinte;
+- a queda dura a base × 100%, 125% ou 150%, pelo pior nível atingido no episódio (1, 2 ou 3);
+- nenhuma fase dura menos de 1 s;
+- sem item novo, a onda gera no máximo 2 + nível disparos. O episódio mais longo é o do Viajando no nível 3: 20 + 3 × 140 + 90 = 530 s.
+
+**Perfis do pico** (percentuais sobre o perfil de energia, 100 = igual; "a/b/c" = níveis 1, 2 e 3; "perfil" = a chance do foguete do perfil de energia). A subida usa o perfil do nível 1, só com a cara da subida.
+
+| Onda | Intervalo | Descanso | Andar | Escalar | Pular | Descansar | Gesto | Troca de cara | Velocidade | Cambaleio | Foguete | Altura do pulo |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Satisfeito | 100 | 100 | 100 | 100 | 100 | 150 | 150 | 150 | 100 | 0 | perfil | 100 |
+| Alegre | 60/50/40 | 60 | 130 | 130 | 200 | 30 | 150 | 100 | 120/125/130 | 0 | perfil | 120 |
+| Relaxado | 130 | 120 | 70 | 50 | 30 | 150 | 120 | 100 | 90 | 0 | perfil | 100 |
+| Ligado | 70/55/40 | 60/45/30 | 150 | 150 | 150/200/250 | 30/15/5 | 120 | 100 | 115/130/145 | 0 | 40/50/60 | 110/125/140 |
+| Bebado | 100 | 120 | 130 | 40 | 40 | 120 | 200 | 150 | 80/70/60 | 60/90/120 | 5 | 80 |
+| Chapado | 160 | 150 | 60 | 30 | 20 | 200 | 150 | 120 | 60/55/50 | 0 | 0 | 80 |
+| Eletrico | 35/28/20 | 30/20/10 | 200 | 200 | 180 | 10/5/5 | 150 | 200 | 170/185/200 | 0 | 60/70/80 | 120/130/140 |
+| Euforico | 60 | 50 | 120 | 100 | 150 | 30 | 250 | 150 | 120 | 0 | perfil | 120 |
+| Tonto | 50 | 100 | 50 | 0 | 0 | 100 | 300 | 200 | 60 | 100 | 0 | 100 |
+| Viajando | 130 | 120 | 80 | 80 | 60 | 100 | 200 | 250 | 70 | 0 | 20 | 100 |
+
+**Perfis da queda**, iguais em todos os níveis, com a altura do pulo em 100:
+
+| Queda de | Intervalo | Descanso | Andar | Escalar | Pular | Descansar | Gesto | Troca de cara | Velocidade | Cambaleio | Foguete |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Alegre | 120 | 150 | 80 | 60 | 50 | 200 | 80 | 100 | 90 | 0 | perfil |
+| Ligado | 130 | 150 | 70 | 50 | 40 | 200 | 80 | 100 | 85 | 0 | perfil |
+| Bebado | 150 | 200 | 60 | 20 | 10 | 250 | 80 | 80 | 75 | 30 | 5 |
+| Chapado | 150 | 200 | 60 | 30 | 20 | 300 | 80 | 100 | 70 | 0 | 0 |
+| Eletrico | 150 | 180 | 60 | 40 | 30 | 250 | 80 | 100 | 80 | 0 | perfil |
+| Euforico | 140 | 150 | 70 | 60 | 50 | 200 | 80 | 100 | 85 | 0 | perfil |
+| Tonto | 100 | 100 | 80 | 50 | 50 | 120 | 80 | 100 | 80 | 0 | perfil |
+| Viajando | 120 | 120 | 80 | 70 | 60 | 150 | 100 | 150 | 85 | 0 | perfil |
+
+**Gestos e caras por fase** (pesos). Na subida, a cara é só a da subida, e os gestos são os do pico.
+
+| Onda | Gestos no pico | Caras no pico | Gestos na queda | Caras na queda |
+|---|---|---|---|---|
+| Satisfeito | Cocar 2, Espreguicar 2, Brincar 1 | Feliz 4, Rindo 1, Travesso 1, Sonolento 1 | — | — |
+| Alegre | Brincar 2, Danca 2, Gargalhada 1 | Empolgado 3, Rindo 2, Feliz 2 | Espreguicar 1 | Entediado 2, Sonolento 2 |
+| Relaxado | Espreguicar 2, Tosse 1, OlharAoRedor 1 | Pensativo 2, Neutro 2, Sonolento 1, Feliz 1 | — | — |
+| Ligado | Tremedeira 2, OlharAoRedor 2, Brincar 1 | Determinado 2, Empolgado 2, Surpreso 1 | Espreguicar 2, Cocar 1 | Sonolento 3, Bocejando 1 |
+| Bebado | Soluco 3, Danca 1, Gargalhada 1 | Bebado 4, Rindo 2, Feliz 1, Sonolento 1 | Soluco 1, Espreguicar 1 | Enjoado 3, Sonolento 2, Entediado 1 |
+| Chapado | Gargalhada 3, OlharAoRedor 1, Cocar 1 | Chapado 4, Rindo 2, Pensativo 1, Sonolento 1 | Espreguicar 2 | Sonolento 3, Bocejando 2, Pensativo 1 |
+| Eletrico | Tremedeira 3, Espirro 1, OlharAoRedor 1 | Eletrico 4, Determinado 1, Surpreso 1, Empolgado 1 | Espreguicar 1, Cocar 1 | Entediado 3, Sonolento 2, Pensativo 1 |
+| Euforico | Danca 4, Brincar 1 | Apaixonado 3, Empolgado 2, Feliz 1, Rindo 1 | Espreguicar 1, OlharAoRedor 1 | Entediado 2, Pensativo 2, Sonolento 1 |
+| Tonto | Gargalhada 2, OlharAoRedor 1 | Tonto 4, Rindo 2 | OlharAoRedor 1 | Sonolento 1, Surpreso 1, Neutro 1 |
+| Viajando | OlharAoRedor 2, Danca 1, Espiar 1 | Viajando 4, Surpreso 1, Pensativo 1, Curioso 1, Rindo 1 | OlharAoRedor 2, Espiar 1 | Pensativo 3, Curioso 1, Sonolento 1 |
+
+Cada troca de cara e cada gesto da onda gastam os mesmos sorteios de sempre: um sorteio ponderado no lugar de cada sorteio uniforme.
+
+**Perfil efetivo e física efetiva** (`Maquina.PerfilEfetivo` e `Maquina.FisicaEfetiva`). Sem onda, ou com a chave desligada, valem o perfil de energia e a física de sempre. Com onda, pela fase dela:
+- os intervalos entre decisões e de descanso vão a milissegundos inteiros × percentual / 100, truncados;
+- os pesos de andar, escalar, pular, descansar, gesto e troca de cara vão a (peso × percentual + 50) / 100, arredondados; um peso positivo nunca vira 0, a não ser a 0%;
+- a altura mínima e a máxima do pulo são arredondadas do mesmo jeito, com pelo menos 1 DIP;
+- a chance do foguete é a da fase ou, sem ela, a do perfil;
+- o tempo na parede e o tempo pendurado vão a × 100 / velocidade, só com a velocidade abaixo de 100%; senão, ficam os mesmos;
+- o piso de 3 s do intervalo de acomodação continua valendo em todo agendamento;
+- na física, só as velocidades de andar, escalar e pendurar mudam, × velocidade / 100.
+
+O peso de atravessar monitores, quando a travessia entrar (passo P13 da Fase 5), vai seguir o percentual de andar.
+
+**Combinação, quando ele usa um item** (`AplicarNaOnda`):
+- **água:** refresca a onda da frente. Na queda, ou na subida do nível 1, a onda acaba; no pico do nível 1, vai para a queda, ou acaba, sem queda; senão, baixa um nível, sem mexer no temporizador. Sem onda, nada;
+- **sem onda:** começa a do item, na subida, no nível da intensidade;
+- **mesmo tipo da onda da frente:** os níveis somam até 3, o pior nível acompanha, e a fase recomeça: a subida continua subida, e o pico ou a queda viram pico;
+- **mesmo tipo da onda de fundo:** os níveis dela somam, do mesmo jeito, e ela continua congelada;
+- **precedência maior ou igual à da frente:** a do item vai para a frente, na subida; a da frente vira a de fundo, congelada, e a de fundo anterior é descartada;
+- **precedência menor:** o item é absorvido; a onda e o temporizador não mudam.
+
+Quando a onda da frente acaba, a de fundo volta à frente com a fase em que estava recomeçada na duração cheia e com a cara dessa fase. Sem onda de fundo, a cara volta à de base, se está livre.
+
+**Cambaleio** (`Maquina.FatorDoCambaleio`): o passo da caminhada é multiplicado por 1 + amplitude × (12 − d) / 1200, com d a distância, em passos, até o meio de uma volta de 48 passos (0,8 s). O fator vai de 1 − amplitude/100, no começo da volta, a 1 + amplitude/100, no meio, com média 1 na volta inteira; a 120%, vai de −0,2 a 2,2. As contas são inteiras até a última divisão. A âncora fica presa entre as laterais, e o percurso que falta diminui pelo passo com sinal.
+
+**Aceitação do soltar e apoio do uso** (`Maquina.AceitaItem`):
+
+| Estado ao soltar | Resultado | Apoio do uso | Depois do uso |
+|---|---|---|---|
+| `IDLE` | uso | chão | `IDLE` |
+| `WALKING` | uso; o plano é descartado | chão | `IDLE` |
+| `CLIMBING`, preso ou não | uso | parede | agarrado à parede, preso se já estava |
+| `HANGING`, preso ou não | uso | cipó | agarrado ao cipó, preso se já estava |
+| `PEEKING` | uso | esconderijo | `PEEKING` na mesma borda |
+| `RESTING` | acorda e usa | chão | `IDLE` |
+| `REACTING`, `LANDING` | uso; a reação ou o pouso é cortado | pela posição | pela acomodação |
+| `JUMPING`, `FALLING`, `USING`, `PRESSED`, `DRAGGING`, `SETTLING`, `HIDDEN`, `BOOTING`, `EXITING` | recusado: o item cai de onde foi solto | — | — |
+
+O apoio do uso sai primeiro do estado e depois da posição: escondido numa borda, o esconderijo; em `CLIMBING` fora do chão, numa lateral, a parede, mesmo na quina; em `HANGING` na borda de cima, o cipó; senão, pela âncora: no chão, o chão; na borda de cima, o cipó; numa lateral, a parede; no ar, por toon force, o chão, e a acomodação decide no fim. Sem a física, o apoio é o chão ou o esconderijo. A acomodação do fim do uso recebe o apoio e, na parede ou no cipó, volta a ele mesmo a menos de 32 DIP do chão.
+
+**"Sobre ele"** (`Maquina.SobreOPersonagem`): o retângulo do sprite do personagem encolhe 20% de cada lado (`MargemDoAlvo`), da largura nas laterais e da altura em cima e embaixo, arredondado ao pixel com a metade para cima. Num sprite de 128 × 128 px, são 26 px de cada lado, e sobra um miolo de 76 × 76 px. O item conta como solto sobre ele se o retângulo dele, já preso na área útil, tem ao menos um pixel em comum com esse miolo, com os retângulos semiabertos, como o `RECT` do Windows.
+
+**Companheiras da emoção dominante** (DEC-027): no sorteio, a dominante tem peso 6, e cada companheira, peso 1.
+
+| Dominante | Companheiras |
+|---|---|
+| Neutro | Feliz, Curioso, Pensativo, Entediado |
+| Feliz | Rindo, Empolgado, Travesso, Curioso |
+| Rindo | Feliz, Travesso, Empolgado, Surpreso |
+| Curioso | Pensativo, Surpreso, Feliz, Travesso |
+| Surpreso | Assustado, Curioso, Empolgado, Rindo |
+| Assustado | Surpreso, Pensativo, Curioso, Neutro |
+| Sonolento | Bocejando, Dormindo, Entediado, Neutro |
+| Bocejando | Sonolento, Entediado, Neutro, Pensativo |
+| Dormindo | Sonolento, Bocejando, Neutro, Feliz |
+| Travesso | Rindo, Feliz, Curioso, Empolgado |
+| Entediado | Sonolento, Bocejando, Pensativo, Neutro |
+| Pensativo | Curioso, Neutro, Entediado, Determinado |
+| Empolgado | Feliz, Rindo, Surpreso, Determinado |
+| Determinado | Empolgado, Pensativo, Neutro, Feliz |
+
+**Itens no mundo** (`Maquina.Itens.cs`; o item tem 48 × 48 DIP, `TamanhoDoItem`):
+- **Nascimento**, no monitor do personagem. As posições candidatas ficam ao lado dele, a meia largura do personagem + 8 DIP + meia largura do item, e depois mais longe, de uma largura de item + 8 DIP de cada vez, até duas vezes; primeiro do lado para onde ele olha, depois do outro. Vale a primeira dentro dos limites laterais e sem cruzar outro item fora da mão no mesmo monitor; se nenhuma servir, a primeira, presa entre as laterais. A âncora começa 140 DIP acima dos pés dele, onde quer que ele esteja (no chão, 140 DIP acima do chão), nunca acima da borda de cima. O item nasce caindo, com o próximo Id.
+- **Queda**, a cada passo: a gravidade e a queda máxima do personagem, presa entre as laterais. Ao tocar o chão a 300 DIP/s ou mais, quica uma vez, com 35% da velocidade; depois para. Não achata ao pousar.
+- **Segurar:** só um item visível. A pegada é o cursor menos a âncora. Outro item que estivesse na mão é largado de onde estava, com a captura solta. Pegar um item no ar é aceito: ele para e fica na mão.
+- **Arrastar:** a âncora é o cursor menos a pegada, sem prender, no monitor da âncora.
+- **Soltar ou largar:** a âncora é presa na área útil do monitor dela. No chão, o item fica; no ar, cai de novo e pode quicar outra vez.
+- **Topologia:** cada item fora da mão é reacomodado pela posição relativa no monitor dele, como o personagem; fora do chão, volta a cair.
+- **Esconder e sair:** o item da mão solta a captura e fica no chão; os que caíam vão direto ao chão, cada um na coluna em que estava.
+- **Janelas:** comparando o começo e o fim do evento, primeiro os que saíram (`RemoverItem`, com o motivo); depois, item a item, na ordem do Id: o que deixou de aparecer (`EsconderItem`), o que passou a aparecer ou nasceu à vista (`MostrarItem`) ou o que mudou de lugar à vista (`MoverItem`, com o monitor e a âncora).
+
+**Menu** (passos T2 e T8; `MenuNativo`). É o mesmo pelo botão direito no personagem, num item e no ícone da bandeja. Os textos vêm de `Textos.resx` e só nomeiam as opções, sem descrição:
+
+| Linha | Id | Tecla de acesso | Regra |
+|---|---|---|---|
+| Esconder Buzzy / Mostrar Buzzy | 1 | E / M | como antes |
+| Pausar movimento / Retomar movimento | 3 | P / R | como antes |
+| separador | | | |
+| Emoção dominante ▸ | — | D | habilitada mesmo com o Buzzy escondido: o núcleo grava a escolha, e a cara aparece quando ele voltar |
+| Itens ▸ | — | I | só existe com a chave do tamagotchi ligada; desabilitada com o Buzzy escondido |
+| separador | | | |
+| Sair | 2 | S | como antes |
+
+- **Submenu "Emoção dominante":** "Automática" (id 999, tecla A), um separador e as 14 caras de humor na ordem de `Expressoes.DeHumor` (ids 1000 a 1013): Neutro (N), Feliz (F), Rindo (R), Curioso (C), Surpreso (S), Assustado (U), Sonolento (O), Bocejando (B), Dormindo (D), Travesso (T), Entediado (E), Pensativo (P), Empolgado (M) e Determinado (I). Todas são opções de rádio, com a marca na escolha atual, ou em "Automática" sem dominante; cada cara leva o rosto como ícone.
+- **Submenu "Itens":** os 13 itens na ordem do enum `Item` (ids 2000 a 2012): Banana (B), Água (G), Vodka (V), Cerveja (C), Baseado (S), Cigarro (I), Cocaína (O), MD (M), Lança-perfume (L), Café (F), Energético (N), Cogumelo (U) e Bala (A), cada um com o desenho do chão como ícone; um separador; e "Recolher itens" (id 2999, tecla R), desabilitado sem itens na tela.
+- **Escolha:** o id que o Windows devolve vira comando, emoção ou item por listas fixas (`Expressoes.DeHumor` e `TabelaDoTamagotchi.Itens`), nunca por conversão do número; qualquer outro id não escolhe nada. A emoção envia `CMD_SET_DOMINANT_EMOTION`, o item `CMD_SUMMON_ITEM` e "Recolher itens" `CMD_CLEAR_ITEMS`. O estado que o menu mostra é lido na abertura (`ModeloAoAbrir`), e a escolha vale por ele, que é o texto que o usuário leu.
+- **Ícones:** o rosto é a célula de 40 × 32 pixels de arte de `expressoes.png`, e o item, o desenho do chão de 24 × 24, os dois ampliados por vizinho mais próximo pelo fator inteiro do DPI do monitor em que o menu abre (`DpiAoAbrir`; o fator é o DPI dividido por 96, no mínimo 1: 1× até 191 DPI, 2× de 192 a 287, 3× de 288 a 383), porque o Windows não amplia o bitmap de um item de menu. Em alto contraste, o menu fica só com texto. Com a chave ligada, cada abertura cria 27 bitmaps, 14 rostos e 13 itens, mesmo com o submenu "Itens" desabilitado, e apaga os 27.
+- **Uma abertura:** a lista de entradas é uma função pura (`Entradas`), testável sem o Windows. A montagem (`ComMenuMontado` e `ComMenuMontadoNoDpi`) cria o menu, anexa cada submenu logo depois de criá-lo, põe as linhas por posição explícita, mostra o menu, destrói-o e só então apaga os bitmaps, mesmo com erro. Uma falha do Windows deixa a linha sem ícone, ou de fora, e vai para o log só com o código.
+
+**Reprodução gravada:** a referência `tests/Buzzy.Core.Testes/Referencias/07-tamagotchi.txt` roda com a diretiva de cabeçalho `# tamagotchi: sim`, que liga a chave, junto com `# movimento: sim` e `# queda-fisica: sim`; a 06 fica reservada para a Fase 5. Ela cobre a emoção dominante; a vodka invocada, pega no chão e usada; o lança-perfume pego no ar e usado por cima, com o bêbado de fundo; pressionar no meio do uso; a água, que acaba a queda do tonto e devolve o bêbado; a banana solta longe; e o bêbado até a queda. Os eventos novos se escrevem `CmdSetDominantEmotion emocao=Nome` (ou `Automatica`), `CmdSummonItem item=Nome`, `CmdClearItems`, `ItemPress id= x= y=`, `ItemDragStart id=`, `ItemDragMove id= x= y=`, `ItemDragEnd id= x= y=`, `ItemRelease id=` e `ItemEffectTimer geracao=`; sem a geração, vale a agendada.
+
 ## 3. Decisões ainda pendentes
 
 As escolhas do usuário e as pendências ainda abertas estão numeradas (Q-01 em diante) em [DECISIONS.md](DECISIONS.md).
@@ -504,3 +886,6 @@ As escolhas do usuário e as pendências ainda abertas estão numeradas (Q-01 em
 | 2026-09-30 | Fase 4: física de passo fixo no núcleo (andar, escalar, pendurar-se, pular, cair), superfícies do monitor da âncora, relógio pelos quadros do compositor e poses provisórias por estado (seções 2.5, 2.9 e 2.13.4). | DEC-022 |
 | 2026-09-30 | Toon force, a pedido do usuário: toda lateral é escalável, quique e foguete de borracha, esticar e achatar nas poses (seções 2.5, 2.6, 2.9 e 2.10). | DEC-023 |
 | 2026-09-30 | A pedido do usuário: cipó na borda de cima; agarrar onde é solto e ficar preso até o usuário tirar; estado `PEEKING` (esconderijo) pelo clique duplo, com o painel de energia passando para o menu (seções 2.6 e 2.10). | DEC-024, DEC-025 |
+| 2026-09-30 | Fase 5, bloco A: a posição guarda a tela do monitor; a partida restaura em cascata; a reacomodação mede pelo pixel dos pés; esquema v1 do `settings.json` no núcleo; arquivo com gravação atômica e perfis de teste no adaptador, ainda não usados pela raiz; invariante 18 (seções 1, 2.6, 2.8, 2.12 e 2.13). | DEC-029, DEC-030 |
+| 2026-10-01 | Emoção dominante e tamagotchi adulto no núcleo e na arte, com a chave do tamagotchi desligada no aplicativo: estado `USING`, eventos e efeitos dos itens e da onda, dimensões novas, invariantes 22 a 29, esquema v2, retrato e linha das reproduções, referência 07, arte em `Buzzy.Visual` e regra da calma (seções 1, 2.3, 2.6, 2.9, 2.10, 2.12 e 2.16). | DEC-027, DEC-028 |
+| 2026-10-01 | O app da emoção dominante e do tamagotchi, com a chave ligada no aplicativo: menu com submenus e ícones em bitmap; quadro de uso, caras, gestos e sobreposição da onda, com cache limitado a 16 MiB; uma janela por item, com árbitro próprio e ordem Z por evento; temporizador da onda de disparo único; contrato do log e leitura dele através da rotação (seções 1, 2.3, 2.6, 2.7, 2.10, 2.13 e 2.16). | DEC-027, DEC-028 |

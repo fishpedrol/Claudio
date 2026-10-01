@@ -17,6 +17,7 @@ Inspecione código, resultados e configurações reais antes de afirmar implemen
 - Siga as fases de TODO.md na ordem e respeite dependências e escopo.
 - A identidade segue as pranchas de referência e lembra o Luffy de propósito: chapéu de palha com faixa vermelha e personalidade do Luffy (DEC-019). Não crie regra de distância visual do Luffy. Não aguarde aprovação de rotina.
 - Execute build, testes e verificações pertinentes; corrija falhas dentro do escopo e repita o teste afetado.
+- Todo teste, verificação ou ferramenta que abra o `Buzzy.exe` passa `--perfil-de-teste NOME`, com essa grafia exata, e nunca lê nem grava as configurações reais do usuário (DEC-029).
 - Se hardware estiver indisponível, registre o critério como pendente e continue o trabalho independente. Não declare PASS, VERIFIED ou fase concluída sem a evidência exigida.
 - Não leia conteúdo de outros aplicativos, não encerre processos do usuário, não altere configurações globais para simular hardware e não publique nem distribua o aplicativo.
 - Não introduza chat, texto, voz, IA integrada, rede ou capacidades proibidas no MVP.

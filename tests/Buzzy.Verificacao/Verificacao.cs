@@ -212,16 +212,22 @@ internal sealed partial class Verificacao
         _rel.Linha($"   receptor ativado por clique SINTÉTICO nele mesmo ({motivo})");
     }
 
-    private void AbrirBuzzy()
+    /// <param name="semente">
+    /// <c>--semente</c> do Buzzy (verificação do tamagotchi: os sorteios de cara que a onda faz mesmo pausado se repetem);
+    /// nula, a do relógio, como nas Fases 1, 3 e 4.
+    /// </param>
+    private void AbrirBuzzy(ulong? semente = null)
     {
         nint frenteAntes = Nativo.GetForegroundWindow();
         int marcaReceptor = _logReceptor.Contar();
-        _inicioLogBuzzy = LogDoBuzzy.Tamanho();
+        _inicioLogBuzzy = LogDoBuzzy.Marca();
 
-        var psi = new ProcessStartInfo(_exeBuzzy) { UseShellExecute = false };
-        psi.ArgumentList.Add("--diagnostico");
         // A partir da Fase 4 o personagem anda sozinho: a verificação o quer parado no lugar inicial.
-        psi.ArgumentList.Add("--pausado");
+        ProcessStartInfo psi = PerfilDaVerificacao.Descrever(_exeBuzzy,
+            semente is { } s ? ["--pausado", "--semente", s.ToString(CultureInfo.InvariantCulture)] : ["--pausado"]);
+        ExigirNenhumBuzzyAberto();
+        // Sem nenhum Buzzy aberto, ninguém usa a pasta do perfil: apagada, o Buzzy parte da posição inicial esperada.
+        PerfilDaVerificacao.Limpar();
         ExigirNenhumBuzzyAberto(); // repetida imediatamente antes de iniciar
         _buzzy = Process.Start(psi) ?? throw new FalhaDeVerificacao("Buzzy.exe não iniciou.");
         _inicioBuzzy = _buzzy.StartTime;
@@ -311,7 +317,7 @@ internal sealed partial class Verificacao
         Nativo.RECT r = Nativo.Retangulo(_hBuzzy);
         var p = new Nativo.POINT(r.Left + _deslocTransparente.X, r.Top + _deslocTransparente.Y);
         nint dono = Nativo.DonoDoPonto(p.X, p.Y);
-        long marcaB = LogDoBuzzy.Tamanho();
+        long marcaB = LogDoBuzzy.Marca();
         int marcaR = _logReceptor.Contar();
 
         if (dono != _hReceptor)
@@ -352,7 +358,7 @@ internal sealed partial class Verificacao
             Registrar(rotulo, Falhou, $"o teste de acerto no ponto opaco {p} aponta {Quem(dono)}, não o Buzzy; nada foi clicado");
             return;
         }
-        long marcaB = LogDoBuzzy.Tamanho();
+        long marcaB = LogDoBuzzy.Marca();
         int marcaR = _logReceptor.Contar();
         try
         {
@@ -392,7 +398,7 @@ internal sealed partial class Verificacao
         Nativo.RECT area = sec.Info.rcWork;
         int x = (area.Left + area.Right) / 2 - _retanguloOriginal.Largura / 2;
         int y = area.Bottom - _retanguloOriginal.Altura;
-        long marca = LogDoBuzzy.Tamanho();
+        long marca = LogDoBuzzy.Marca();
         // A Fase 1 não tem arraste: a janela é levada ao outro monitor pela ferramenta de teste.
         Nativo.SetWindowPos(_hBuzzy, 0, x, y, 0, 0, Nativo.SWP_NOSIZE | Nativo.SWP_NOZORDER | Nativo.SWP_NOACTIVATE);
         // Mais que o agrupamento de 300 ms do Buzzy: uma reacomodação por mudança de DPI aparece antes da conferência.
@@ -424,6 +430,23 @@ internal sealed partial class Verificacao
             return $"o ponto opaco {p} está no monitor {noPonto ?? "nenhum"}, não em {sec.Info.szDevice} (o Buzzy pode ter se reacomodado)";
         if (!sec.Info.rcMonitor.Contem(r))
             return $"a janela do Buzzy {r} não está inteira dentro de {sec.Info.szDevice} {sec.Info.rcMonitor}";
+        return null;
+    }
+
+    /// <summary>
+    /// A chave do monitor de nome GDI <paramref name="nomeGdi"/>, pela última linha TOPOLOGIA deste Buzzy, com o campo
+    /// <c>chaves=chave=nomeGdi;…</c> (chave estável, DEC-030); nula sem ela. A linha POSICAO traz o nome GDI ao lado da
+    /// chave (<c>gdi=</c>); a linha ITEM, só a chave.
+    /// </summary>
+    private string? ChaveDoMonitorNoLog(string nomeGdi)
+    {
+        EventoBuzzy? topologia = LogDoBuzzy.Desde(_inicioLogBuzzy).LastOrDefault(e => e.Chave == "TOPOLOGIA" && e.Campos.ContainsKey("chaves"));
+        if (topologia is null) return null;
+        foreach (string par in topologia["chaves"].Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            int igual = par.IndexOf('=', StringComparison.Ordinal);
+            if (igual > 0 && string.Equals(par[(igual + 1)..], nomeGdi, StringComparison.OrdinalIgnoreCase)) return par[..igual];
+        }
         return null;
     }
 
@@ -512,7 +535,7 @@ internal sealed partial class Verificacao
         Nativo.POINT p = PontoOpaco();
         if (Nativo.DonoDoPonto(p.X, p.Y) != _hBuzzy)
             throw new FalhaDeVerificacao($"o ponto opaco {p} não pertence ao Buzzy; nada foi clicado");
-        long marca = LogDoBuzzy.Tamanho();
+        long marca = LogDoBuzzy.Marca();
         try
         {
             _inj.CliqueDireito(p.X, p.Y, _hBuzzy);
@@ -533,7 +556,7 @@ internal sealed partial class Verificacao
     /// </summary>
     private void C3EsconderPeloMenuDoPersonagem(string rotulo)
     {
-        long marca = LogDoBuzzy.Tamanho();
+        long marca = LogDoBuzzy.Marca();
         int marcaR = _logReceptor.Contar();
         MenuOperado m = MenuDoPersonagem(VK_E, "E (Esconder)");
         EventoBuzzy? escondeu = LogDoBuzzy.Esperar(marca, e => e.Chave == "VISIVEL" && e["visivel"] == "nao" && e["motivo"] == "menu", m.TeclaEnviada ? 3000 : 300);
@@ -554,12 +577,12 @@ internal sealed partial class Verificacao
 
     private void C4SegundaInstanciaRevelaAExistente()
     {
-        long marca = LogDoBuzzy.Tamanho();
+        long marca = LogDoBuzzy.Marca();
         int marcaR = _logReceptor.Contar();
         bool escondidoAntes = !Nativo.IsWindowVisible(_hBuzzy);
 
-        var psi = new ProcessStartInfo(_exeBuzzy) { UseShellExecute = false };
-        psi.ArgumentList.Add("--diagnostico");
+        // O mesmo perfil do Buzzy aberto, sem limpar: a pasta é dele.
+        ProcessStartInfo psi = PerfilDaVerificacao.Descrever(_exeBuzzy);
         Process segunda = Process.Start(psi) ?? throw new FalhaDeVerificacao("A segunda instância não iniciou.");
         bool saiu = false;
         int codigo = -1;
@@ -617,7 +640,7 @@ internal sealed partial class Verificacao
             return;
         }
 
-        long marca = LogDoBuzzy.Tamanho();
+        long marca = LogDoBuzzy.Marca();
         bool simulado = !TentarCliqueRealNoIcone(direito: true, marca, e => e.Chave == "MENU" && e["aberto"] == "bandeja", "abrir o menu", out string semCliqueReal);
         MenuOperado m;
         string caminho;
@@ -630,7 +653,7 @@ internal sealed partial class Verificacao
         {
             _rel.Linha($"   sem clique real no ícone da bandeja: {semCliqueReal}; usando a notificação SIMULADA");
             if (Nativo.GetForegroundWindow() != _hReceptor) AtivarReceptor("antes do menu da bandeja simulado");
-            marca = LogDoBuzzy.Tamanho();
+            marca = LogDoBuzzy.Marca();
             m = MenuDaBandejaSimulado(marca, VK_E, "E (Esconder)");
             caminho = "notificação WM_CONTEXTMENU da bandeja SIMULADA (PostMessage à janela de serviço), logo depois de um clique SINTÉTICO no personagem para o Buzzy ter o último input";
         }
@@ -794,7 +817,7 @@ internal sealed partial class Verificacao
             _coberturaRestaurarPelaBandeja = $"{Inconclusivo} (pré-condição não atendida)";
             return;
         }
-        long marca = LogDoBuzzy.Tamanho();
+        long marca = LogDoBuzzy.Marca();
         static bool Mostrou(EventoBuzzy e) => e.Chave == "VISIVEL" && e["visivel"] == "sim" && e["motivo"] == "bandeja";
 
         if (TentarCliqueRealNoIcone(direito: false, marca, Mostrou, "reaparecer", out string semCliqueReal))
@@ -808,7 +831,7 @@ internal sealed partial class Verificacao
         {
             _rel.Linha($"   sem clique real no ícone da bandeja: {semCliqueReal}; usando a notificação SIMULADA");
             if (Nativo.GetForegroundWindow() != _hReceptor) AtivarReceptor("antes da restauração simulada pela bandeja");
-            marca = LogDoBuzzy.Tamanho();
+            marca = LogDoBuzzy.Marca();
             int marcaR = _logReceptor.Contar();
             PostarNotificacaoDaBandeja(NIN_SELECT);
             bool registrou = LogDoBuzzy.Esperar(marca, Mostrou, 3000) is not null;
@@ -838,7 +861,7 @@ internal sealed partial class Verificacao
             Registrar(Criterio, Inconclusivo, "o Buzzy estava escondido (a restauração pela bandeja falhou): sem personagem na tela, \"Sair\" pelo menu dele não pôde ser exercitado; nada foi clicado");
             return;
         }
-        long marca = LogDoBuzzy.Tamanho();
+        long marca = LogDoBuzzy.Marca();
         AmostrarFilhos();
         MenuOperado m = MenuDoPersonagem(VK_S, "S (Sair)");
         bool saiu = _buzzy!.WaitForExit(5000);

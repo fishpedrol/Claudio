@@ -93,7 +93,7 @@ internal sealed partial class Verificacao
     {
         Nativo.POINT p = ExigirPontoOpaco("clique");
         Nativo.RECT antes = Nativo.Retangulo(_hBuzzy);
-        long marca = LogDoBuzzy.Tamanho();
+        long marca = LogDoBuzzy.Marca();
         int marcaR = _logReceptor.Contar();
 
         _inj.Pressionar(p.X, p.Y, _hBuzzy);
@@ -114,7 +114,7 @@ internal sealed partial class Verificacao
     private void F3CliqueDuplo()
     {
         Nativo.POINT p = ExigirPontoOpaco("clique duplo");
-        long marca = LogDoBuzzy.Tamanho();
+        long marca = LogDoBuzzy.Marca();
         int marcaR = _logReceptor.Contar();
         _inj.CliqueDuploEsquerdo(p.X, p.Y, _hBuzzy);
 
@@ -122,7 +122,7 @@ internal sealed partial class Verificacao
         EventoBuzzy? primeiro = Nucleo(marca, "Click", "Pressed", "Reacting", 500);
         // DEC-025: o clique duplo esconde o personagem atrás da borda de baixo; outro o tira de lá.
         EventoBuzzy? escondeu = Nucleo(marca, "DoubleClick", "Settling", "Peeking", 3000);
-        long marcaSaida = LogDoBuzzy.Tamanho();
+        long marcaSaida = LogDoBuzzy.Marca();
         Nativo.POINT cabeca = PontoDoCorpo();
         _inj.CliqueDuploEsquerdo(cabeca.X, cabeca.Y, _hBuzzy);
         EventoBuzzy? saiu = Nucleo(marcaSaida, "DoubleClick", "Settling", "Idle", 3000);
@@ -149,7 +149,7 @@ internal sealed partial class Verificacao
         Nativo.POINT p = ExigirPontoOpaco("arraste");
         Nativo.RECT inicio = Nativo.Retangulo(_hBuzzy);
         Nativo.POINT pegada = new(p.X - (inicio.Left + inicio.Largura / 2), p.Y - inicio.Bottom);
-        long marca = LogDoBuzzy.Tamanho();
+        long marca = LogDoBuzzy.Marca();
         int marcaR = _logReceptor.Contar();
 
         // Faixa horizontal livre na área útil do principal, a partir do ponto de pressão.
@@ -219,7 +219,7 @@ internal sealed partial class Verificacao
         Nativo.POINT p = ExigirPontoOpaco("soltar no ar");
         Nativo.RECT inicio = Nativo.Retangulo(_hBuzzy);
         Nativo.POINT pegada = new(p.X - (inicio.Left + inicio.Largura / 2), p.Y - inicio.Bottom);
-        long marca = LogDoBuzzy.Tamanho();
+        long marca = LogDoBuzzy.Marca();
 
         _inj.Pressionar(p.X, p.Y, _hBuzzy);
         int y = p.Y;
@@ -261,7 +261,7 @@ internal sealed partial class Verificacao
         Nativo.RECT area = sec.Info.rcWork;
         var destino = new Nativo.POINT((area.Left + area.Right) / 2 + pegada.X, area.Bottom + pegada.Y);
 
-        long marca = LogDoBuzzy.Tamanho();
+        long marca = LogDoBuzzy.Marca();
         ArrastarEmPassos(p, destino, 30);
         EventoBuzzy? fim = Nucleo(marca, "DragEnd", "Settling", "Idle", 3000);
         Thread.Sleep(200);
@@ -269,9 +269,10 @@ internal sealed partial class Verificacao
         EventoBuzzy? posicao = LogDoBuzzy.Desde(marca).LastOrDefault(e => e.Chave == "POSICAO");
         bool dentro = area.Contem(noSec) && noSec.Bottom == area.Bottom;
         bool mesmoTamanho = noSec.Largura == origem.Largura && noSec.Altura == origem.Altura;
+        // Desde a chave estável (Fase 5, DEC-030), o campo monitor é um resumo opaco; o nome GDI vem ao lado, em gdi.
         Registrar($"critério 5 [HW] — arrastar até {sec.Info.szDevice} {sec.Info.rcMonitor}, com coordenadas negativas, e soltar lá",
-            fim is not null && dentro && posicao?["monitor"] == sec.Info.szDevice,
-            $"janela {noSec}; na área útil {area} com os pés no chão={dentro}; monitor registrado={posicao?["monitor"] ?? "nenhum"}; "
+            fim is not null && dentro && posicao?["gdi"] == sec.Info.szDevice,
+            $"janela {noSec}; na área útil {area} com os pés no chão={dentro}; monitor registrado={posicao?["gdi"] ?? "nenhum"} (chave {posicao?["monitor"] ?? "-"}); "
             + $"DPI {sec.Dpi} (principal {_dpiPrincipal}); mesmo tamanho={mesmoTamanho}");
         if (sec.Dpi == _dpiPrincipal)
         {
@@ -281,7 +282,7 @@ internal sealed partial class Verificacao
         }
 
         // De volta ao lugar de origem, para os cenários seguintes.
-        long marcaVolta = LogDoBuzzy.Tamanho();
+        long marcaVolta = LogDoBuzzy.Marca();
         Nativo.POINT q = ExigirPontoOpaco("arraste de volta");
         var volta = new Nativo.POINT(origem.Left + origem.Largura / 2 + pegada.X, origem.Bottom + pegada.Y);
         ArrastarEmPassos(q, volta, 30);
@@ -292,7 +293,7 @@ internal sealed partial class Verificacao
     /// <summary>Critério 9: o botão direito solicita o menu de contexto; Esc o fecha e o foco volta.</summary>
     private void F3BotaoDireitoAbreOMenu()
     {
-        long marca = LogDoBuzzy.Tamanho();
+        long marca = LogDoBuzzy.Marca();
         MenuOperado m = MenuDoPersonagem(VK_ESCAPE, "Esc (fechar sem escolher)");
         bool voltou = EsperarAte(() => Nativo.GetForegroundWindow() == _hReceptor, 2000);
         bool visivel = Nativo.IsWindowVisible(_hBuzzy);
@@ -332,7 +333,7 @@ internal sealed partial class Verificacao
         // físico é engolido; o arraste segue sem botão até o clique de liberação.
         Nativo.POINT p = ExigirPontoOpaco("ClickLock");
         Nativo.RECT inicio = Nativo.Retangulo(_hBuzzy);
-        long marca = LogDoBuzzy.Tamanho();
+        long marca = LogDoBuzzy.Marca();
         _inj.Pressionar(p.X, p.Y, _hBuzzy);
         Thread.Sleep(tempo.Value + 400);
         _inj.SoltarEsquerdo(p.X, p.Y);
@@ -359,7 +360,7 @@ internal sealed partial class Verificacao
     {
         const string Criterio = "critério 4 — Alt+Tab no meio do arraste encerra o gesto sem travar o personagem";
         Nativo.POINT p = ExigirPontoOpaco("Alt+Tab");
-        long marca = LogDoBuzzy.Tamanho();
+        long marca = LogDoBuzzy.Marca();
         _inj.Pressionar(p.X, p.Y, _hBuzzy);
         for (int i = 1; i <= 8; i++)
         {
@@ -390,7 +391,7 @@ internal sealed partial class Verificacao
     {
         const string Criterio = "critério 4 — tecla Windows no meio do arraste encerra o gesto sem travar o personagem";
         Nativo.POINT p = ExigirPontoOpaco("tecla Windows");
-        long marca = LogDoBuzzy.Tamanho();
+        long marca = LogDoBuzzy.Marca();
         _inj.Pressionar(p.X, p.Y, _hBuzzy);
         for (int i = 1; i <= 8; i++)
         {
@@ -443,7 +444,7 @@ internal sealed partial class Verificacao
         bool clicou = false;
         if (Nativo.DonoDoPonto(p.X, p.Y) == _hBuzzy)
         {
-            long marca = LogDoBuzzy.Tamanho();
+            long marca = LogDoBuzzy.Marca();
             try
             {
                 _inj.CliqueEsquerdo(p.X, p.Y, _hBuzzy);

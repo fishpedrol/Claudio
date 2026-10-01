@@ -35,9 +35,12 @@
     A Fase 1 só precisa REGISTRAR a linha de base. As metas de repouso de Q-08 (DEC-011)
     aparecem no fim do relatório como referência informativa, não como veredito.
 
-    Contrato com o aplicativo (Buzzy.exe --diagnostico):
+    Contrato com o aplicativo (Buzzy.exe --diagnostico --perfil-de-teste desempenho):
       - grava %LOCALAPPDATA%\Buzzy\diagnostico.log acrescentando; o script só lê o que for
         escrito depois de abrir o app;
+      - com o perfil de teste, os dados do app (posição, preferências) ficam em
+        %LOCALAPPDATA%\Buzzy\testes\desempenho, nunca nas configurações reais do usuário; essa
+        pasta é apagada antes de abrir, para toda medição partir da posição inicial;
       - linhas "[hh:mm:ss.fff] BUZZY|CHAVE|campo=valor|...": INICIO (pid), JANELA (hwnd em
         decimal), PRIMEIRO_QUADRO (ms desde o início do processo), FIM (codigo);
       - instância única: se já houver processo Buzzy, o script aborta ANTES de abrir, e
@@ -60,10 +63,24 @@
     -Modo autonomia deixa a agenda ligada: o personagem anda, escala e pula pela tela durante a
     medição, e o relatório dá o custo médio desse comportamento.
 
+    -Modo onda (tamagotchi, DEC-028; crítica de integração, V13) abre pausado, como o repouso, e
+    antes do aquecimento deixa uma vodka em uso: o botão direito no personagem abre o menu, as
+    teclas I e V invocam a vodka, e ela é arrastada até ele. Tudo por mensagens POSTADAS às
+    janelas do próprio Buzzy aberto aqui (WM_RBUTTONDOWN/UP, WM_CHAR ao dono do menu,
+    WM_LBUTTONDOWN, WM_MOUSEMOVE e WM_LBUTTONUP à janela do item), com o PID de cada janela
+    conferido antes de cada mensagem, como nos testes de integração: nada passa pela fila de
+    input do Windows, o cursor não se move e nenhum outro aplicativo recebe nada. O menu toma o
+    primeiro plano por um instante, como sempre (DEC-016). A medição é o repouso pausado com a
+    onda de bebedeira em curso: os disparos únicos do temporizador da onda só trocam a cara, e o
+    relógio fica desligado. Uma vodka dura cerca de 5 min e 20 s (subida, dois níveis de pico e a
+    queda); o relatório mostra a linha do tempo da onda, a CPU com ela e depois dela, e se o
+    relógio ligou durante a janela medida.
+
     Uso, na raiz do repositório, depois de compilar o Release de src/Buzzy.App:
       .\tools\medir-desempenho.ps1
       .\tools\medir-desempenho.ps1 -Minutos 60 -IntervaloSegundos 5
       .\tools\medir-desempenho.ps1 -Modo autonomia -Semente 7
+      .\tools\medir-desempenho.ps1 -Modo onda
       .\tools\medir-desempenho.ps1 -Exe C:\caminho\Buzzy.exe -Destino C:\temp\medicao.txt
 
     Código de saída: 0 medição completa e encerramento limpo; 1 medição incompleta ou
@@ -96,7 +113,9 @@ param(
     # linha de base de repouso (Fase 1, critério 11), que a Fase 4 não pode piorar.
     # 'autonomia' abre com a agenda autônoma ligada (Fase 4): o personagem anda, escala, pula
     # e descansa sozinho, e a medição dá o custo médio desse comportamento.
-    [ValidateSet('repouso', 'autonomia')]
+    # 'onda' abre pausado e, antes do aquecimento, deixa uma vodka em uso por mensagens postadas
+    # às janelas do próprio Buzzy (tamagotchi, DEC-028; crítica, V13): repouso com a onda ativa.
+    [ValidateSet('repouso', 'autonomia', 'onda')]
     [string] $Modo = 'repouso',
 
     # Semente da agenda autônoma (--semente), para repetir a mesma sequência de ações.
@@ -115,11 +134,17 @@ $intervaloRedeSegundos = 10        # instantâneos de conexões de rede do PID
 $intervaloProgressoSegundos = 60   # linha de progresso no console
 $trocasDeUmTimer300ms = 1000.0 / 300.0   # um timer de 300 ms acorda a thread 3,33 vezes/s
 
-$argumentosDoBuzzy = '--diagnostico'
-if ($Modo -eq 'repouso') { $argumentosDoBuzzy += ' --pausado' }
+# Perfil de teste (Fase 5): os dados do Buzzy medido ficam em %LOCALAPPDATA%\Buzzy\testes\desempenho; a
+# medição nunca lê nem grava a posição e as preferências reais do usuário. O log continua na pasta do Buzzy.
+# A pasta do perfil é apagada antes de abrir (LimparPerfilDeTeste): toda medição parte da posição inicial.
+$perfilDeTeste = 'desempenho'
+$argumentosDoBuzzy = '--diagnostico --perfil-de-teste ' + $perfilDeTeste
+if ($Modo -eq 'repouso' -or $Modo -eq 'onda') { $argumentosDoBuzzy += ' --pausado' }
 if ($Semente -ge 0) { $argumentosDoBuzzy += (' --semente {0}' -f $Semente) }
 $tituloDaMedicao = if ($Modo -eq 'repouso') {
     'linha de base de desempenho em repouso, movimento pausado (Fase 1, critério 11)'
+} elseif ($Modo -eq 'onda') {
+    'repouso pausado com a onda de uma vodka em curso (tamagotchi, DEC-028; crítica, V13)'
 } else {
     'desempenho com a agenda autônoma ligada (Fase 4): anda, escala, pula e descansa sozinho'
 }
@@ -137,6 +162,8 @@ if (-not $Destino) { $Destino = Join-Path $raiz ('resultados\desempenho-{0}.txt'
 $Exe = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Exe)
 $Destino = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Destino)
 $logDiag = Join-Path (Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Buzzy') 'diagnostico.log'
+# Ao passar de 1 MB, o Buzzy move o log para esta cópia e recomeça (Diagnostico.cs).
+$logDiagCopia = Join-Path (Split-Path -Parent $logDiag) 'diagnostico.1.log'
 $nomesProcesso = @('Buzzy', [IO.Path]::GetFileNameWithoutExtension($Exe)) | Select-Object -Unique
 
 function Abortar([string] $motivo) {
@@ -147,6 +174,31 @@ function Abortar([string] $motivo) {
 
 function ProcessosBuzzyAbertos {
     @(Get-Process -Name $nomesProcesso -ErrorAction SilentlyContinue | Sort-Object Id -Unique)
+}
+
+# Apaga a pasta do perfil de teste (<pastaLocal>\Buzzy\testes\<perfil>, com a pasta local do usuário), se existir,
+# com tudo o que houver dentro, como a limpeza dos testes (PerfilDeTeste.Limpar): só com nenhum Buzzy aberto, e
+# sem seguir junção nem link simbólico no caminho até ela, para nunca apagar nada fora da pasta do Buzzy. Sem a
+# posição gravada pela medição anterior, duas medições com a mesma semente partem do mesmo lugar e continuam
+# comparáveis. Devolve o que fez, para o relatório; se não puder apagar, aborta antes de abrir.
+function LimparPerfilDeTeste([string] $pastaLocal, [string] $perfil) {
+    if ($perfil -cnotmatch '\A[a-z0-9][a-z0-9-]{0,31}\z') { Abortar ('nome de perfil de teste inválido: {0}' -f $perfil) }
+    if ([string]::IsNullOrEmpty($pastaLocal) -or $pastaLocal -notmatch '\A([A-Za-z]:\\|\\\\)') { return 'sem a pasta local do usuário; nada a apagar' }
+    $buzzy = [IO.Path]::Combine($pastaLocal, 'Buzzy')
+    $testes = [IO.Path]::Combine($buzzy, 'testes')
+    $pasta = [IO.Path]::Combine($testes, $perfil)
+    if (-not [IO.Directory]::Exists($pasta)) { return 'sem pasta de uma medição anterior' }
+    foreach ($trecho in @($buzzy, $testes, $pasta)) {
+        if (([IO.File]::GetAttributes($trecho) -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            Abortar ('{0} é uma junção ou um link: a medição não apaga nada fora da pasta do Buzzy.' -f $trecho)
+        }
+    }
+    try {
+        [IO.Directory]::Delete($pasta, $true)
+    } catch {
+        Abortar ('não foi possível apagar a pasta do perfil de teste {0}: {1}' -f $pasta, $_.Exception.Message)
+    }
+    'pasta da medição anterior apagada'
 }
 
 # ------------------------------------------------------------------ verificações antes de abrir
@@ -261,6 +313,56 @@ namespace BuzzyFerramentas
             uint pid;
             if (GetWindowThreadProcessId(hWnd, out pid) == 0) return 0;
             return unchecked((int)pid);
+        }
+
+        // ------------------------------------------------------ mensagens postadas às janelas do Buzzy (modo onda)
+        public const int WM_CHAR = 0x0102;
+        public const int WM_MOUSEMOVE = 0x0200;
+        public const int WM_LBUTTONDOWN = 0x0201;
+        public const int WM_LBUTTONUP = 0x0202;
+        public const int WM_RBUTTONDOWN = 0x0204;
+        public const int WM_RBUTTONUP = 0x0205;
+        public const int MK_LBUTTON = 0x0001;
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetWindowRect(IntPtr hWnd, out RECT r);
+
+        // Retângulo da janela em pixels físicos { esquerda, topo, direita, base }, ou null: a thread fica em
+        // Per-Monitor V2 só durante a leitura (o PowerShell não tem consciência de DPI e, fora de 100%, leria
+        // coordenadas virtualizadas). O contexto anterior da thread é restaurado.
+        public static int[] RetanguloFisico(IntPtr hWnd)
+        {
+            IntPtr anterior = IntPtr.Zero;
+            try { anterior = SetThreadDpiAwarenessContext(new IntPtr(-4)); }
+            catch (EntryPointNotFoundException) { }
+            try
+            {
+                RECT r;
+                if (!GetWindowRect(hWnd, out r)) return null;
+                return new int[] { r.Left, r.Top, r.Right, r.Bottom };
+            }
+            finally
+            {
+                if (anterior != IntPtr.Zero) SetThreadDpiAwarenessContext(anterior);
+            }
+        }
+
+        // Posta uma mensagem de mouse a uma janela, com o ponto de tela (pixels físicos) convertido para coordenadas
+        // de cliente pela posição ATUAL dela (as janelas do Buzzy não têm borda: o cliente é a janela inteira). Não é
+        // input: nada passa pela fila de input do Windows nem move o cursor.
+        public static bool PostarMouse(IntPtr hWnd, int mensagem, int botoes, int x, int y)
+        {
+            int[] r = RetanguloFisico(hWnd);
+            if (r == null) return false;
+            int cx = x - r[0], cy = y - r[1];
+            return PostMessage(hWnd, mensagem, new IntPtr(botoes), new IntPtr(((cy & 0xFFFF) << 16) | (cx & 0xFFFF)));
+        }
+
+        // Posta um caractere (WM_CHAR) a uma janela, como a tecla de acesso de um item do menu ao dono dele.
+        public static bool PostarCaractere(IntPtr hWnd, char c)
+        {
+            return PostMessage(hWnd, WM_CHAR, new IntPtr(c), IntPtr.Zero);
         }
 
         // ------------------------------------------------------ tela e sistema acordados
@@ -497,6 +599,10 @@ namespace BuzzyFerramentas
 }
 '@
 }
+# Uma sessão do PowerShell que já carregou uma versão anterior das ferramentas não carrega a nova (o tipo é o mesmo).
+if ($Modo -eq 'onda' -and $null -eq [BuzzyFerramentas.MedicaoDesempenho].GetMethod('PostarMouse')) {
+    Abortar 'esta sessão do PowerShell carregou uma versão anterior das ferramentas de medição, sem as mensagens do modo onda. Rode o script num PowerShell novo (powershell -NoProfile -File tools\medir-desempenho.ps1 -Modo onda).'
+}
 
 # ------------------------------------------------------------------ estado da medição
 $amostrasCpu = New-Object System.Collections.Generic.List[double]          # % de um núcleo
@@ -525,6 +631,9 @@ $encerramento = @{
     Saiu = $false; SegundosAteSair = $null; Forcado = $false; ErroForcado = $null
     JaTinhaSaido = $false; CodigoSaida = $null; HoraSaida = $null
 }
+# Modo onda (tamagotchi, DEC-028; crítica, V13)
+$preparacaoOnda = New-Object System.Collections.Generic.List[string]   # o que a preparação fez, para o relatório
+$temposCpu = New-Object System.Collections.Generic.List[double]         # s desde o início da janela, um por amostra de M1
 
 $script:posLog = [int64]0
 $script:bytesLogAntes = [int64]0
@@ -548,6 +657,10 @@ $script:cpuPartidaAquecimento = $null
 $script:cpuFimJanela = $null
 $script:cpuTotalProcesso = $null
 $script:threadsUltimaLeitura = $null
+$script:indiceInicioJanela = -1     # modo onda: índice em $eventos no começo da janela medida
+$script:indiceUsoDaOnda = -1        # modo onda: índice em $eventos do ITEM_DRAG_END que começou o uso da vodka
+$script:tFimDaOnda = $null          # modo onda: s desde o início da janela até a amostra em que a onda acabou no log
+$script:eventosVistosOnda = 0
 
 # ------------------------------------------------------------------ utilidades
 # Tudo o que o bloco finally usa (encerrar, coletar depois, relatório) evita cmdlets:
@@ -729,42 +842,62 @@ function ConverterLinhaBuzzy([string] $linha) {
     return [pscustomobject]@{ Chave = $partes[1].Trim(); Campos = $campos; Carimbo = $carimbo; Linha = $linha }
 }
 
+function LerLinhasNovas([IO.FileStream] $fluxo, [int64] $desde) {
+    # Acrescenta as linhas completas do fluxo a partir de $desde e devolve quantos bytes consumiu. Só avança até a
+    # última quebra de linha: uma linha que o app ainda está escrevendo é lida inteira na próxima vez.
+    $pendentes = [int]($fluxo.Length - $desde)
+    if ($pendentes -le 0) { return [int64]0 }
+    $bytes = New-Object byte[] $pendentes
+    [void]$fluxo.Seek($desde, [IO.SeekOrigin]::Begin)
+    $lidos = 0
+    while ($lidos -lt $pendentes) {
+        $n = $fluxo.Read($bytes, $lidos, $pendentes - $lidos)
+        if ($n -le 0) { break }
+        $lidos += $n
+    }
+    if ($lidos -le 0) { return [int64]0 }
+    $ultimaQuebra = [Array]::LastIndexOf($bytes, [byte]10, $lidos - 1)
+    if ($ultimaQuebra -lt 0) { return [int64]0 }
+    $texto = [Text.Encoding]::UTF8.GetString($bytes, 0, $ultimaQuebra + 1)
+    foreach ($bruta in $texto.Split([char]10)) {
+        $linha = $bruta.TrimEnd([char]13).TrimStart([char]0xFEFF)
+        if ($linha.Length -eq 0) { continue }
+        $linhasLog.Add($linha)
+        $evento = ConverterLinhaBuzzy $linha
+        if ($null -ne $evento) { $eventos.Add($evento) }
+    }
+    return [int64]($ultimaQuebra + 1)
+}
+
+function LerRestoDaCopia([int64] $desde) {
+    # Depois de uma rotação (o Buzzy passou de 1 MB e o log virou diagnostico.1.log), o trecho ainda não lido do
+    # arquivo anterior está na cópia, a partir do mesmo deslocamento. Uma cópia menor que ele (de outra rotação) não
+    # tem nada depois dele: a leitura não traz linha nenhuma.
+    if (-not [IO.File]::Exists($logDiagCopia)) { return }
+    $copia = $null
+    try {
+        $copia = [IO.FileStream]::new($logDiagCopia, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]'ReadWrite, Delete')
+        [void](LerLinhasNovas $copia $desde)
+    } finally {
+        if ($null -ne $copia) { $copia.Dispose() }
+    }
+}
+
 function AtualizarLog {
-    # Lê as linhas completas acrescentadas ao log desde a última leitura. Só avança até a
-    # última quebra de linha: uma linha que o app ainda está escrevendo é lida inteira na
-    # próxima vez. Abre com compartilhamento total para não atrapalhar a escrita do app.
+    # Lê as linhas completas acrescentadas ao log desde a última leitura. Abre com compartilhamento
+    # total para não atrapalhar a escrita do app.
     if (-not [IO.File]::Exists($logDiag)) { return }
     $fluxo = $null
     try {
         $fluxo = [IO.FileStream]::new($logDiag, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]'ReadWrite, Delete')
-        $tamanho = $fluxo.Length
-        if ($tamanho -lt $script:posLog) {
-            # O arquivo encolheu depois de aberto o app: foi recriado ou truncado.
+        if ($fluxo.Length -lt $script:posLog) {
+            # O arquivo encolheu depois de aberto o app: o Buzzy o rotacionou ou ele foi recriado ou truncado. O
+            # que faltava ler do arquivo anterior vem da cópia da rotação; depois, o arquivo novo, do começo.
             $script:logRecriado = $true
+            LerRestoDaCopia $script:posLog
             $script:posLog = [int64]0
         }
-        $pendentes = [int]($tamanho - $script:posLog)
-        if ($pendentes -le 0) { return }
-        $bytes = New-Object byte[] $pendentes
-        [void]$fluxo.Seek($script:posLog, [IO.SeekOrigin]::Begin)
-        $lidos = 0
-        while ($lidos -lt $pendentes) {
-            $n = $fluxo.Read($bytes, $lidos, $pendentes - $lidos)
-            if ($n -le 0) { break }
-            $lidos += $n
-        }
-        if ($lidos -le 0) { return }
-        $ultimaQuebra = [Array]::LastIndexOf($bytes, [byte]10, $lidos - 1)
-        if ($ultimaQuebra -lt 0) { return }
-        $texto = [Text.Encoding]::UTF8.GetString($bytes, 0, $ultimaQuebra + 1)
-        $script:posLog += $ultimaQuebra + 1
-        foreach ($bruta in $texto.Split([char]10)) {
-            $linha = $bruta.TrimEnd([char]13).TrimStart([char]0xFEFF)
-            if ($linha.Length -eq 0) { continue }
-            $linhasLog.Add($linha)
-            $evento = ConverterLinhaBuzzy $linha
-            if ($null -ne $evento) { $eventos.Add($evento) }
-        }
+        $script:posLog += (LerLinhasNovas $fluxo $script:posLog)
         $script:erroLeituraLog = $null
     } catch {
         $script:erroLeituraLog = $_.Exception.Message
@@ -895,6 +1028,152 @@ function MostrarProgresso([double] $t) {
     $cpuMedia = if ($t -gt 0) { ($cpuAnterior - $cpuInicioJanela).TotalSeconds / $t * 100.0 } else { [double]::NaN }
     $priv = if ($amostrasPriv.Count -gt 0) { $amostrasPriv[$amostrasPriv.Count - 1] } else { [double]::NaN }
     Write-Host ('   [{0} de {1}] {2} amostras | CPU média {3}% de um núcleo | trocas/s média {4} | privada {5} MB | filhos {6}' -f (Duracao $t), (Duracao ($Minutos * 60)), $amostrasCpu.Count, (Num $cpuMedia), (Num (Media $amostrasTrocas) '0.00'), (Num $priv '0.00'), $filhosVistos.Count) -ForegroundColor DarkGray
+}
+
+# ------------------------------------------------------------------ modo onda (tamagotchi, DEC-028; crítica, V13)
+# Mensagens POSTADAS às janelas do próprio Buzzy aberto aqui, com o PID de cada janela conferido imediatamente antes de
+# cada mensagem, como nos testes de integração (ItensIntegracaoTestes): nada passa pela fila de input do Windows, o
+# cursor não se move e nenhum outro aplicativo recebe nada.
+
+function EsperarEvento([int] $desde, [string] $chave, [hashtable] $campos, [string[]] $comCampos, [double] $limiteSegundos, [string] $oque) {
+    # Índice em $eventos do primeiro evento a partir de $desde com a chave, os valores e os campos pedidos.
+    $relogio = [Diagnostics.Stopwatch]::StartNew()
+    while ($true) {
+        AtualizarLog
+        for ($i = $desde; $i -lt $eventos.Count; $i++) {
+            $e = $eventos[$i]
+            if ($e.Chave -ne $chave) { continue }
+            $confere = $true
+            foreach ($nome in $campos.Keys) { if ($e.Campos[$nome] -ne [string]$campos[$nome]) { $confere = $false; break } }
+            foreach ($nome in $comCampos) { if (-not $e.Campos.ContainsKey($nome)) { $confere = $false; break } }
+            if ($confere) { return $i }
+        }
+        if ($proc.HasExited) { throw ('o Buzzy encerrou (código {0}) antes de registrar: {1}' -f $proc.ExitCode, $oque) }
+        if ($relogio.Elapsed.TotalSeconds -ge $limiteSegundos) { throw ('tempo limite de {0} s esgotado esperando no log: {1}' -f $limiteSegundos, $oque) }
+        Start-Sleep -Milliseconds 50
+    }
+}
+
+function ExigirJanelaDoBuzzy([IntPtr] $hwnd, [string] $oque) {
+    if ($hwnd -eq [IntPtr]::Zero -or [BuzzyFerramentas.MedicaoDesempenho]::PidDaJanela($hwnd) -ne $pidAlvo) {
+        throw ('a janela {0} ({1}) não é do Buzzy aberto por este script (PID {2}); nada foi enviado a ela' -f $hwnd.ToInt64(), $oque, $pidAlvo)
+    }
+}
+
+function PostarMouse([IntPtr] $hwnd, [int] $mensagem, [int] $botoes, [int[]] $ponto, [string] $oque) {
+    ExigirJanelaDoBuzzy $hwnd $oque
+    if (-not [BuzzyFerramentas.MedicaoDesempenho]::PostarMouse($hwnd, $mensagem, $botoes, $ponto[0], $ponto[1])) { throw ('PostMessage falhou: {0}' -f $oque) }
+}
+
+function LerPonto([string] $texto) {
+    # "x,y" ou "(x,y)", com sinais, em pixels físicos.
+    if ($texto -match '^\(?(-?\d+),(-?\d+)\)?$') { return [int[]]@([int]$matches[1], [int]$matches[2]) }
+    throw ('ponto ilegível no log: {0}' -f $texto)
+}
+
+function LerRetangulo([string] $texto) {
+    # "(esquerda,topo)-(direita,base)", com sinais, em pixels físicos.
+    if ($texto -match '^\((-?\d+),(-?\d+)\)-\((-?\d+),(-?\d+)\)$') { return [int[]]@([int]$matches[1], [int]$matches[2], [int]$matches[3], [int]$matches[4]) }
+    throw ('retângulo ilegível no log: {0}' -f $texto)
+}
+
+function Centro([int[]] $r) { return [int[]]@([int][Math]::Floor(($r[0] + $r[2]) / 2.0), [int][Math]::Floor(($r[1] + $r[3]) / 2.0)) }
+
+function PrepararOnda {
+    # 1. O ponto opaco do personagem parado, registrado pelo app (BUZZY|POSICAO), e a janela dele (BUZZY|JANELA).
+    $M = [BuzzyFerramentas.MedicaoDesempenho]
+    $hwndPersonagem = LerHwnd $eJanela.Campos['hwnd']
+    $iPosicao = EsperarEvento 0 'POSICAO' @{} @('pontoOpaco') 10 'BUZZY|POSICAO com o ponto opaco'
+    $opaco = LerPonto $eventos[$iPosicao].Campos['pontoOpaco']
+
+    # 2. O menu pelo botão direito no personagem; as teclas de acesso I (Itens) e V (Vodka), como WM_CHAR ao dono do
+    # menu, cuja fila o laço modal do menu lê.
+    $marca = $eventos.Count
+    PostarMouse $hwndPersonagem $M::WM_RBUTTONDOWN 0 $opaco 'botão direito no personagem'
+    PostarMouse $hwndPersonagem $M::WM_RBUTTONUP 0 $opaco 'botão direito no personagem'
+    $iMenu = EsperarEvento $marca 'MENU' @{ exibindo = 'sim' } @('dono') 5 'BUZZY|MENU|exibindo=sim'
+    $dono = LerHwnd $eventos[$iMenu].Campos['dono']
+    Start-Sleep -Milliseconds 200
+    foreach ($tecla in @('i', 'v')) {
+        ExigirJanelaDoBuzzy $dono 'dono do menu'
+        if (-not $M::PostarCaractere($dono, [char]$tecla)) { throw ("PostMessage WM_CHAR '{0}' ao dono do menu falhou" -f $tecla) }
+        Start-Sleep -Milliseconds 150
+    }
+    $iFechado = EsperarEvento $marca 'MENU' @{} @('fechado') 5 'BUZZY|MENU|fechado'
+    $fechado = $eventos[$iFechado]
+    if ($fechado.Campos['fechado'] -ne 'Item' -or $fechado.Campos['argumento'] -ne 'Vodka') {
+        throw ('o menu fechou com {0} {1}, não com a vodka' -f $fechado.Campos['fechado'], $fechado.Campos['argumento'])
+    }
+    $preparacaoOnda.Add(('menu pelo botão direito no personagem (mensagem postada), teclas I e V (WM_CHAR ao dono do menu): fechado={0}, argumento={1}; o dono do menu teve o primeiro plano={2}' -f $fechado.Campos['fechado'], $fechado.Campos['argumento'], $fechado.Campos['donoEmPrimeiroPlano']))
+
+    # 3. A janela da vodka aparece, cai e para no chão: o relógio, ligado só pela queda, desliga.
+    $iMostrado = EsperarEvento $marca 'ITEM' @{ item = 'Vodka' } @('mostrado', 'hwnd', 'retangulo', 'pontoOpaco') 5 'BUZZY|ITEM|mostrado da vodka'
+    $mostrado = $eventos[$iMostrado]
+    $id = $mostrado.Campos['mostrado']
+    $hwndItem = LerHwnd $mostrado.Campos['hwnd']
+    ExigirJanelaDoBuzzy $hwndItem 'janela da vodka'
+    $retNascimento = LerRetangulo $mostrado.Campos['retangulo']
+    $opacoNascimento = LerPonto $mostrado.Campos['pontoOpaco']
+    [void](EsperarEvento $iMostrado 'RELOGIO' @{ ligado = 'nao' } @() 10 'a vodka parar no chão (BUZZY|RELOGIO|ligado=nao)')
+    Start-Sleep -Milliseconds 300
+    $retItem = $M::RetanguloFisico($hwndItem)
+    $retPersonagem = $M::RetanguloFisico($hwndPersonagem)
+    if ($null -eq $retItem -or $null -eq $retPersonagem) { throw 'não deu para ler o retângulo da janela da vodka ou do personagem' }
+    $preparacaoOnda.Add(('vodka (Id {0}) invocada ao lado dele: nasceu em {1} e parou no chão em ({2},{3})-({4},{5})' -f $id, $mostrado.Campos['retangulo'], $retItem[0], $retItem[1], $retItem[2], $retItem[3]))
+
+    # 4. O arraste até ele: o botão no ponto opaco da vodka e o soltar deslocado do mesmo tanto, para o centro dela
+    # ficar no centro dele; oito movimentos com o botão, cada um convertido pela posição atual da janela do item.
+    $de = [int[]]@(($retItem[0] + $opacoNascimento[0] - $retNascimento[0]), ($retItem[1] + $opacoNascimento[1] - $retNascimento[1]))
+    $centroItem = Centro $retItem
+    $centroPersonagem = Centro $retPersonagem
+    $ate = [int[]]@(($de[0] + $centroPersonagem[0] - $centroItem[0]), ($de[1] + $centroPersonagem[1] - $centroItem[1]))
+    $marca = $eventos.Count
+    PostarMouse $hwndItem $M::WM_LBUTTONDOWN $M::MK_LBUTTON $de 'botão pressionado na vodka'
+    [void](EsperarEvento $marca 'ITEM' @{ clique = $id } @() 5 'o botão pressionado chegar à vodka (BUZZY|ITEM|clique)')
+    Start-Sleep -Milliseconds 80
+    for ($passo = 1; $passo -le 8; $passo++) {
+        $ponto = [int[]]@(($de[0] + [int][Math]::Truncate(($ate[0] - $de[0]) * $passo / 8.0)), ($de[1] + [int][Math]::Truncate(($ate[1] - $de[1]) * $passo / 8.0)))
+        PostarMouse $hwndItem $M::WM_MOUSEMOVE $M::MK_LBUTTON $ponto 'arraste da vodka'
+        Start-Sleep -Milliseconds 60
+    }
+    PostarMouse $hwndItem $M::WM_LBUTTONUP 0 $ate 'soltar a vodka sobre ele'
+    $iUso = EsperarEvento $marca 'NUCLEO' @{ evento = 'ItemDragEnd'; para = 'Using' } @() 5 'a vodka solta sobre ele (BUZZY|NUCLEO ItemDragEnd -> Using)'
+    $script:indiceUsoDaOnda = $iUso
+    $iFim = EsperarEvento $iUso 'NUCLEO' @{ de = 'Using' } @() 10 'o fim do uso (BUZZY|NUCLEO de=Using)'
+    $iRelogio = EsperarEvento $iFim 'RELOGIO' @{ ligado = 'nao' } @() 10 'o relógio desligar depois do uso'
+    $iOnda = EsperarEvento $iUso 'ONDA' @{ agendada = 'sim' } @() 5 'a onda agendada (BUZZY|ONDA|agendada=sim)'
+    $preparacaoOnda.Add(('arraste até ele por mensagens postadas à janela da vodka: {0} ({1}); fim do uso: {2} -> {3}; relógio desligado às {4}; onda agendada com {5} ms (geração {6})' -f $eventos[$iUso].Campos['regra'], $eventos[$iUso].Carimbo, $eventos[$iFim].Campos['de'], $eventos[$iFim].Campos['para'], $eventos[$iRelogio].Carimbo, $eventos[$iOnda].Campos['atrasoMs'], $eventos[$iOnda].Campos['geracao']))
+}
+
+function VerificarFimDaOnda([double] $t) {
+    # A onda acaba no disparo que leva a "-> fim"; anota a amostra em que a linha apareceu.
+    for ($i = [Math]::Max($script:eventosVistosOnda, $script:indiceUsoDaOnda); $i -lt $eventos.Count; $i++) {
+        $e = $eventos[$i]
+        if ($e.Chave -eq 'NUCLEO' -and $e.Campos['evento'] -eq 'ItemEffectTimer' -and $e.Campos['regra'] -match '-> fim') {
+            $script:tFimDaOnda = $t
+            break
+        }
+    }
+    $script:eventosVistosOnda = $eventos.Count
+}
+
+function ResumoDaOnda {
+    # Na janela medida: os disparos da onda, as linhas de relógio ligado e as amostras de CPU com a onda e depois dela.
+    $disparos = 0
+    $relogioLigado = 0
+    if ($script:indiceInicioJanela -ge 0) {
+        for ($i = $script:indiceInicioJanela; $i -lt $eventos.Count; $i++) {
+            $e = $eventos[$i]
+            if ($e.Chave -eq 'ONDA' -and $e.Campos['disparada'] -eq 'sim') { $disparos++ }
+            if ($e.Chave -eq 'RELOGIO' -and $e.Campos['ligado'] -eq 'sim') { $relogioLigado++ }
+        }
+    }
+    $com = New-Object System.Collections.Generic.List[double]
+    $sem = New-Object System.Collections.Generic.List[double]
+    for ($i = 0; $i -lt $amostrasCpu.Count -and $i -lt $temposCpu.Count; $i++) {
+        if ($null -eq $script:tFimDaOnda -or $temposCpu[$i] -le $script:tFimDaOnda) { $com.Add($amostrasCpu[$i]) } else { $sem.Add($amostrasCpu[$i]) }
+    }
+    return [pscustomobject]@{ Disparos = $disparos; RelogioLigado = $relogioLigado; ComOnda = $com; SemOnda = $sem }
 }
 
 # ------------------------------------------------------------------ encerramento e depois
@@ -1035,7 +1314,8 @@ function EscreverRelatorio {
     $L.Add('Protocolo')
     $L.Add(('   PID medido          : {0} (processo aberto por este script, com --diagnostico)' -f $pidAlvo))
     $L.Add(('   Log de diagnóstico  : {0} (lido a partir do byte {1})' -f $logDiag, $script:bytesLogAntes))
-    $L.Add(('   Aquecimento         : {0} s descartados, contados do primeiro quadro (CPU de partida e aquecimento: {1} s)' -f $AquecimentoSegundos, (Num $script:cpuPartidaAquecimento)))
+    $contadoDe = if ($Modo -eq 'onda') { 'contados do fim da preparação da onda, que vem logo depois do primeiro quadro' } else { 'contados do primeiro quadro' }
+    $L.Add(('   Aquecimento         : {0} s descartados, {1} (CPU de partida e aquecimento: {2} s)' -f $AquecimentoSegundos, $contadoDe, (Num $script:cpuPartidaAquecimento)))
     $ordIntervalos = Ordenar $intervalosReais
     $maxIntervalo = if ($ordIntervalos.Count -gt 0) { $ordIntervalos[$ordIntervalos.Count - 1] } else { [double]::NaN }
     $L.Add(('   Janela medida       : {0} min pedidos, {1} min amostrados | intervalo pedido {2} s | {3} amostras | intervalo real médio {4} s, máximo {5} s' -f $Minutos, (Num ($script:duracaoMedida / 60.0) '0.00'), $IntervaloSegundos, $amostrasCpu.Count, (Num (Media $intervalosReais)), (Num $maxIntervalo)))
@@ -1104,6 +1384,32 @@ function EscreverRelatorio {
             $L.Add('   nenhuma engine de GPU apareceu para este PID: o processo não usou a GPU durante a medição (0%).')
         }
         if ($script:falhasGpu -gt 0) { $L.Add(('   {0} consultas de GPU falharam e ficaram fora da média' -f $script:falhasGpu)) }
+    }
+
+    if ($Modo -eq 'onda') {
+        $L.Add($separador)
+        $L.Add('Onda da vodka (modo onda; tamagotchi, DEC-028; crítica de integração, V13)')
+        $L.Add('   preparação, antes do aquecimento, por mensagens postadas às janelas do próprio Buzzy (PID conferido; sem SendInput, sem mover o cursor):')
+        if ($preparacaoOnda.Count -eq 0) { $L.Add('   NÃO PREPARADA: a medição parou antes (ver Resultado)') }
+        foreach ($linha in $preparacaoOnda) { $L.Add('   - ' + $linha) }
+        $L.Add('   linha do tempo da onda no log (carimbo = tempo desde o início do processo do Buzzy):')
+        if ($script:indiceUsoDaOnda -ge 0) {
+            for ($i = $script:indiceUsoDaOnda; $i -lt $eventos.Count; $i++) {
+                $e = $eventos[$i]
+                if ($e.Chave -eq 'ONDA' -or ($e.Chave -eq 'NUCLEO' -and $e.Campos['evento'] -eq 'ItemEffectTimer')) {
+                    $L.Add(('     [{0}] {1}' -f $e.Carimbo, $e.Linha.Substring($e.Linha.IndexOf('BUZZY|', [StringComparison]::Ordinal))))
+                }
+            }
+        }
+        $resumoOnda = ResumoDaOnda
+        $L.Add(('   na janela medida: {0} disparo(s) único(s) da onda; {1} linha(s) RELOGIO|ligado=sim (esperado 0: pausado, a onda só troca a cara)' -f $resumoOnda.Disparos, $resumoOnda.RelogioLigado))
+        if ($null -ne $script:tFimDaOnda) {
+            $L.Add(('   a onda acabou aos {0} da janela medida (amostra em que a linha "-> fim" apareceu no log)' -f (Duracao $script:tFimDaOnda)))
+        } elseif ($preparacaoOnda.Count -gt 0) {
+            $L.Add('   a onda continuava em curso no fim da janela medida')
+        }
+        $L.Add('   CPU com a onda ativa         : ' + (Resumo $resumoOnda.ComOnda '%'))
+        $L.Add('   CPU depois do fim da onda    : ' + (Resumo $resumoOnda.SemOnda '%'))
     }
 
     $L.Add($separador)
@@ -1183,6 +1489,13 @@ function EscreverRelatorio {
     if ($Modo -eq 'autonomia') {
         $L.Add('   Modo autonomia: o personagem se move durante parte da janela, então as metas de REPOUSO')
         $L.Add('   não se aplicam diretamente; a comparação fica só como ordem de grandeza.')
+    }
+    if ($Modo -eq 'onda') {
+        # V13 da crítica de integração: repouso pausado com a onda de uma vodka, CPU média até 0,1% e relógio desligado.
+        $resumoOnda = ResumoDaOnda
+        $L.Add(('   Modo onda (V13): repouso pausado com a onda de uma vodka; uma vodka dura cerca de 5 min e 20 s, e o resto da janela é o repouso de sempre.'))
+        $L.Add(('   - relógio desligado durante a janela medida : {0} linha(s) RELOGIO|ligado=sim -> {1}' -f $resumoOnda.RelogioLigado, (Referencia ($resumoOnda.RelogioLigado -eq 0 -and $preparacaoOnda.Count -gt 0))))
+        $L.Add(('   - CPU média com a onda ativa até 0,1%       : {0}% (média das amostras de 1 s) -> {1}' -f (Num (Media $resumoOnda.ComOnda)), (Referencia ($resumoOnda.ComOnda.Count -gt 0 -and (Media $resumoOnda.ComOnda) -le 0.1))))
     }
     if ($amostrasCpu.Count -gt 0) {
         $janelaCurta = if ($script:duracaoMedida -lt 599) { ' (janela menor que os 10 min de Q-08: só indicativo)' } else { '' }
@@ -1288,6 +1601,16 @@ if ($abertos.Count -gt 0) {
     Abortar ('um processo Buzzy apareceu antes da abertura (PID {0}). Feche-o pelo menu da bandeja e rode de novo.' -f (($abertos | ForEach-Object { $_.Id }) -join ', '))
 }
 
+# Sem nenhum Buzzy aberto, ninguém usa a pasta do perfil de teste: apagada, o Buzzy medido parte da posição inicial.
+$pastaLocalDoUsuario = [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData, [Environment+SpecialFolderOption]::DoNotVerify)
+$limpezaDoPerfil = LimparPerfilDeTeste $pastaLocalDoUsuario $perfilDeTeste
+Write-Host ('Perfil de teste {0}: {1}.' -f $perfilDeTeste, $limpezaDoPerfil) -ForegroundColor DarkGray
+$linhasAmbiente.Add(('Perfil de teste     : {0}, em %LOCALAPPDATA%\Buzzy\testes ({1})' -f $perfilDeTeste, $limpezaDoPerfil))
+$abertos = @(ProcessosBuzzyAbertos)
+if ($abertos.Count -gt 0) {
+    Abortar ('um processo Buzzy apareceu durante a limpeza do perfil de teste (PID {0}). Feche-o pelo menu da bandeja e rode de novo.' -f (($abertos | ForEach-Object { $_.Id }) -join ', '))
+}
+
 # O log é acrescentado: só interessa o que vier depois deste ponto.
 $script:posLog = if ([IO.File]::Exists($logDiag)) { [IO.FileInfo]::new($logDiag).Length } else { [int64]0 }
 $script:bytesLogAntes = $script:posLog
@@ -1382,6 +1705,14 @@ try {
     if ($null -ne $eQuadro) { $m6 = LerNumero $eQuadro.Campos['ms'] }
     Write-Host ('Janela do Buzzy: HWND {0}. Primeiro quadro: {1} ms (informado pelo app).' -f $hwndJanela.ToInt64(), (Num $m6 '0.#')) -ForegroundColor DarkGray
 
+    # ---------------------------------------------------------------- preparação da onda (modo onda)
+    if ($Modo -eq 'onda') {
+        $etapa = 'preparação da onda'
+        Write-Host 'Modo onda: uma vodka pelo menu e arrastada até ele, por mensagens postadas às janelas do Buzzy (o cursor não se move; o menu toma o primeiro plano por um instante)...' -ForegroundColor Yellow
+        PrepararOnda
+        foreach ($linha in $preparacaoOnda) { Write-Host ('   ' + $linha) -ForegroundColor DarkGray }
+    }
+
     # ---------------------------------------------------------------- aquecimento
     $etapa = 'aquecimento'
     Write-Host ('Aquecimento: {0} s descartados. A partir de agora, não interaja com o Buzzy nem passe o mouse sobre ele.' -f $AquecimentoSegundos) -ForegroundColor Yellow
@@ -1435,6 +1766,9 @@ try {
     $etapa = 'medição'
     Write-Host ('Medindo por {0} min, amostra a cada {1} s. Progresso a cada {2} s:' -f $Minutos, $IntervaloSegundos, $intervaloProgressoSegundos) -ForegroundColor Yellow
     $duracaoAlvo = $Minutos * 60.0
+    AtualizarLog
+    $script:indiceInicioJanela = $eventos.Count
+    $script:eventosVistosOnda = $eventos.Count
     $relogioMedicao = [Diagnostics.Stopwatch]::StartNew()
     $cpuInicioJanela = $proc.TotalProcessorTime
     $cpuAnterior = $cpuInicioJanela
@@ -1471,6 +1805,7 @@ try {
         if ($dt -le 0) { continue }
         $usoNucleo = ($cpu - $cpuAnterior).TotalSeconds / $dt * 100.0
         $amostrasCpu.Add($usoNucleo)
+        $temposCpu.Add($t)
         $amostrasCpuMaquina.Add($usoNucleo / $nucleos)
         $intervalosReais.Add($dt)
         $cpuAnterior = $cpu
@@ -1513,6 +1848,7 @@ try {
             $ultimaRede = $t
         }
         AtualizarLog
+        if ($Modo -eq 'onda' -and $null -eq $script:tFimDaOnda) { VerificarFimDaOnda $t }
 
         if ($t - $ultimoProgresso -ge $intervaloProgressoSegundos) {
             MostrarProgresso $t

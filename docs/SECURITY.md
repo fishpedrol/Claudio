@@ -1,8 +1,8 @@
 # SECURITY.md — Modelo de segurança do Buzzy
 
-> Regras de segurança do produto. As Fases 1 a 3 estão implementadas e verificadas nos limites descritos na seção 10; a Fase 4 está em integração. O modelo completo de segurança continua PLANNED até a Fase 9.
+> Regras de segurança do produto. As Fases 1 a 4 estão implementadas e verificadas nos limites descritos na seção 10; a Fase 5 está em andamento, intercalada com a emoção dominante e o tamagotchi adulto (DEC-027 e DEC-028). O modelo completo de segurança continua PLANNED até a Fase 9.
 >
-> Última atualização: 2026-09-30
+> Última atualização: 2026-10-01
 
 ## 1. Modelo de segurança
 
@@ -22,8 +22,8 @@ STATUS: PLANNED.
 |---|---|---|---|
 | Executar | Processo comum, manifesto `asInvoker`, sem elevação | Nenhuma além do usuário | Sempre |
 | Janela transparente sobre o desktop | Janela sem borda, do tamanho do sprite, com transparência por pixel | Nenhuma | Fase 1 |
-| Sempre no topo | Estilo topmost aplicado uma vez, nunca reafirmado por timer | Nenhuma | Q-03 |
-| Receber clique e arraste | Mensagens de mouse da própria janela e captura do mouse durante o arraste | Nenhuma | Fase 3 |
+| Sempre no topo | Estilo topmost aplicado uma vez, nunca reafirmado por timer. As janelas dos itens do tamagotchi só mudam de lugar na ordem Z por evento: o item aparecer, o gesto sobre ele e o personagem reaparecer (DEC-028) | Nenhuma | Q-03 |
+| Receber clique e arraste | Mensagens de mouse das próprias janelas (o personagem e os itens do tamagotchi) e captura do mouse durante o gesto | Nenhuma | Fase 3; itens no passo T8 |
 | Ajustar energia | Controle com três valores permitidos (`BAIXA`, `MEDIA`, `ALTA`) no painel do mascote e nas configurações | Nenhuma | Fase 8 |
 | Monitores, DPI e área útil | Leitura de topologia e mensagens de mudança | Nenhuma | Fase 1 |
 | Ícone na bandeja | `Shell_NotifyIcon` identificado por janela e ID, sem GUID | Nenhuma | Q-03 |
@@ -41,13 +41,17 @@ Os riscos da stack WPF selecionada estão resumidos na seção 4.
 
 STATUS: PLANNED.
 
-- Criar, mover, mostrar e esconder as próprias janelas.
-- Ler posição do cursor e botões apenas nas mensagens entregues às próprias janelas, ou durante a captura de um arraste iniciado pelo usuário. *Implementação (Fase 3, DEC-021):* `SetCapture` só depois de um botão pressionado sobre um pixel visível do Buzzy, e `ReleaseCapture` no fim do gesto. `WM_MOUSEMOVE` só é tratado enquanto a janela tem a captura. A perda da captura (`WM_CAPTURECHANGED`, `WM_CANCELMODE`) encerra o gesto. O limiar de arraste e as regras de clique duplo são lidos do sistema (`GetSystemMetricsForDpi`, `GetDoubleClickTime`) sem alterar nada. `GetWindowRect` só é chamado sobre a janela do próprio Buzzy.
+- Criar, mover, mostrar e esconder as próprias janelas, inclusive uma janela por item do tamagotchi, que só a raiz fecha (DEC-028).
+- Ler posição do cursor e botões apenas nas mensagens entregues às próprias janelas, ou durante a captura de um arraste iniciado pelo usuário. *Implementação (Fase 3, DEC-021):* `SetCapture` só depois de um botão pressionado sobre um pixel visível do Buzzy, e `ReleaseCapture` no fim do gesto. `WM_MOUSEMOVE` só é tratado enquanto a janela tem a captura. A perda da captura (`WM_CAPTURECHANGED`, `WM_CANCELMODE`) encerra o gesto. O limiar de arraste e as regras de clique duplo são lidos do sistema (`GetSystemMetricsForDpi`, `GetDoubleClickTime`) sem alterar nada. `GetWindowRect` só é chamado sobre a janela do próprio Buzzy. *Tamagotchi (DEC-028, passo T8):* as janelas dos itens seguem as mesmas regras, com um árbitro de gestos próprio: a captura só existe durante um gesto começado num pixel visível do item, e a janela nunca é ativada. Quando o núcleo encerra esse gesto por conta própria (esconder, minimizar, bloquear a sessão, suspender, sair, recolher os itens ou pegar outro), a janela solta a captura na hora, e um soltar tardio não vira nada. Na perda da captura, só o fato conta, nunca qual janela ficou com o mouse.
+- Montar o menu nativo com ícones (DEC-027 e DEC-028, passos T2 e T8): `InsertMenuItemW` e bitmaps de 32 bits criados só na memória do próprio Buzzy, por `CreateDIBSection` sem DC e preenchidos por `Marshal.Copy`, sem `BitBlt`, `StretchBlt` nem `CreateDC`. Os bitmaps de cada abertura são apagados com `DeleteObject` depois de o menu ser destruído, inclusive quando a exibição lança; o log confere criados = apagados, e uma falha vai para ele só com o código.
 - Ler geometria, escala e orientação dos monitores e a área útil de cada um.
 - Observar eventos de mudança de janela em primeiro plano e de geometria via `SetWinEventHook` em modo out-of-context, filtrados para a janela de nível superior ativa; ler somente `GetWindowRect` e o monitor associado. Converter em uma lista transitória dos monitores ocupados e descartar HWND/retângulo após o cálculo. Nunca ler título, nome, caminho de processo, texto, pixels ou conteúdo; nunca enumerar janelas/processos; nunca persistir ou registrar esses dados. (DEC-013) *Planejado (DEC-026):* a curiosidade pedida pelo usuário usa os mesmos dados e os mesmos limites: o monitor e o retângulo da janela ativa, transitórios, e há quanto tempo ela está em primeiro plano, sem identidade, título, processo ou conteúdo.
 - Receber mensagens de sessão, energia, bloqueio e encerramento.
 - Ler os próprios assets, o manifesto de assets e o perfil local de comportamento, somente leitura.
-- Ler e gravar os arquivos da própria pasta de dados.
+- Ler e gravar os arquivos da própria pasta de dados. *Implementação (Fase 5, bloco A; DEC-029), que o app só passa a usar no passo P7:*
+  - as configurações só usam os nomes fixos `settings.json`, `settings.json.bak`, `settings.json.tmp` e `settings.corrupt.json`, numa pasta escolhida por uma regra única, com falha fechada (ARCHITECTURE.md 2.12);
+  - os perfis de teste (`--perfil-de-teste NOME`) ficam em `%LOCALAPPDATA%\Buzzy\testes\NOME`, sempre filha direta de `testes`. O nome tem de 1 a 32 caracteres, só a–z, 0–9 e hífen, sem hífen inicial, e não pode ser um nome reservado do Windows (`con`, `prn`, `aux`, `nul`, `com0`–`com9`, `lpt0`–`lpt9`). Maiúsculas são recusadas, não convertidas;
+  - nome inválido, opção sem nome ou opção escrita de outro jeito (`--perfil-de-teste=NOME`, outra caixa, `/perfil-de-teste`) desligam a persistência naquela execução, em vez de cair na pasta real.
 
 ### 3.2 Proibidas no MVP
 
@@ -66,6 +70,8 @@ STATUS: PLANNED. Cada item vira regra de verificação automática na Fase 1 (se
 
 **Exceção do apphost (DEC-016).** O `Buzzy.exe` é o lançador nativo genérico do SDK do .NET, não código do Buzzy: localiza o runtime instalado, carrega `hostfxr.dll` e entrega a execução ao `Buzzy.dll`. Ele importa `LoadLibraryExW`, `LoadLibraryA` e `GetProcAddress` para carregar o runtime, e `ShellExecuteW` para abrir a página de download do .NET quando o runtime falta e o usuário aceita. O portão permite essas quatro importações só nesse arquivo nativo, por nome exato e com o motivo no relatório; qualquer outra importação proibida, ou qualquer uma delas no `Buzzy.dll` e nas demais DLLs, reprova o build.
 
+**Ferramentas de teste (regra registrada com o tamagotchi, DEC-028).** Os testes de integração e a medição de desempenho (`-Modo onda`) só postam mensagens às janelas do Buzzy que eles mesmos abriram, com o PID conferido antes de cada uma, sem `SendInput` e sem mover o cursor; o `SendInput` fica com a verificação de tela, que é input SINTÉTICO e avisa o usuário antes. As consultas só de teste (`GetGuiResources`, `GetGUIThreadInfo` da thread do Buzzy, `GetMenuItemInfoW`, `GetDIBits` e outras) ficam fora do executável e leem objetos do próprio Buzzy ou do próprio teste. Ao conferir a ordem Z, a varredura das janelas abaixo do personagem para na primeira janela de outro processo, da qual lê só o PID.
+
 ## 4. Stack selecionada e riscos de distribuição
 
 STATUS: PLANNED. DEC-006 selecionou WPF, C# e .NET 10; P1/P2 foram aceitos nos limites documentados e P3 passou como gate técnico no ambiente medido, com input sintético. A seleção não valida por si só o aplicativo.
@@ -79,11 +85,15 @@ STATUS: PLANNED. Esquema proposto em [ARCHITECTURE.md](ARCHITECTURE.md), seção
 
 | Dado | Onde | Por quê |
 |---|---|---|
-| Posição do personagem (chave e retângulo do monitor, posição relativa e absoluta) | `settings.json` | Restaurar onde o usuário deixou |
-| Escala, sempre no topo, iniciar com o Windows, nível de energia (`BAIXA`/`MEDIA`/`ALTA`), modo de tela cheia ligado/desligado, atravessar monitores, idioma | `settings.json` | Preferências do usuário; opacidade fica fora do MVP. A posição temporária do modo de tela cheia e os monitores ocupados **não** são gravados |
-| Última cópia boa e, no máximo, uma cópia ilegível para diagnóstico | `settings.json.bak`, `settings.corrupt.json` | Recuperação |
+| Posição do personagem (chave do monitor, tela desse monitor na época, posição relativa e absoluta) | `settings.json` | Restaurar onde o usuário deixou. A partir do passo P7 da Fase 5, também a borda do esconderijo e a marca "preso pelo usuário" (DEC-029) |
+| Escala, sempre no topo, iniciar com o Windows, nível de energia (`BAIXA`/`MEDIA`/`ALTA`), modo de tela cheia ligado/desligado, atravessar monitores, emoção dominante, idioma | `settings.json` | Preferências do usuário; opacidade fica fora do MVP. A posição temporária do modo de tela cheia e os monitores ocupados **não** são gravados. O esquema v2 guarda só a energia, o modo de tela cheia, atravessar monitores e a emoção dominante: `"automatica"` ou o nome de uma das 14 caras de humor (DEC-027) |
+| Última cópia boa e, no máximo, uma cópia ilegível para diagnóstico | `settings.json.bak`, `settings.corrupt.json` | Recuperação. A leitura usa o principal, depois o `.bak`, depois os padrões; a cópia de diagnóstico nunca é lida |
+| Temporário de uma gravação | `settings.json.tmp` | Gravação atômica; apagado e recriado a cada gravação, nunca lido |
+| Dados dos perfis de teste | `testes\NOME\`, com os mesmos nomes de arquivo | Isolar testes e ferramentas das configurações reais; a pasta é apagada antes de cada uso, recusando junção ou link no caminho |
 
-Local: `%LOCALAPPDATA%\Buzzy` sem pacote, obtido pela API de pastas conhecidas; pasta local do pacote com MSIX. Nenhum segredo é armazenado, por isso DPAPI não é usado. Logs de diagnóstico, se existirem, ficam na mesma pasta e têm tamanho limitado.
+Local: `%LOCALAPPDATA%\Buzzy` sem pacote, obtido pela API de pastas conhecidas; pasta local do pacote com MSIX. Nenhum segredo é armazenado, por isso DPAPI não é usado. Logs de diagnóstico, se existirem, ficam na mesma pasta e têm tamanho limitado. Até o passo P6, a chave do monitor é o nome GDI (`\\.\DISPLAYn`); a chave estável desse passo está planejada como um resumo do caminho do dispositivo, sem o caminho em si (DEC-030). Um arquivo de versão futura ou um principal inacessível na partida bloqueiam a gravação nesta execução, para não sobrescrever o que não se conhece nem se conseguiu ler.
+
+Os itens do tamagotchi, o uso de um item e a onda de desenho animado (DEC-028) ficam só em memória: nada deles vai para o `settings.json` nem para outro arquivo, fora as linhas do log de diagnóstico opcional (seção 6), e tudo some ao sair do app. A emoção dominante é o único dado novo gravado, e o app só a grava a partir do passo P7 da Fase 5.
 
 ## 6. Dados que nunca devem ser coletados
 
@@ -98,18 +108,26 @@ STATUS: PLANNED.
 - Localização, microfone, câmera, histórico de navegação.
 - Qualquer dado enviado para fora da máquina. O MVP não tem rede.
 
+*Implementação no log de diagnóstico (Fase 5, bloco A; DEC-029):*
+- erros do sistema vão só com o tipo e o código da exceção, nunca com a mensagem, que pode trazer um caminho com o nome do usuário ou o SID da conta. Isso vale para a gravação das configurações, para `INSTANCIA` e para `ERRO`; um teste de fonte lista as duas mensagens que ainda vão para o log, ambas de exceções do próprio Buzzy;
+- os avisos da leitura do `settings.json` só levam nomes de campo do esquema e o motivo, nunca valores nem nomes vindos do arquivo;
+- o nome de perfil recusado e a chave lida do arquivo não vão para o log, e o caminho da pasta de dados nunca vai.
+
+*No tamagotchi e no menu (DEC-027 e DEC-028; contrato em ARCHITECTURE.md 2.13.4):* as linhas `MENU`, `ITEM` e `ONDA` levam só nomes de comandos, de caras e de itens, Ids, pontos e retângulos das janelas do próprio Buzzy, o DPI e o HWND delas, contagens e tempos. Na perda da captura, não vai qual janela ficou com o mouse, e uma falha do Windows vai só com o código.
+
 ## 7. Superfícies de ataque relevantes
 
 STATUS: PLANNED.
 
 | Superfície | Risco | Defesa planejada |
 |---|---|---|
-| Arquivo de configurações | Arquivo adulterado ou corrompido trava o app ou causa comportamento inesperado | Tamanho máximo, esquema validado, valores presos a faixas, padrões em caso de erro |
+| Arquivo de configurações | Arquivo adulterado ou corrompido trava o app ou causa comportamento inesperado | Tamanho máximo, esquema validado, valores presos a faixas, padrões em caso de erro. *Implementado no bloco A da Fase 5 (DEC-029; regras em ARCHITECTURE.md 2.12):* tamanho conferido antes de ler (64 KiB, contando o BOM); UTF-8 validado; JSON lido sem reflexão, com profundidade máxima de 8; tolerância campo a campo, com valores presos a faixas; energia só pelos três nomes, e a emoção dominante só pela lista fechada da linha própria, desde o esquema v2; um escape de surrogate solto torna o arquivo inteiro ilegível; leitura principal → `.bak` → padrões; versão futura ou principal inacessível bloqueiam a gravação; temporário recriado para nunca gravar através de um link |
+| `--perfil-de-teste` | Um teste ou ferramenta com a opção escrita errado leria e gravaria as configurações reais do usuário | Nome validado caractere a caractere; nome inválido, opção sem nome ou outra grafia da opção desligam a persistência (falha fechada); regra única da pasta, com teste de tabela; testes de fonte exigem o perfil em todo lançador do `Buzzy.exe` (DEC-029) |
 | Controle de energia | Valor de configuração adulterado ou fora do conjunto permitido | Enumeração estrita de três níveis, validação no carregamento e valor padrão seguro em caso de erro |
+| Emoção dominante (DEC-027) | Valor adulterado no arquivo, ou fora das 14 caras de humor | Lista fechada de 15 nomes no arquivo (`automatica` e as 14 caras), sem diferenciar maiúsculas e nunca por `Enum.Parse`, que aceitaria números, listas e as caras de efeito do tamagotchi. Valor inválido vira a automática, com um aviso que não repete o valor lido. No núcleo, um comando fora das 14 é ignorado, e uma carga ou configuração fora delas vira a automática. No menu, o id escolhido vira a emoção, ou o item do tamagotchi, por listas fixas, nunca por conversão do número, e qualquer outro id não escolhe nada. Implementado e coberto por testes automatizados |
 | Evento de janela ativa (DEC-013) | Evento inesperado ou frequência alta pode gerar reposicionamento/custo | Observar somente eventos aprovados; filtrar para a janela ativa e mudanças relevantes; agrupar eventos; descartar metadados; medir em P7 a taxa de chamadas com mouse e teclado em uso, restringindo a assinatura de geometria à janela ativa se a global acordar o Buzzy continuamente; nunca usar loop de polling em repouso |
 | Assets, manifesto e perfil de comportamento | Arquivo trocado por outro processo do usuário | Carregados só da pasta de instalação; manifesto validado. Proteção contra troca de binários depende da forma de distribuição (Q-10) |
 | Dependências de terceiros | Código vulnerável ou malicioso entrando pelo build | Poucas dependências, versões fixas com lockfile, auditoria automática no build, revisão antes de adicionar |
-
 | Carregamento de DLL | DLL plantada na pasta do app ou no caminho de busca | Instalação em pasta própria e busca de DLL restrita, conforme a stack |
 | Distribuição futura | Binário adulterado ou avisos/bloqueios do Windows | Não há distribuição autorizada; se ela for decidida, reavaliar formato, assinatura e integridade antes de publicar |
 
@@ -117,7 +135,7 @@ STATUS: PLANNED.
 
 STATUS: PLANNED. Cada prática vira item de teste a partir da Fase 1.
 
-1. **Portão de APIs proibidas no build.** Um script inspeciona as importações do executável e das DLLs próprias e falha se encontrar APIs da seção 3.2. O mesmo script procura as chamadas equivalentes no código-fonte da stack escolhida. A exceção `SetWinEventHook` só passa se ficar restrita aos eventos e filtros de DEC-013; hooks de input continuam proibidos. *Implementação (Fase 1, DEC-016):* `tools/Buzzy.PortaoApis` roda depois de cada build de `src/Buzzy.App` e lê as importações nativas, as declarações P/Invoke dos binários gerenciados, o código-fonte de `src/Buzzy.App` e `src/Buzzy.Core` e o manifesto (`asInvoker`, Per-Monitor V2). A única exceção é a do apphost descrita na seção 3.2.
+1. **Portão de APIs proibidas no build.** Um script inspeciona as importações do executável e das DLLs próprias e falha se encontrar APIs da seção 3.2. O mesmo script procura as chamadas equivalentes no código-fonte da stack escolhida. A exceção `SetWinEventHook` só passa se ficar restrita aos eventos e filtros de DEC-013; hooks de input continuam proibidos. *Implementação (Fase 1, DEC-016):* `tools/Buzzy.PortaoApis` roda depois de cada build de `src/Buzzy.App` e lê as importações nativas, as declarações P/Invoke dos binários gerenciados, o código-fonte de `src/Buzzy.App`, `src/Buzzy.Core` e `src/Buzzy.Visual` e o manifesto (`asInvoker`, Per-Monitor V2). Desde 2026-09-30, o relatório de `tools/testar.ps1` também confere `src/Buzzy.Visual`, como o portão do build já fazia. A única exceção é a do apphost descrita na seção 3.2. A arte do tamagotchi em `src/Buzzy.Visual` (2026-10-01) passou pelo portão de fonte sem nenhum nome da lista proibida, nem em comentários: a ampliação dos ícones do menu é feita em memória, por vizinho mais próximo, sem `BitBlt`, `StretchBlt` nem `CreateDC`.
 2. **Auditoria de dependências** a cada build, com a ferramenta oficial do ecossistema da stack.
 3. **Verificação de rede zero:** durante os testes manuais de cada fase, confirmar que o processo do Buzzy e os processos filhos não abrem conexão. Comando de referência:
 
@@ -126,9 +144,13 @@ STATUS: PLANNED. Cada prática vira item de teste a partir da Fase 1.
    Get-NetUDPEndpoint -OwningProcess (Get-Process buzzy).Id -ErrorAction SilentlyContinue
    ```
 
-4. **Verificação de gravação:** com o Process Monitor da Sysinternals, confirmar que o Buzzy só grava na própria pasta de dados.
+4. **Verificação de gravação:** com o Process Monitor da Sysinternals, confirmar que o Buzzy só grava na própria pasta de dados. *Pendente [MANUAL] na Fase 5:* depois do passo P7, confirmar que as gravações ficam em `%LOCALAPPDATA%\Buzzy` e, nos testes, em `%LOCALAPPDATA%\Buzzy\testes\`.
 5. **Sem elevação:** manifesto `asInvoker`; o app recusa rodar elevado ou avisa e continua sem usar o privilégio. O ZIP portátil inicial deve executar sem instalação nem elevação; P10 verifica o comportamento. *Implementação (Fase 1, DEC-016):* o Buzzy recusa rodar elevado — mostra um aviso e sai com código 5.
-6. **Gravação atômica** das configurações e validação ao ler.
+6. **Gravação atômica** das configurações e validação ao ler. *Implementação (Fase 5, bloco A; DEC-029):* no adaptador; o app só passa a usá-la no passo P7. Evidência [AUTO]:
+   - `Gravar_FalhaSimuladaEmCadaEtapa_NuncaIlegivel`: queda simulada em cada etapa da gravação, a partir de quatro estados iniciais;
+   - `Ler_EstadosDeQuedaExaustivos`: o disco em cada estado possível de uma queda, com o temporário cortado em cada byte;
+   - `MatarDuranteGravacoes_NuncaDeixaIlegivel`: 25 rodadas matando um processo filho que grava sem parar, aberto pelo próprio teste;
+   - `Gravar_TemporarioQueEhLinkParaOutroArquivo_NaoGravaAtravesDele`: com link físico. O link simbólico exige o modo de desenvolvedor, e sem ele esse caso é pulado.
 7. **Nenhum segredo** no repositório nem no app.
 
 ## 9. Limitações
@@ -139,6 +161,8 @@ STATUS: PLANNED. Cada prática vira item de teste a partir da Fase 1.
 - Sem assinatura de código, o Windows mostra avisos do SmartScreen, e o Smart App Control pode bloquear o app. Essa limitação foi aceita para uso pessoal e testes; assinatura e formato devem ser reavaliados em Q-10 antes de qualquer distribuição pública. Assinatura para pessoa física fora dos EUA e do Canadá exige certificado OV pago.
 
 - Sem atualização automática, que é proibida no MVP, correções de segurança dependem de o usuário instalar a nova versão.
+- Queda de energia no meio da gravação das configurações não é testável. A defesa é descarregar o temporário no disco (`Flush(true)`) antes da troca atômica do NTFS; no pior caso volta a versão anterior. `File.Replace` exige NTFS local: noutro sistema de arquivos, a gravação falha sempre (DEC-029).
+- Links plantados pelo próprio usuário na pasta do Buzzy não cruzam fronteira de privilégio, mas podem desviar uma gravação. O temporário das configurações é recriado para nunca gravar através de um link, e a limpeza dos perfis de teste recusa junção ou link no caminho. **Aceito:** o `diagnostico.log`, anterior à Fase 5, é aberto para acrescentar e segue um link que já exista; só vale com `--diagnostico`, e só o próprio usuário consegue plantar esse link.
 
 ## 10. Verificações realizadas
 
@@ -148,4 +172,24 @@ STATUS: PLANNED. Cada prática vira item de teste a partir da Fase 1.
 - 2026-09-30, depois das Fases 2 a 4 (inclusive a toon force):
   - `tools/testar.ps1` código 0: portão binário e de fonte APROVADO, com as mesmas quatro permissões do apphost, 73 testes do portão e nenhum pacote vulnerável. As APIs novas da Fase 3 (`SetCapture`, `ReleaseCapture`, `GetDoubleClickTime`, `GetWindowRect` na própria janela) não estão na lista proibida.
   - Duas medições de dez minutos, repouso (`resultados/desempenho-20260930-160012.txt`) e autonomia com movimento (`resultados/desempenho-20260930-161054.txt`): cada uma teve 629 verificações sem processo filho e 59 sem conexão TCP/UDP, e a resolução global do timer não mudou.
+- 2026-09-30, Fase 5, bloco A (passos P1–P5):
+  - uma revisão de segurança dos passos não achou problema bloqueante. Os achados foram corrigidos: outra grafia de `--perfil-de-teste` caía na pasta real; a escolha da pasta não tinha regra testada; o temporário seguia um link já existente; mensagens de exceção do sistema iam para o log; a varredura dos lançadores era fraca. Os adiados estão em DEC-029 e na seção 9;
+  - `tools/testar.ps1` (Release) código 0: portão binário e de fonte APROVADO, com as mesmas quatro permissões do apphost, agora também sobre `src/Buzzy.Visual` no relatório; 73 testes do portão; nenhum pacote vulnerável. A gravação atômica usa só a biblioteca base, sem P/Invoke novo;
+  - pendentes: o Process Monitor (seção 8, item 4) depois do passo P7, e a sessão de uma hora sem rede da Fase 9.
+- 2026-10-01, emoção dominante e tamagotchi no núcleo e na arte (DEC-027 e DEC-028), com a chave do tamagotchi desligada no aplicativo:
+  - `tools/testar.ps1` (Release) código 0 depois da mescla da arte: portão binário e de fonte APROVADO, com as mesmas quatro permissões do apphost, 73 testes do portão e nenhum pacote vulnerável. O núcleo e a arte não chamam o Windows: nenhum P/Invoke novo;
+  - a emoção dominante é lida por lista fechada, e o aviso não repete o valor do arquivo (seção 7); os itens, o uso e a onda ficam só em memória (seção 5);
+  - a revisão do núcleo não achou informação real sobre drogas em nomes, comentários, testes ou textos, só nomes e efeitos de desenho animado, e os itens da arte não têm texto, marca nem folha (DEC-028);
+  - pendentes no app naquele momento: as APIs do menu com os rostos e a captura do mouse nas janelas dos itens (seção 3.1), feitas depois nos passos T2 e T8 (entrada seguinte).
+- 2026-10-01, o app da emoção dominante e do tamagotchi (passos T2 e T7–T9), com a chave do tamagotchi ligada no aplicativo, na última rodada da correção do app:
+  - `tools/testar.ps1` (Release) código 0: portão binário e de fonte APROVADO, com as mesmas quatro permissões do apphost, 73 testes do portão e nenhum pacote vulnerável. As três APIs novas do menu (`InsertMenuItemW`, `CreateDIBSection` e `DeleteObject`) ficam em `Win32.cs` e não estão na lista proibida; a apresentação, as janelas dos itens e a ligação da chave não trouxeram P/Invoke novo ao produto;
+  - integração por mensagens postadas (`tools/testar.ps1 -Integracao`, 271/271): 20 aberturas do menu com os objetos GDI e USER no mesmo patamar e cada abertura apagando os bitmaps que criou; a janela de um item aparece sem ativar e sem tirar o primeiro plano; esconder, ou minimizar, no meio do arraste de um item solta a captura; sair com itens na tela termina com código 0 e nenhuma janela viva;
+  - os textos do menu só nomeiam as emoções e os itens, sem descrição, e os itens só existem em memória (seção 5);
+  - pendentes naquele momento: a verificação de tela com input SINTÉTICO (`--fase tamagotchi`), que também confere o foco depois dos menus, e o repouso de 10 minutos com uma onda ativa (`tools/medir-desempenho.ps1 -Modo onda`), que também conta processos filhos e conexões, feitos depois (entrada seguinte); e a revisão de tom pelo usuário, que continua pendente.
+- 2026-10-01, verificação de tela do tamagotchi com input SINTÉTICO (`--fase tamagotchi`, `resultados/verificacao-tamagotchi.log`; a execução das 10:26 deu 46 OK, 1 N/A e 0 falhas) e repouso de 10 minutos com a onda de uma vodka (`tools/medir-desempenho.ps1 -Modo onda`, `resultados/desempenho-20261001-085153.txt`); resultados por caso em TODO.md, seção "Interação":
+  - o `SendInput` ficou na ferramenta de verificação, fora do executável (seção 3.2). A medição preparou a onda só com mensagens postadas às janelas do próprio Buzzy, com o PID conferido, sem mover o cursor. O Buzzy abriu nos perfis de teste `verificacao` e `desempenho`, sem tocar nas configurações reais (DEC-029);
+  - na medição: nenhum processo filho em 629 verificações, nenhuma conexão TCP/UDP em 58, a resolução global do timer sem mudança atribuível ao Buzzy e o encerramento por `WM_CLOSE`, com código 0;
+  - na tela: a janela de um item não tirou o foco do aplicativo em uso, e o clique no ponto transparente dela chegou ao aplicativo de baixo; depois de cada um dos 50 menus, o foco voltou sozinho ao aplicativo em uso; sair com itens na tela terminou com código 0, sem janela nem processo do Buzzy;
+  - quando uma janela sempre no topo de outro programa cobriu o canto da tela onde o Buzzy nasce, a ferramenta não clicou nem identificou a janela: só conferiu que o ponto não era do Buzzy nem do receptor da própria ferramenta (seção 3.2), e a verificação esperou o usuário liberar o canto;
+  - pendentes: a revisão de tom pelo usuário, o Process Monitor depois do passo P7 (seção 8, item 4) e a sessão de uma hora sem rede da Fase 9.
 - O resultado de dez minutos e o portão aprovado não verificam todas as práticas da seção 8; a Fase 9 permanece pendente.

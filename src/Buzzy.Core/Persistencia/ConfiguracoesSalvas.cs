@@ -4,18 +4,43 @@ namespace Buzzy.Core.Persistencia;
 
 /// <summary>
 /// O que o Buzzy guarda entre execuções no settings.json (Fase 5, ARCHITECTURE.md 2.12): a posição do
-/// personagem, quando há uma, e as preferências que o núcleo conhece. É o conteúdo, sem o formato: quem
-/// converte bytes é <see cref="EsquemaDeConfiguracoes"/>, e quem lê e grava o arquivo é o adaptador.
+/// personagem, quando há uma, com a postura gravada junto (a borda do esconderijo e a marca de preso, esquema v3), e as
+/// preferências que o núcleo conhece. É o conteúdo, sem o formato: quem converte bytes é
+/// <see cref="EsquemaDeConfiguracoes"/>, e quem lê e grava o arquivo é o adaptador.
 /// </summary>
 /// <param name="Posicao">
 /// A posição do último efeito <see cref="GravarPosicao"/>, com a tela do monitor da época; nula na primeira
 /// execução ou quando a gravada era inválida.
 /// </param>
-/// <param name="Preferencias">Energia, modo de tela cheia e travessia entre monitores.</param>
+/// <param name="Preferencias">Energia, modo de tela cheia, travessia entre monitores e emoção dominante.</param>
 public sealed record ConfiguracoesSalvas(PosicaoDoPersonagem? Posicao, Preferencias Preferencias)
 {
     /// <summary>Sem posição e com as preferências padrão: o que vale sem arquivo ou com um ilegível.</summary>
     public static readonly ConfiguracoesSalvas Padrao = new(null, Preferencias.Padrao);
+
+    /// <summary>
+    /// A borda do esconderijo gravada com a posição (DEC-025; esquema v3, DEC-029, item 11), a do último
+    /// <see cref="GravarPosicao"/>. Só existe com a posição: sem ela, <see cref="EsquemaDeConfiguracoes.Normalizar"/> a
+    /// deixa em nenhum. Fica fora do construtor posicional.
+    /// </summary>
+    public LadoDoEsconderijo Esconderijo { get; init; }
+
+    /// <summary>
+    /// A marca "preso pelo usuário" gravada com a posição (DEC-024; esquema v3), a do último <see cref="GravarPosicao"/>.
+    /// Só existe com a posição: sem ela, a normalização a deixa falsa.
+    /// </summary>
+    public bool PresoPeloUsuario { get; init; }
+
+    /// <summary>
+    /// A carga da partida com estas configurações (<see cref="Loaded"/>): a posição salva, com a tela do monitor da
+    /// época, as preferências lidas (a emoção dominante e a travessia inclusive) e a borda do esconderijo e a marca de
+    /// preso que vieram com a posição.
+    /// </summary>
+    public Loaded ParaACarga(Topologia topologia)
+    {
+        ArgumentNullException.ThrowIfNull(topologia);
+        return new Loaded(topologia, Posicao, Preferencias) { Esconderijo = Esconderijo, PresoPeloUsuario = PresoPeloUsuario };
+    }
 }
 
 /// <summary>Como terminou a leitura de um settings.json (<see cref="EsquemaDeConfiguracoes.Ler"/>).</summary>

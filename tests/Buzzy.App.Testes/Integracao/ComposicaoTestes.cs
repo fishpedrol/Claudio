@@ -37,7 +37,7 @@ internal sealed class ComposicaoTestes
         using BuzzyEmTeste b = BuzzyEmTeste.Iniciar();
         b.Esperar(e => e.Chave == "NUCLEO" && e["evento"] == "Loaded" && e["para"] == "Idle", 5000, "núcleo carregado");
         PontoPx opaco = PontoOpaco(b);
-        long marca = BuzzyEmTeste.TamanhoDoLog();
+        long marca = BuzzyEmTeste.MarcaDoLog();
 
         b.PostarMouse(NativoTeste.WM_RBUTTONDOWN, 0, opaco);
         b.PostarMouse(NativoTeste.WM_RBUTTONUP, 0, opaco);
@@ -64,7 +64,7 @@ internal sealed class ComposicaoTestes
         Thread.Sleep(700);
         Afirmar.Falso(b.Eventos().Any(e => e.Chave == "RELOGIO" && e["ligado"] == "sim"), "sem relógio em repouso depois da carga");
 
-        long marca = BuzzyEmTeste.TamanhoDoLog();
+        long marca = BuzzyEmTeste.MarcaDoLog();
         PontoPx opaco = PontoOpaco(b);
         b.PostarMouse(NativoTeste.WM_LBUTTONDOWN, NativoTeste.MK_LBUTTON, opaco);
         b.PostarMouse(NativoTeste.WM_LBUTTONUP, 0, opaco);
@@ -83,7 +83,7 @@ internal sealed class ComposicaoTestes
         using BuzzyEmTeste b = BuzzyEmTeste.Iniciar();
         b.Esperar(e => e.Chave == "NUCLEO" && e["evento"] == "Loaded" && e["para"] == "Idle", 5000, "núcleo carregado");
         RetanguloPx lugar = b.RetanguloDaJanela();
-        long marca = BuzzyEmTeste.TamanhoDoLog();
+        long marca = BuzzyEmTeste.MarcaDoLog();
 
         // Outro agente (aqui, o teste) move a janela sem passar pelo núcleo.
         Afirmar.Verdadeiro(NativoTeste.SetWindowPos(b.Janela, 0, lugar.Esquerda - 300, lugar.Topo - 200, 0, 0,

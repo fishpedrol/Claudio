@@ -249,6 +249,41 @@ public static class PosesPixel
     ];
 
     /// <summary>
+    /// Poses provisórias dos seis gestos da onda do tamagotchi (DEC-028; crítica, L11), com os nomes que o
+    /// núcleo gera do enum <c>Gesto</c> em minúsculas, na ordem dele: a dança é o "brincando", a gargalhada
+    /// é o "reagindo", a tremedeira é o parado deslocado 1 pixel (a apresentação alterna as duas) e o
+    /// soluço, a tosse e o espirro são o parado com a cara e o efeito do gesto (a fumaça da tosse sai da
+    /// boca; o espirro solta a poeira do nariz). Ficam fora de <see cref="Todas"/>, como as poses de uso:
+    /// a folha nativa e as prévias das poses não mudam. <see cref="PorNome"/> acha as três listas.
+    /// </summary>
+    public static readonly IReadOnlyList<PosePixel> DosGestos = CriarGestos();
+
+    private static PosePixel[] CriarGestos()
+    {
+        PosePixel parado = Todas.First(p => p.Nome == "parado");
+        PosePixel brincando = Todas.First(p => p.Nome == "brincando");
+        PosePixel reagindo = Todas.First(p => p.Nome == "reagindo");
+        return
+        [
+            parado with { Nome = "soluco", Estado = "gesto: soluçar", Expressao = "surpreso" },
+            brincando with { Nome = "danca", Estado = "gesto: dançar" },
+            reagindo with { Nome = "gargalhada", Estado = "gesto: gargalhar" },
+            parado with { Nome = "espirro", Estado = "gesto: espirrar", Expressao = "tossindo", EfeitoDaPose = EfeitoVisual.Poeira },
+            parado with { Nome = "tosse", Estado = "gesto: tossir", Expressao = "tossindo", EfeitoDaPose = EfeitoVisual.Fumaca },
+            parado with { Nome = "tremedeira", Estado = "gesto: tremer", Expressao = "eletrico", QuadrilX = parado.QuadrilX + 1 },
+        ];
+    }
+
+    /// <summary>
+    /// A pose pelo nome: uma das poses de estado e gesto (<see cref="Todas"/>), dos gestos da onda
+    /// (<see cref="DosGestos"/>) ou de uso (<see cref="UsosPixel.Poses"/>); nula se não houver.
+    /// </summary>
+    public static PosePixel? PorNome(string nome)
+        => Todas.FirstOrDefault(p => p.Nome == nome)
+           ?? DosGestos.FirstOrDefault(p => p.Nome == nome)
+           ?? UsosPixel.Poses.FirstOrDefault(p => p.Nome == nome);
+
+    /// <summary>
     /// Pendurado no cipó (DEC-024), de frente: a mão B segura o cipó acima e ao lado do chapéu, a A
     /// balança solta, a cauda sobe para equilibrar. O tronco e o cipó inclinam juntos no balanço.
     /// </summary>

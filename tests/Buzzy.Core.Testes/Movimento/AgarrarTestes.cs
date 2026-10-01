@@ -179,4 +179,44 @@ internal static class AgarrarTestes
         }
         Afirmar.Falhar("nenhuma semente chegou a escalar abaixo de y = 700");
     }
+
+    // DEC-022 com DEC-024: agarrado sem ter sido posto pelo usuário (depois da reação a um clique no meio de uma escalada),
+    // com a autonomia pausada ele não fica esperando uma agenda que não vem: desce até o chão pela mesma parede, como quem
+    // escala. Vale pausar depois do clique e clicar já pausado (a acomodação o agarra e a calma o faz descer).
+    [Teste]
+    public static void AgarradoSemEstarPreso_PausadoDesceAteOChao()
+    {
+        foreach (bool pausaAntes in new[] { false, true })
+        {
+            string caso = pausaAntes ? "clique já pausado" : "pausa depois do clique";
+            bool achou = false;
+            for (ulong semente = 1; semente <= 40 && !achou; semente++)
+            {
+                var sim = new SimuladorDeTempo(MovimentoTestes.Fase4(AcoesAutonomas.Escalar), semente, TopologiasDeExemplo.UmMonitor);
+                sim.Avancar(TimeSpan.FromMinutes(2), s => s.Estado == Estado.Climbing && s.Lugar!.Ancora.Y < 700 && !s.Movimento.Foguete);
+                if (sim.Estado.Estado != Estado.Climbing) continue;
+                achou = true;
+                Superficies sup = Sup(sim);
+                PontoPx naParede = sim.Estado.Lugar!.Ancora;
+                if (pausaAntes)
+                {
+                    // Pausado no meio da subida, ele já começa a descer; o clique o pega no passo seguinte.
+                    sim.Aplicar(new CmdPauseAutonomy());
+                    sim.Passos(1);
+                    naParede = sim.Estado.Lugar!.Ancora;
+                }
+                sim.Aplicar(new Press(new PontoPx(naParede.X, naParede.Y - 40)));
+                sim.Aplicar(new Click());
+                sim.Avancar(TimeSpan.FromSeconds(2), s => s.Estado != Estado.Reacting);
+                sim.Esta(Estado.Climbing, $"{caso}: depois do clique, de volta à parede");
+                Afirmar.Falso(sim.Estado.PresoPeloUsuario, $"{caso}: não foi o usuário que o pôs lá");
+                if (!pausaAntes) sim.Aplicar(new CmdPauseAutonomy());
+                sim.Avancar(TimeSpan.FromMinutes(1));
+                sim.Esta(Estado.Idle, $"{caso}: pausado, desceu");
+                Afirmar.Igual(new PontoPx(naParede.X, sup.Chao), sim.Estado.Lugar!.Ancora, $"{caso}: pela mesma parede, até o chão");
+                Afirmar.Falso(sim.RelogioLigado, $"{caso}: parado no chão, sem relógio");
+            }
+            Afirmar.Verdadeiro(achou, $"{caso}: alguma semente chegou a escalar abaixo de y = 700");
+        }
+    }
 }

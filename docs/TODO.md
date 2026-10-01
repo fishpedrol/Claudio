@@ -8,17 +8,22 @@
 > - **[MANUAL]** inspeção manual em Windows, com resultado registrado no DEVELOPMENT_LOG.md.
 > - **[HW]** exige hardware específico: mais de um monitor, escalas diferentes, monitor em retrato ou possibilidade de conectar e desconectar. Nunca é declarado feito sem o hardware.
 >
-> Última atualização: 2026-09-30
+> Última atualização: 2026-10-01
 
 ## Fase atual
 
-**Fase atual: Fase 4 — movimento e superfícies, em integração.** Situação das etapas anteriores:
+**Fase atual: Fase 5 — multi-monitor completo e posição persistida, em andamento.** O bloco A (passos P1–P5) está implementado e verificado por testes; o próximo passo da fase é o P6.
+
+**Intercalada com a Fase 5, antes dos blocos B a D: a seção [Interação — emoção dominante e tamagotchi adulto](#interação--emoção-dominante-e-tamagotchi-adulto)** (DEC-027 e DEC-028). O núcleo, a arte e o app estão implementados, com a chave do tamagotchi ligada no aplicativo, e verificados por testes automatizados, de integração e, em 2026-10-01, pela verificação de tela com input SINTÉTICO e pelo repouso de 10 minutos com uma onda ativa: os passos T1–T9 estão feitos. Faltam a revisão visual e de tom pelo usuário, as outras pendências [MANUAL] e [HW] da seção e a persistência da emoção (passo P7).
+
+Situação das etapas anteriores:
 
 - Etapa 0B: fechou tecnicamente em 2026-09-29, com P3 aprovado no ambiente medido por evidência sintética.
 - Identidade visual original: criada.
 - Fase 1: implementada e verificada por automação e input sintético. Continua PLANNED enquanto faltarem os critérios manuais 3 (bandeja real), 8 (escalas 150% e 200%) e 9 (mudanças reais de resolução, escala e barra).
 - Fase 2: VERIFIED em 2026-09-30.
 - Fase 3: implementada e verificada por automação e input sintético. Continua PLANNED por três pendências: UAC [MANUAL], escalas diferentes [HW] e ClickLock [MANUAL].
+- Fase 4: implementada e verificada por automação e input sintético, com os pedidos do usuário (DEC-023 a DEC-025). Continua PLANNED pelo critério 5, a gravação de tela a 120 qps [MANUAL].
 
 O usuário autorizou a execução das Fases 1–11 sem aprovação rotineira (DEC-015). Prossiga com trabalho independente.
 
@@ -255,10 +260,12 @@ STATUS: PLANNED. A implementação (DEC-022 e a toon force pedida pelo usuário 
 
 ### Fase 5 — Multi-monitor completo e posição persistida
 
+STATUS: PLANNED, em andamento. O bloco A (passos P1–P5) está implementado e verificado por testes automatizados e pela regressão com input SINTÉTICO (2026-09-30). O app ainda não lembra a posição: isso é o passo P7.
+
 - **Objetivo:** comportamento correto em qualquer topologia, com a posição restaurada entre execuções.
-- **Inclui:** chave estável do monitor conforme P5; restauração com alternativas (ARCHITECTURE.md, seção 2.8); circulação e travessia entre superfícies compatíveis de monitores; troca de escala em movimento com histerese conforme P6; conexão, desconexão, rearranjo, troca de principal, rotação e troca de escala; barra de tarefas movida ou oculta automaticamente; recuperação se o Windows minimizar a janela ao desconectar um monitor; suspensão, retomada e bloqueio de sessão; **persistência mínima da posição escolhida pelo usuário** em `settings.json` com versão de esquema e gravação atômica.
+- **Inclui:** chave estável do monitor conforme o protótipo P5; restauração com alternativas (ARCHITECTURE.md, seção 2.8); circulação e travessia entre superfícies compatíveis de monitores; troca de escala em movimento com histerese conforme o protótipo P6; conexão, desconexão, rearranjo, troca de principal, rotação e troca de escala; barra de tarefas movida ou oculta automaticamente; recuperação se o Windows minimizar a janela ao desconectar um monitor; suspensão, retomada e bloqueio de sessão; **persistência mínima da posição escolhida pelo usuário** em `settings.json` com versão de esquema e gravação atômica.
 - **Exclui:** tela de configurações e demais preferências (Fase 8).
-- **Depende de:** Fase 4; P5 e P6.
+- **Depende de:** Fase 4; protótipos P5 e P6.
 - **Critérios de aceitação, por cenário:**
 
   | ID | Cenário | Verificação |
@@ -280,6 +287,148 @@ STATUS: PLANNED. A implementação (DEC-022 e a toon force pedida pelo usuário 
 - **Critérios de travessia:** cruzar entre monitores vizinhos pelas passagens permitidas nos dois sentidos, inclusive com coordenadas negativas; não atravessar vãos sem superfície alcançável nem entrar em janelas de outros aplicativos. [AUTO e MANUAL][HW]
 - **Testes automatizados:** topologias S1 a S7 e restauração S9 com dados de exemplo; gravação atômica simulando falha entre gravar e substituir. [AUTO]
 - **Observação:** drivers de monitor virtual podem simular parte do hardware. STATUS: UNCERTAIN; isso não substitui [HW].
+- **Passos de implementação.** A fase segue 16 passos, numerados de P1 a P16; no texto, aparecem como "passo P7", e um P-número sem "passo" é um dos protótipos P1 a P10 da Etapa 0B. As decisões são DEC-029 (persistência) e DEC-030 (chave do monitor e topologia). Para os blocos seguintes estão reservadas DEC-031 (sessão, energia e minimização) e DEC-032 (travessia e escala). Os invariantes 19 a 21 e a referência gravada 06 ficam reservados para a Fase 5; os invariantes 22 a 29 e a referência 07 são da seção "Interação". Os pontos marcados "(tamagotchi)" abaixo vieram da seção "Interação" e precisam ser preservados nos blocos B a D.
+  - [x] **Bloco A, passos P1–P5 (2026-09-30):**
+    - [x] P1. Tela do monitor na posição (`TelaDoMonitor`) e pixel dos pés (DEC-030).
+    - [x] P2. Restauração com alternativas na partida: chave, tela do monitor, principal (DEC-030).
+    - [x] P3. Esquema v1 do `settings.json` e política de gravação no núcleo; `AtravessarMonitores` nas preferências, ainda sem efeito; invariante 18 (DEC-029).
+    - [x] P4. Pasta de dados e arquivo de configurações com gravação atômica, ainda desligados do app (DEC-029).
+    - [x] P5. Isolamento dos testes por `--perfil-de-teste` (DEC-029).
+  - [ ] P6. Chave estável do monitor, antes de gravar no disco real; a estabilidade depende do protótipo P5 (DEC-030).
+  - [ ] P7. Persistência ligada: a raiz lê o arquivo na partida, entrega a posição salva ao núcleo e grava pela agenda (DEC-029). Inclui:
+    - proteger a leitura contra qualquer exceção, com a persistência desligada naquela execução e o log só com tipo e código; estreitar junto a captura ampla dentro da leitura do esquema;
+    - criar o arquivo só pela regra da pasta, com uma instância por execução, porque o bloqueio da gravação não volta atrás;
+    - linhas `CONFIG` só com enums, contagens e tempos;
+    - (tamagotchi) entregar no `Loaded` as preferências lidas, com a emoção dominante (DEC-027), e ligar a verificação V16 da seção "Interação";
+    - gravar o esconderijo e a marca "preso pelo usuário" na v3 do esquema, porque a v2 já é a da emoção dominante; a versão futura dos testes passa de 3 a 4;
+    - corrigir o comentário de `Programa.cs` que diz que, sem `--diagnostico`, o Buzzy não grava nada;
+    - integração: soltar, fechar e reabrir no mesmo lugar (S2 e S7); partida com arquivo ilegível; o arquivo real intocado pelos testes.
+  - [ ] P8. Topologia em execução, no núcleo (DEC-030):
+    - o personagem continua quando só outros monitores mudam ou quando o dele é só transladado, e vai ao sobrevivente certo quando o dele some;
+    - a tela gravada nunca é transladada;
+    - o clique depois de o monitor mudar valida a partir da posição que acompanhou a topologia, o que resolve as frações da área antiga;
+    - (tamagotchi) `USING` é tratado como `REACTING` nas revalidações, e a reacomodação dos itens segue a mesma regra.
+  - [ ] P9. Releitura robusta no app: barra recriada, agrupamento de mensagens com teto e conferência tardia do lugar da janela (DEC-030).
+  - [ ] P10–P12. Sessão, energia, fim de sessão e minimização pelo Windows. (tamagotchi) A recuperação da minimização vale também para as janelas dos itens.
+  - [ ] P13. Travessia entre monitores, em três partes (plana, salto de degrau e transbordo), respeitando a DEC-023. (tamagotchi):
+    - o recuo do cambaleio não pode disparar a travessia pela lateral de trás;
+    - o personagem atento a um item espera a travessia em curso terminar, como a pausa;
+    - o peso de atravessar entra no perfil efetivo da onda, com o percentual de andar (ARCHITECTURE.md 2.16).
+  - [ ] P14. Escala mista na janela do app (protótipo P6). (tamagotchi) A correção de DPI vale também para a janela do item; nesse passo, extrair o gancho comum às duas janelas.
+  - [ ] P15. Verificação de tela da Fase 5, com input SINTÉTICO e aviso ao usuário antes. (tamagotchi) A opção `--fase 5` convive com a `--fase tamagotchi` no mesmo programa de verificação.
+  - [ ] P16. Gate: documentação da fase e repouso de 10 min com perfil de teste.
+- **Evidências de 2026-09-30 (bloco A):**
+  - [AUTO], só na parte de restauração e persistência de cada cenário; a travessia e as mudanças com o app aberto ficam para os passos seguintes:
+    - S1–S7: `RestaurarTestes.PelaChave_S1aS7_AncorasCalculadasAMao`, com âncoras calculadas à mão e coordenadas negativas; `RestaurarTestes.Carga_S1aS7_VoltaAoMesmoLugarEmCadaMonitor`; `EsquemaDeConfiguracoesTestes.S1aS7_GravarLerRestaurar_MesmoLugarEmCadaMonitor`, que grava, lê e restaura em cada monitor;
+    - S5 e S6: `RestaurarTestes.MesmaChaveComOutraGeometria_VaiPelaFracaoNaoPelaAncora`, a 144 DPI e com o monitor girado, além da troca de principal;
+    - S9: `RestaurarTestes.MonitorSalvoAusente_NoPrincipalComAsMesmasFracoes`, `ChaveAusenteComAMesmaTela_PeloRetangulo` e `Carga_MonitorSalvoAusente_NaoVoltaQuandoReconectaEGravaOPrincipal`;
+    - S11: o mesmo `MesmaChaveComOutraGeometria_…`, com a barra de tarefas nas quatro bordas;
+    - S12, parcial no núcleo: `S12_BloquearESuspender_EmitemGravarPosicaoImediata` e `Politica_Imediata_SoSuspensaoFimDeSessaoSairEBloqueio`;
+    - gravação atômica simulando falha entre gravar e substituir: `Gravar_FalhaSimuladaEmCadaEtapa_NuncaIlegivel`, `Ler_EstadosDeQuedaExaustivos` e `MatarDuranteGravacoes_NuncaDeixaIlegivel` (SECURITY.md 8, item 6);
+    - invariante 18 nas sequências aleatórias sem a física (`InvariantesTestes`) e com a configuração do aplicativo, em 150 sequências (`PropriedadesDaPersistenciaTestes.NaConfiguracaoDoAplicativo_GravacoesECargasSeguemAsRegras`);
+    - propriedades com 5.000 casos: a restauração segue a cascata e termina na área útil, e a ida e volta pelo arquivo equivale a reacomodar na mesma topologia;
+    - isolamento: `IsolamentoTestes` e `ArquivoDeConfiguracoesTestes.PastaDasConfiguracoes_FalhaFechadaNumaRegraSo`.
+  - [AUTO] suíte completa, com o Buzzy do usuário fechado: `tools/testar.ps1` (Release) com Core 309/309, portão 73/73 e App 59 (mais 11 de integração); `-Integracao` com App 70/70. Histórico em DEVELOPMENT_LOG.md.
+  - [MANUAL] com input SINTÉTICO, só regressão das Fases 1, 3 e 4, com o perfil `verificacao`: 25 OK e 4 SIMULADO; 34 OK e 2 N/A; 28 OK; nenhuma falha. Não é evidência humana nem da Fase 5.
+  - Pendentes:
+    - S9 [MANUAL][HW] real e os demais [MANUAL][HW] da tabela;
+    - Process Monitor (SECURITY.md 8, item 4), depois do passo P7;
+    - a persistência ligada (passo P7) e os passos seguintes;
+    - `tools/medir-desempenho.ps1` com o perfil `desempenho`: rodou pela primeira vez em 2026-10-01, só no `-Modo onda` da seção "Interação" (V13), sem pasta de uma medição anterior para limpar; os modos `repouso` e `autonomia` ainda não rodaram com ele (avisar o usuário antes). A limpeza das pastas reais de perfil ainda não apagou nada, porque o app só grava nelas a partir do passo P7.
+
+### Interação — emoção dominante e tamagotchi adulto
+
+STATUS: PLANNED, em andamento, intercalada com a Fase 5, antes dos blocos B a D. O núcleo (passos T1 e T3–T6) e a arte (A1–A4) foram implementados em 2026-09-30; o app (T2 e T7–T9), em 2026-10-01. Tudo foi revisado, corrigido e verificado por testes automatizados e de integração, com mensagens postadas às janelas do próprio Buzzy, em 2026-10-01. A chave `Tamagotchi` está ligada no aplicativo: o usuário já escolhe a emoção e invoca e usa os itens pelo menu. Em 2026-10-01, a verificação de tela com input SINTÉTICO e o repouso de 10 minutos com uma onda ativa fecharam o passo T9 (evidências abaixo). A seção continua sem VERIFIED pela revisão visual e de tom pelo usuário e pelas outras pendências [MANUAL] e [HW] abaixo; a persistência da emoção entre execuções é do passo P7 da Fase 5, e a V16 depende dele.
+
+- **Objetivo:** os pedidos do usuário de 2026-09-30. Escolher a emoção dominante pelo menu, com os rostos de `expressoes.png` (DEC-027), e o tamagotchi adulto: 13 itens invocados pelo menu, que caem ao lado dele e são usados quando o usuário os arrasta e solta sobre ele, com efeitos de desenho animado no comportamento, nas caras e nas animações (DEC-028).
+- **Inclui:** a emoção dominante no núcleo, no esquema e no menu; tipos, tabelas, ondas, itens e o estado `USING` no núcleo; a arte dos itens, das caras, das poses de uso, das sobreposições e dos ícones; a apresentação; as janelas dos itens; a chave ligada; integração e verificação de tela.
+- **Exclui:** necessidades que decaem com o tempo (resposta 1 do usuário na DEC-028); poses de uso na parede, no cipó e no esconderijo, que ficam para depois; gravar os itens e a onda.
+- **Depende de:** bloco A da Fase 5, já feito. A persistência da emoção entre execuções depende do passo P7.
+- **Passos** (regras em DEC-027, DEC-028 e ARCHITECTURE.md 2.6 e 2.16; cada passo termina com `tools/testar.ps1` verde e as referências gravadas 01–05 idênticas byte a byte):
+  - [x] **T1. Emoção dominante no núcleo e no esquema v2** (2026-10-01). [AUTO] `EmocaoDominanteTestes`, com 8 testes: listas fixas, escolher, valores fora das 14, carga, a dominante em pelo menos metade das trocas nas 14 opções, os três ganchos da cara de base, esconderijo e preso, e o invariante 27 com a física do aplicativo. Também `EsquemaDeConfiguracoesTestes` (texto da v2, v1 sem aviso, valores inválidos, versão futura 3), `ReproducaoTestes`, `PropriedadesDaPersistenciaTestes`, `InvarianteDezoito`, `InvariantesTestes` e `ArbitroPropriedadesTestes`, com o sorteio pelas 14 caras.
+  - [x] **T2. Menu "Emoção dominante" com os rostos** (DEC-027; 2026-10-01). [AUTO] `MenuNativoTestes` (a lista do menu: ordem, ids, marca na atual, "Automática" sem dominante, alto contraste), `MontagemDoMenuTestes` (o menu montado de verdade e lido de volta, sem janela), `BitmapsDoMenuTestes` e `PlataformaTestes` (textos e teclas de acesso sem repetir). [AUTO, integração] `MenuIntegracaoTestes`: 20 aberturas com os objetos GDI e USER estáveis e bitmaps criados = apagados; a emoção escolhida por teclado postado ao dono do menu troca a cara e fica marcada. V1 e V2 passaram na verificação de tela com input SINTÉTICO, no passo T9.
+  - [x] **T3. Tipos e tabelas do tamagotchi, sem comportamento** (2026-10-01). [AUTO] `TabelaDoTamagotchiTestes`, com 8 testes.
+  - [x] **T4. Onda da frente, atrás da chave** (2026-10-01). [AUTO] `OndaTestes`: durações; disparo velho ou repetido ignorado; pausado, o disparo só troca a cara; 6 horas simuladas de repouso sem relógio; perfil e física efetivos; velocidades nos cinco lugares do passo físico; cambaleio; caras e gestos da fase com os mesmos sorteios; precedência sobre a dominante; chave desligada; retrato, gravação, fila e simulador.
+  - [x] **T5. Itens, `USING`, onda de fundo e combinação, atrás da chave** (2026-10-01). [AUTO] `ItensTestes`, `UsoTestes`, o resto de `OndaTestes`, `FilaEAleatorioTestes` e `InvariantesTestes`, com os invariantes 22 a 29.
+  - [x] **T6. Referência gravada `07-tamagotchi.txt`**, com a diretiva `# tamagotchi: sim` (2026-10-01). Revisada linha a linha.
+  - [x] **A1–A4. Arte** (2026-10-01; feita numa cópia isolada e mesclada na árvore principal, com o hash de cada arquivo conferido). [AUTO] `CarimboTestes`, `ItensPixelTestes`, `RostosNovosTestes`, `UsosPixelTestes`, `EfeitosPixelTestes`, `IconesDoMenuTestes`, `GestosPixelTestes` e `RostoDoDesenhoTestes`. A ferramenta de prévias sai com código 1 se algo encosta na borda do quadro ou tem o contorno cortado.
+    - A1: paleta, legenda que recusa letra repetida, carimbo girado e os 13 itens em 24 × 24;
+    - A2: caras de efeito e passageiras, chapéu torto e rubor;
+    - A3: poses de uso no chão, com a ponta do item na boca ou no nariz;
+    - A4: sobreposições, modificadores, poses provisórias dos gestos e ícones do menu.
+  - [x] **Revisões adversariais e correções** (2026-10-01), do núcleo e da arte, com mutações temporárias. O que mudou está nos desvios da DEC-028. Entre os testes novos está `ChaveLigadaTestes`, que confere os invariantes 22 e 27 com a física e a configuração do aplicativo: é condição para o T9.
+  - [x] **T7. Apresentação, sem janelas de item** (2026-10-01): a pose de `USING` por verbo, passo e apoio; as caras de efeito; as poses dos gestos da onda; a sobreposição pela onda; o cache de quadros limitado a 16 MiB. [AUTO] `NucleoEArteTestes` (os enums do núcleo contra as listas da arte), `PoseDeUsoTestes`, `CacheDeQuadrosTestes` e `PoseTestes`, que desenha cerca de 3 mil quadros distintos, com todos os usos, caras, gestos, sobreposições, fases e giros.
+  - [x] **T8. No app, as janelas dos itens, o submenu "Itens" e o temporizador da onda,** com a chave ainda desligada (2026-10-01). [AUTO] `SpriteDoItemTestes`, `GestosDosItensTestes`, `TemporizadorDaOndaTestes` (o temporizador real desliga depois de cada disparo), `GerenteDosItensTestes`, `JanelaDoItemTestes` (janelas reais criadas sem mostrar: 20 criadas e fechadas sem vazar objetos) e os testes do menu com o submenu "Itens" (ids, teclas de acesso e 27 bitmaps criados = apagados por abertura). Antes do T9, a ligação foi exercitada numa cópia isolada, com a chave ligada só lá.
+  - [x] **T9. Ligar a chave** em `DoAplicativo`, com a integração, a verificação de tela abaixo e um repouso de 10 minutos com uma onda ativa; documentação do app e do produto (PRODUCT_SPEC.md) (2026-10-01):
+    - [x] chave ligada e testes que esperavam a chave desligada ajustados (2026-10-01);
+    - [x] integração `ItensIntegracaoTestes`, ampliada pela revisão de correção (2026-10-01; evidências abaixo);
+    - [x] verificação de tela (`--fase tamagotchi`) e medição com onda (`tools/medir-desempenho.ps1 -Modo onda`) escritas e compiladas (2026-10-01);
+    - [x] revisão de correção e das regras do projeto, com as correções aplicadas, e a documentação do app e do produto (2026-10-01);
+    - [x] verificação de tela executada com input SINTÉTICO, depois de o usuário liberar o canto da tela (2026-10-01): 46 OK, 1 N/A (V16) e 0 falhas na execução das 10:26, depois de duas correções na ferramenta (resultados abaixo);
+    - [x] repouso de 10 minutos com uma onda ativa (`-Modo onda`; 2026-10-01): `resultados/desempenho-20261001-085153.txt`, na linha V13 abaixo.
+- **Evidências de 2026-10-01, núcleo e arte** (contagens e histórico em DEVELOPMENT_LOG.md):
+  - [AUTO] suíte completa depois da mescla da arte: `tools/testar.ps1` (Release) código 0, com Core 393, portão 73, App 150 (mais 11 de integração, que não rodaram), portão de APIs aprovado e nenhum pacote vulnerável;
+  - [AUTO] referências 01–05 idênticas byte a byte, conferidas por SHA-256 e `git diff`;
+  - [AUTO] propriedade (`InvariantesTestes`): a execução principal repetida com a chave ligada e sem itens dá o mesmo registro (invariantes 7 e 22); a execução com o tamagotchi, em 1.000 sequências e cerca de 471 mil eventos, confere os invariantes 22 a 29 contra regras escritas no teste; a comparação com a emoção confere o invariante 27;
+  - [AUTO] `ChaveLigadaTestes`, com a física e a configuração do aplicativo: a chave ligada sem itens dá o mesmo resultado que desligada (60 sementes × 10 min, cerca de 508 mil eventos), e a dominante só muda a cara, com itens e ondas (40 sementes, cerca de 126 mil eventos, 108 usos);
+  - [AUTO] simulação longa com a física (4 horas simuladas): usos até o fim no chão, na parede e no cipó, presos e livres, e no esconderijo;
+  - [AUTO] mutações temporárias em cada passo, nas revisões e nas correções. As que escaparam mostraram lacunas, que viraram testes novos, ou eram código equivalente;
+  - observação informal: Claude olhou as prévias `itens-8x.png`, `rostos-efeito.png`, `usos.png` e `icones-menu.png` e as achou legíveis e no estilo. Não é aprovação do usuário.
+- **Evidências de 2026-10-01, app** (passos T2 e T7–T9, na última rodada da correção do app; histórico em DEVELOPMENT_LOG.md):
+  - [AUTO] `tools/testar.ps1` (Release) código 0, com Core 393, portão 73, App 249 (mais 22 de integração, que só rodam com `-Integracao`), 0 avisos, portão de APIs aprovado e nenhum pacote vulnerável; referências 01–05 idênticas byte a byte;
+  - [AUTO, integração por mensagens postadas às janelas do próprio Buzzy, com o PID conferido antes de cada uma] `tools/testar.ps1 -Integracao` código 0, com App 271/271:
+    - `MenuIntegracaoTestes`: 20 aberturas do menu com GDI 32 → 32 e USER 22 → 22, cada abertura apagando os bitmaps que criou; e a emoção escolhida pelas teclas D e F, postadas ao dono do menu, troca a cara e fica marcada na abertura seguinte;
+    - `ItensIntegracaoTestes`, 9 testes: invocar pelo menu do personagem e pela bandeja; a janela do item aparece sem ativar e sem tirar o primeiro plano, cai, para no chão e fica logo abaixo do personagem; arrastar até ele leva a `USING` e a janela some, e pressionar no meio do uso dá `PRESSED` no mesmo evento; soltar longe; botão direito no item e "Recolher itens"; esconder e mostrar; arrastar o personagem com um item na tela; minimizar no meio do arraste de um item; sair com itens na tela e um na mão, com código 0 e nenhuma janela viva; o temporizador da onda dispara uma vez, reagenda e é cancelado ao sair;
+    - o arraste de um item teve p95 de 1,125 ms entre o movimento do mouse e a janela no lugar;
+  - [AUTO] `LigacaoDosItensTestes` e `LeituraDoLogTestes`, da correção, e mutações temporárias em cada passo e na correção: as que escaparam viraram testes mais fortes ou eram código equivalente;
+  - a integração não é verificação de tela nem evidência humana. Durante ela, o foco pisca, porque cada menu dá o primeiro plano ao dono temporário (DEC-016).
+- **Verificação de tela** com input SINTÉTICO, escrita no passo T9 e **executada em 2026-10-01**: na raiz do repositório, sem nenhum Buzzy aberto, `tests\Buzzy.Verificacao\bin\Release\net10.0-windows\Buzzy.Verificacao.exe --injetar-input-na-tela --fase tamagotchi [--semente N]`. Ela abre o Buzzy várias vezes com o perfil `verificacao`, `--diagnostico` e uma semente (pausado, a de `--semente`, padrão 2028; com a agenda ligada, sementes escolhidas por simulação do núcleo). Tem um repouso de 60 s em que nada deve ser tocado e grava `resultados\verificacao-tamagotchi.log`; em 2026-10-01, levou cerca de 5 minutos. Claude a roda depois de avisar o usuário; o resultado não é evidência humana.
+
+  Antes de rodá-la, Claude repetiu `tools/testar.ps1` (código 0, com Core 393, portão 73 e App 249, mais 22 de integração) e `tools/testar.ps1 -Integracao` (271/271); depois de corrigir a ferramenta, repetiu `tools/testar.ps1`, de novo com código 0. A execução válida é a das 10:26 às 10:31, a última do relatório, com a semente 2028 e os dois monitores a 96 DPI: **46 OK, 1 N/A e 0 falhas**. As duas anteriores do mesmo dia falharam pelo ambiente e por dois defeitos da ferramenta, já corrigidos; nenhuma falha foi do Buzzy (DEVELOPMENT_LOG.md). Resultado por caso:
+
+  | Caso | O que confere | Resultado em 2026-10-01 (input SINTÉTICO) |
+  |---|---|---|
+  | V1 | Menu de emoção pelo clique direito e pelo teclado: a cara muda e a opção fica marcada; "Automática" também funciona. | OK: Feliz e depois "Automática", pelas teclas D e a letra; o núcleo registrou o comando, o sprite parado ficou com a cara feliz, e a opção escolhida estava marcada na abertura seguinte. |
+  | V2 | 20 aberturas do menu: objetos GDI e USER estáveis (±2) e bitmaps criados = apagados. | OK: GDI 32 → 32 e USER 22 → 22; nas 20 aberturas, 27 ícones (14 rostos e 13 itens), com criados = apagados. |
+  | V3 | Invocar a banana: ela pousa ao lado em até 1,5 s e fica 3 s parada; o relógio desliga; o ponto opaco do item cai na janela do item e o transparente no receptor; o foco fica no receptor. | OK: pousou ao lado dele, sem cobri-lo, 0,606 s depois de aparecer, e ficou 3 s parada; o relógio ligou na queda e desligou; o ponto opaco era da janela da banana, e o clique no transparente chegou ao receptor, que continuou na frente. |
+  | V4 | Arrastar o item até ele: `USING` no log, os quadros de uso na ordem, a janela do item some e ele volta a `IDLE`; o arraste do item com p95 abaixo de 16,7 ms. | OK: `USING` ("Comer Banana"), os quadros `comendo-1` a `comendo-8` na ordem, a janela removida com o motivo Usado e a volta a `IDLE`; o arraste do item teve p95 de 0,685 ms em 47 movimentos. |
+  | V5 | Soltar longe: o item cai de onde foi solto. | OK: solto 250 px acima e longe dele, caiu na mesma coluna até o chão, sem uso. |
+  | V6 | Pressionar no meio do uso: `PRESSED` em até um quadro, e a onda continua. | OK: `USING` → `PRESSED` no próprio `PRESS`, visto no log 108 ms depois (o log é lido a cada 100 ms); soltar virou clique; a onda não foi cancelada, e o disparo seguinte veio depois do `PRESS`. |
+  | V7 | Sétimo item: o mais antigo sai. | OK: a banana, o item mais antigo, saiu com o motivo Substituido, e os outros seis ficaram à vista. |
+  | V8 | Com a agenda ligada, segurar um item: `WALKING` vira `IDLE`, nenhuma decisão durante o gesto, e a próxima em 3 s ou mais. | OK, semente 34: `WALKING` → `IDLE` no `ITEM_PRESS`; nenhum agendamento nem disparo da agenda durante o gesto de 1,5 s; a próxima decisão veio 8.287 ms depois de soltar. |
+  | V9 | Soltar um item nele preso no cipó, na parede e no esconderijo: ele volta preso ao mesmo lugar. | OK nos três (banana no cipó, cerveja na parede e café no esconderijo): usou o item, voltou ao mesmo retângulo e, pausado, ficou lá por 5 s (81/81 amostras). |
+  | V10 | Esconder e mostrar: as janelas dos itens acompanham. | OK, com 3 itens: escondido pelo menu e mostrado ao abrir o app de novo, ele levou junto as 3 janelas de item, escondidas sem fechar e de volta as mesmas, abaixo do personagem na ordem Z; reaparecer não tirou o foco. |
+  | V11 | Cocaína contra baseado (as ondas elétrica e chapada): velocidades de caminhada com tolerância de ±10%. | OK: cocaína (onda elétrica, pico 2, 185%) a 168,7 px/s, contra 166,5 esperados; baseado (onda chapada, pico 2, 55%) a 50,8 px/s, contra 49,5. |
+  | V12 | Onda do bêbado no nível 3: recua na caminhada, sempre no chão. | OK, semente 49: 2 recuos de 1 px em 4,0 s de caminhada, com os pés sempre no chão. |
+  | V13 | Repouso pausado com a onda de uma vodka ativa: CPU média de até 0,1%, relógio desligado. Na verificação, 60 s. Os 10 minutos ficam em `powershell -NoProfile -File tools\medir-desempenho.ps1 -Modo onda` (cerca de 11 minutos, relatório em `resultados\desempenho-AAAAMMDD-HHMMSS.txt`), que invoca e entrega a vodka por mensagens postadas, sem `SendInput`, separa a CPU com a onda e depois dela e conta quantas vezes o relógio ligou na janela medida (esperado 0). | OK. Nos 60 s da verificação: CPU 0,000% de um núcleo, relógio desligado e 1 disparo único da onda, que só trocou a cara. Nos 10 minutos (`resultados\desempenho-20261001-085153.txt`, iniciado às 08:51): CPU média de 0,005% de um núcleo com a onda e de 0,000% depois dela, 0,003% nos 10 min e p95 de 0,000%; nenhuma linha de relógio ligado; 4 disparos únicos nos tempos da tabela (8 s, 100 s, 100 s e 112,5 s; o primeiro, antes da janela medida); nenhum processo filho, nenhuma conexão e a resolução do timer inalterada; memória privada +0,21 MB; encerramento limpo, com código 0. |
+  | V14 | Sair com itens na tela: código 0 e nenhuma janela viva. | OK, com 3 itens: código 0, as 3 janelas de item fechadas pela raiz e nenhuma janela nem processo do Buzzy depois. |
+  | V15 | Botão direito num item abre o menu. | OK: o clique direito na bala abriu o mesmo menu do personagem. Nele, "Recolher itens" (I e R) recolheu os 6 itens, sem nenhuma janela de item viva. |
+  | V16 | Emoção gravada no perfil de teste e restaurada ao reabrir. | N/A: a persistência entre execuções só é ligada no passo P7. |
+  | X1 | Dois monitores: arrastar um item até o outro monitor e soltar no ar; ele cai até o chão de lá. Roda nesta máquina, que tem um segundo monitor à esquerda, na mesma escala; entre monitores de escalas diferentes, continua [HW]. | OK, com os dois monitores a 96 DPI: arrastado do principal até o `\\.\DISPLAY2`, em x negativo, e solto no ar, o item caiu até o chão da área útil de lá. Entre monitores de escalas diferentes, continua [HW]. |
+  | Calma | Pausar com ele agarrado à parede sem estar preso: ele desce até o chão (regra da calma, DEC-022, item 4). Essa regra já valia no app antes da chave e só tinha testes automatizados. | OK, semente 19: clicado enquanto escalava, ficou grudado na parede sem estar preso; pausado pelo menu, desceu pela mesma lateral (26/26 amostras) e pôs os pés no chão em 1,2 s (`CLIMBING` → `IDLE`). |
+  | Foco | Depois de fechar cada menu do tamagotchi, o foco volta ao aplicativo em uso. | OK nos 50 menus: a ferramenta não precisou devolver o primeiro plano ao aplicativo em uso nenhuma vez, e todo o texto digitado chegou a ele, na ordem. |
+
+  Os 46 OK somam os casos da tabela (a V9 conta três vezes), "Recolher itens", 4 conferências de regressão da Fase 1 no começo, os 18 textos digitados que chegaram ao aplicativo em uso, o foco até o primeiro menu, a limpeza e a conferência final do texto. A regressão com input SINTÉTICO, no mesmo dia, deu 25 OK e 4 SIMULADO (a bandeja) na `--fase 1`, 34 OK e 2 N/A na `--fase 3` e 28 OK na `--fase 4`, sem falhas.
+
+  Como ler o relatório: a execução não pode sair INVÁLIDA, que indica interferência humana. O V4 sai INCONCLUSIVO, com os quadros pulados, quando a interface atrasa e pula quadros, e pede repetição; FALHOU indica defeito, do Buzzy ou da própria ferramenta, como nas duas falhas da primeira rodada depois de liberado o canto, em 2026-10-01. O V12 pode sair INCONCLUSIVO, porque o recuo é menor que 1 pixel por volta e um quadro com dois passos o esconde. O cenário da calma sai INCONCLUSIVO se nenhum de 3 cliques nele escalando chegar ao Buzzy, porque ele se move entre a conferência do ponto e o clique.
+- **Pendências [MANUAL] e [HW]:**
+  - a marca de rádio ao lado do rosto, e os ícones dos itens, nos temas claro, escuro e de alto contraste [MANUAL];
+  - o menu e as janelas dos itens a 125, 150, 175 e 200% [MANUAL]; o usuário consegue testar parte disso mudando a escala, o que Claude não faz, por ser uma configuração global. Os fatores 2 e 3 dos ícones só foram testados sem janela, e esta máquina está a 96 DPI;
+  - a 300%, o cache de 16 MiB guarda só 28 quadros: andando com uma sobreposição, conferir os quadros descartados na linha `SPRITE` do log [MANUAL];
+  - a altura das opções com o ícone de 40 × 32 a 96 DPI e o queixo cortado reto do recorte [MANUAL];
+  - arrastar um item entre monitores de escalas diferentes [HW];
+  - o Narrador lendo os submenus [MANUAL];
+  - **revisão visual e de tom pelo usuário** [MANUAL]: as prévias de `assets/identidade/pixel/previa/`, os nomes e o app em uso. Pontos a olhar:
+    - o espelhinho no nariz, que ainda pode parecer uma bandeja; o energético verde-neon; o baseado aceso no chão; o lenço dobrado; o MD e a bala na mão, com 5 × 5 e 9 × 4 pixels a 100%;
+    - dois efeitos juntos nos quadros de uso que já têm efeito próprio, quando há uma onda;
+    - a tremedeira, 7,5 vezes por segundo; o bêbado inclinado e parado na fase 0, sem relógio;
+    - `escalando-1` com as caras de chapéu eriçado, como surpreso e empolgado, no uso na parede;
+    - no esconderijo, a boca fica fora do quadro, e só os olhos mostram a cara do uso;
+    - um possível quadro com o item por cima do personagem logo ao aparecer, antes de ir para baixo dele, nunca observado;
+  - conforto para agarrar os itens pequenos [MANUAL]. A 100%, as caixas opacas medidas na tela foram banana 40 × 22, cerveja 36 × 36, vodka 20 × 42 e café 34 × 22 px; os itens finos, como o cigarro e o MD, ainda não foram medidos;
+  - desconectar o monitor com itens na tela (cenário S8), depois do passo P12 [HW];
+  - gravação a 120 qps das animações de uso [MANUAL], como o critério 5 da Fase 4, que já estava pendente;
+  - Process Monitor confirmando que o Buzzy só grava em `%LOCALAPPDATA%\Buzzy`, depois do passo P7 [MANUAL].
 
 ### Fase 6 — Rendering, animações e expressões
 
@@ -321,7 +470,7 @@ STATUS: PLANNED. A implementação (DEC-022 e a toon force pedida pelo usuário 
 - **Critérios de aceitação:**
   1. Gravar e ler devolvem as mesmas configurações. [AUTO]
   2. Arquivo de versão anterior é migrado. [AUTO]
-  3. Arquivo corrompido gera valores padrão, guarda uma cópia e o app continua. [AUTO]
+  3. Arquivo corrompido gera os valores do `.bak` ou, sem ele, os valores padrão, guarda uma cópia e o app continua (DEC-029). [AUTO]
   4. Matar o processo durante a gravação nunca deixa o arquivo ilegível. [AUTO]
   5. Iniciar com o Windows liga, desliga e respeita a desativação feita pelo usuário nas Configurações do Windows. [MANUAL]
   6. O início automático vem desligado e só é ativado após uma ação explícita do usuário. [MANUAL]

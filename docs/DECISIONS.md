@@ -133,7 +133,7 @@ Essas fontes justificam o protótipo, mas não substituem as verificações de P
 - **Alternativas consideradas:** (a) coordenadas em DIPs do framework, que em escalas mistas formam "ilhas" com lacunas e sobreposições, segundo a documentação do Qt e relatos do Electron e do WPF; (b) usar o retângulo envolvente do desktop virtual como mundo, o que inclui áreas vazias fora de qualquer monitor; (c) persistir `HMONITOR` ou o nome `\\.\DISPLAYn`, que não são estáveis entre sessões.
 - **Motivo:** documentação da Microsoft. O monitor principal está em (0,0), outros podem ter coordenadas negativas e o desktop virtual tem áreas vazias. `HMONITOR` só vale durante a execução. PMv2 é o modo recomendado e o único em que o Windows não estica a janela nem virtualiza coordenadas. Fontes: The Virtual Screen, HMONITOR and the Device Context, DISPLAYCONFIG_TARGET_DEVICE_NAME e High DPI Desktop Application Development, no Microsoft Learn.
 - **Trade-offs:** mais código de adaptação no adaptador de plataforma. A estabilidade da chave do monitor precisa de protótipo (P5).
-- **Consequências:** o mundo do desktop tem testes com topologias de exemplo desde a Fase 1. A matriz S1 a S12 da Fase 5 (TODO.md) usa esse modelo.
+- **Consequências:** o mundo do desktop tem testes com topologias de exemplo desde a Fase 1. A matriz S1 a S12 da Fase 5 (TODO.md) usa esse modelo. *Atualização de 2026-09-30 (DEC-030):* a restauração em cascata da partida está implementada no núcleo, e o retângulo do monitor passou a ser usado nela. A chave pelo caminho do dispositivo é do passo P6 da Fase 5.
 
 ## DEC-009 — Arbitragem de input: janela que não ativa e limiar do sistema
 
@@ -157,7 +157,7 @@ Essas fontes justificam o protótipo, mas não substituem as verificações de P
 - **Alternativas consideradas:** (a) registro do Windows, menos transparente para o usuário e mais difícil de inspecionar e migrar; (b) banco de dados local, sem necessidade para uma dezena de campos; (c) gravar só ao sair, o que perde dados, porque o Windows pode encerrar o processo no desligamento e dá cerca de 2 s na suspensão.
 - **Motivo:** documentação da Microsoft sobre `WM_ENDSESSION`, `WM_POWERBROADCAST` e pastas conhecidas; baixo volume de dados.
 - **Trade-offs:** a pasta de dados muda entre distribuição sem pacote e MSIX, e trocar de modelo exige migração explícita.
-- **Consequências:** a gravação da posição começa na Fase 5 e o esquema completo na Fase 8.
+- **Consequências:** a gravação da posição começa na Fase 5 e o esquema completo na Fase 8. *Atualização de 2026-09-30 (DEC-029):* a gravação atômica, o `.bak` e a cópia de diagnóstico estão implementados no adaptador, ainda sem uso pelo app. O `.bak` também serve à leitura (principal → `.bak` → padrões), o que muda o critério 3 da Fase 8.
 
 ## DEC-011 — Tempo ocioso por eventos e plano de medição de desempenho
 
@@ -431,6 +431,8 @@ O usuário aceitou estas metas em 2026-09-27. A Fase 1 deve apenas estabelecer a
      - a escalada desce até o chão;
      - quem está pendurado se solta;
      - pulo, queda e pouso terminam.
+
+     *Atualização de 2026-10-01 (DEC-028), a "regra da calma":* quem está agarrado à parede ou ao cipó sem ter sido posto lá pelo usuário (depois da reação a um clique, de uma revalidação, do fim do uso de um item ou do estado atento) também não fica esperando: com a autonomia pausada ou o painel aberto, deixa de estar agarrado e desce pela parede ou se solta do cipó. A regra roda no fim de todo evento, e por isso vale também para um agarre que acontece já pausado. Ficam onde estão o preso pelo usuário (DEC-024) e quem está atento a um item na mão do usuário, até o item sair da mão. Isso mudou um caminho que já existia na Fase 4 e vale no app sem depender da chave do tamagotchi, que naquele momento ainda estava desligada: agarrado sem estar preso depois de um clique e pausado, ele agora desce. As referências 01–05 não mudaram, porque rodam sem a física.
   5. **Energia (critério 6):** Baixa, Média e Alta mudam pesos, intervalos, distâncias, alturas e os tempos na parede e pendurado; a física é a mesma. Valores iniciais:
 
      | Faixa | Baixa | Média | Alta |
@@ -532,8 +534,10 @@ O usuário aceitou estas metas em 2026-09-27. A Fase 1 deve apenas estabelecer a
      - Um clique não o tira de lá, e pausado ele fica parado.
      - Arrastado para outro lugar, a acomodação decide de novo.
   5. **Agarrado sem ter sido posto pelo usuário** (por exemplo, a reação a um clique no meio de uma escalada): volta a escalar, salta ou se solta, como na Fase 4. Antes ele caía depois da reação.
+
+     *Atualização de 2026-10-01 (DEC-028):* com a autonomia pausada ou o painel aberto, o agarrado sem estar preso não espera a agenda: desce pela parede ou se solta do cipó (regra da calma, DEC-022, item 4). O preso continua onde está. No fim do uso de um item na parede ou no cipó, ele volta agarrado ao mesmo apoio, mesmo a menos de 32 DIP do chão, e só fica preso se já estava.
 - **Motivo:** o macaquinho fica onde o usuário o põe, como pedido, sem custo parado e sem nenhum invariante de apoio relaxado. A lateral, o cipó e o chão são todos apoio.
-- **Trade-offs:** o preso só é lembrado durante a execução. A persistência da Fase 5 grava a posição, não a condição de preso.
+- **Trade-offs:** o preso só é lembrado durante a execução. A persistência da Fase 5 grava a posição, não a condição de preso. *Atualização de 2026-09-30 (DEC-029):* a marca de preso passa a ser gravada no passo P7 da Fase 5; depois de reabrir, ele continua preso onde o usuário o deixou.
 - **Consequências:** ARCHITECTURE 2.6 (linhas de `SETTLING`, `CLIMBING` e `HANGING`), 2.9 e 2.10; TODO Fase 4 (critério 8); testes `AgarrarTestes` e a verificação de tela.
 
 ## DEC-025 — Esconderijo pelo clique duplo; painel de energia pelo menu
@@ -556,9 +560,9 @@ O usuário aceitou estas metas em 2026-09-27. A Fase 1 deve apenas estabelecer a
      - arrastar o tira do esconderijo;
      - esconder e mostrar pela bandeja, mudar a topologia ou transferir pela tela cheia o devolvem ao esconderijo na mesma borda.
   4. **Painel de energia (Fase 8):** abre pelo menu de contexto ("Energia…"), já previsto na tabela de ARCHITECTURE 2.6. O núcleo guarda a regra antiga atrás de `EsconderijoNoCliqueDuplo = false`, para os testes das Fases 2 e 8.
-  5. **Configuração do app:** fica numa fonte única, `ConfiguracaoDoNucleo.DoAplicativo`, usada pelo app e pelas simulações que escolhem sementes nos testes (lacuna L2 da crítica da Fase 5).
+  5. **Configuração do app:** fica numa fonte única, `ConfiguracaoDoNucleo.DoAplicativo`, usada pelo app e pelas simulações que escolhem sementes nos testes, que antes tinham cópias da configuração que podiam divergir do app.
 - **Motivo:** o usuário pediu o gesto e o modo; o painel continua acessível pelo menu, que funciona por teclado e leitor de tela.
-- **Trade-offs:** um terceiro clique rápido não conta como outro clique duplo, como no Windows.
+- **Trade-offs:** um terceiro clique rápido não conta como outro clique duplo, como no Windows. *Atualização de 2026-09-30 (DEC-029):* o esconderijo passa a ser gravado no passo P7 da Fase 5; ao reabrir, ele volta escondido no mesmo lado.
 - **Consequências:**
   - ARCHITECTURE 2.6 (estado `PEEKING` e linhas do clique duplo) e 2.10;
   - PRODUCT_SPEC (controle);
@@ -581,6 +585,363 @@ O usuário aceitou estas metas em 2026-09-27. A Fase 1 deve apenas estabelecer a
   5. **Custo:** por eventos, sem polling. P7 mede o custo com o usuário digitando e mexendo o mouse, como DEC-013 já exige.
 - **Dependências:** Fase 5 (travessia entre monitores) e P7 (observador da janela ativa). A curiosidade entra depois da Fase 5, junto com o observador e o modo de tela cheia, que antecipam parte das Fases 7 e 8.
 - **Consequências:** SECURITY 3.1 passa a citar a curiosidade como segundo uso, igualmente limitado, da geometria da janela ativa; TODO Fases 7 e 8.
+
+## DEC-027 — Emoção dominante escolhida pelo menu
+
+- **Data:** 2026-09-30; detalhada em 2026-10-01, com o núcleo e o menu implementados.
+- **Estado da decisão:** pedido do usuário, com o desenho técnico de Claude sob DEC-015.
+- **STATUS:** PLANNED. O núcleo e o esquema v2 (passo T1 da seção "Interação" de [TODO.md](TODO.md)) e o menu com os rostos (passo T2) estão implementados e verificados por testes automatizados, por integração com mensagens postadas às janelas do próprio Buzzy e, em 2026-10-01, pela verificação de tela com input SINTÉTICO (V1, V2 e o foco de volta ao aplicativo em uso depois dos menus): o usuário já escolhe a emoção pelo menu. Continua sem VERIFIED pelas conferências [MANUAL] do menu e pela persistência entre execuções (passo P7 da Fase 5; a V16 fica N/A até lá): até lá, a escolha não sobrevive a reabrir o app.
+- **Pedido do usuário (2026-09-30):** "crie uma opção quando clicar com o botão direito para escolher a emoção dominante pra ele, use as expressões png pra criar essas opções".
+- **Problema:**
+  - dar ao personagem um humor de base escolhido pelo usuário, sem mudar física, apoio, ações nem a prioridade do usuário;
+  - a troca de cara da agenda sorteava pelo tamanho do enum `Expressao`: acrescentar as caras de efeito da DEC-028 mudaria os sorteios e as reproduções gravadas.
+- **Decisão** (regras exatas em ARCHITECTURE.md 2.6, 2.12 e 2.16):
+  1. **Opções:** as 14 caras de humor de `expressoes.png`, na ordem dela, que é a do enum (`Expressoes.DeHumor`), mais "Automática", o comportamento de sempre. É uma lista fechada: as caras de efeito da DEC-028 nunca são a dominante.
+  2. **Comando `CMD_SET_DOMINANT_EMOTION`**, do usuário:
+     - é ignorado antes da carga, com uma cara fora das 14 ou igual à escolha atual;
+     - senão, grava `Preferencias.EmocaoDominante`, emite `GravarPreferencias` e registra uma transição para o mesmo estado, que só marca a escolha;
+     - a cara muda na hora, menos em `RESTING`, `REACTING` e `USING`, que mantêm a própria cara até acabar, e com a onda de um item, que tem precedência (DEC-028);
+     - "Automática" mantém a cara atual até a próxima troca.
+  3. **Sorteio com a dominante:** um único sorteio ponderado, com peso 6 para ela e 1 para cada uma de quatro companheiras fixas (tabela em ARCHITECTURE.md 2.16). Vale nas trocas de cara parado, escondido (`PEEKING`) e preso pelo usuário. A dominante sai em 60% dos sorteios. Como o sorteio pode repetir a cara atual, cerca de 36% das trocas sorteiam de novo a dominante que já está na tela, e uns 4% repetem uma companheira: perto de 40% das trocas não mudam a cara. É assim que ela fica a mais frequente.
+  4. **Sorteio automático pela lista fixa:** na automática, a troca de cara sorteia entre as outras 13 caras de `DeHumor`, com o mesmo número de sorteios de antes. As referências 01–05 continuaram idênticas byte a byte.
+  5. **Cara de base:** a da fase da onda de um item, se houver (DEC-028); senão, a dominante; senão, a neutra. Ele volta a ela no fim da reação ao clique, do pouso e do uso de um item, e ao acordar. Na automática e sem onda, tudo continua como antes.
+  6. **Carga e configurações:** o `Loaded` com a dominante já começa com a cara dela. `SETTINGS_CHANGED` com outra emoção troca a cara na hora, sem gravar. Uma emoção fora das 14 vira automática.
+  7. **Só a cara muda:** cada sorteio de cara continua gastando exatamente um número do gerador. Com a mesma semente e os mesmos eventos, ligar a dominante muda só as expressões (invariante 27).
+  8. **Esquema v2 do `settings.json`:** `preferencias.emocaoDominante` é sempre escrito, como `"automatica"` ou o nome da cara em minúsculas. A leitura usa uma lista fechada (SECURITY.md 7). Um arquivo v1, sem o campo, é lido sem migração e sem aviso, e a versão futura dos testes passou a 3.
+  9. **Ícone de cada opção:** o recorte exato de 40 × 32 pixels de arte em (12, 0) do quadro parado com a cara, a mesma célula de `expressoes.png`. Uma função só faz o recorte para a prévia e para o menu (`IconesDoMenu.Rosto`, por `Tela.Recortada`), e o ícone é ampliado por um fator inteiro do DPI, por vizinho mais próximo ([IDENTIDADE_VISUAL.md](IDENTIDADE_VISUAL.md)).
+  10. **Reproduções gravadas:** `emocao=` aparece no retrato e nas preferências só quando há escolha, e o comando se grava como `CmdSetDominantEmotion emocao=Feliz` ou `emocao=Automatica`. A leitura aceita só o nome exato, ou o número de um valor fora do enum (para os testes de saneamento), nunca listas.
+  11. **Menu (passo T2; ordem, ids e teclas em ARCHITECTURE.md 2.16):** o submenu "Emoção dominante" entra no menu de sempre, aberto pelo personagem, por um item ou pela bandeja, entre "Pausar movimento" e "Sair". Tem "Automática", um separador e as 14 caras, todas como opções de rádio, com a marca na escolha atual e uma tecla de acesso diferente para cada uma.
+      - Cada cara leva o rosto do item 9 como ícone, ampliado pelo fator inteiro do DPI do monitor em que o menu abre, porque o Windows não amplia o bitmap de um item de menu. Em alto contraste, o menu fica só com texto.
+      - Os bitmaps são criados na memória do próprio Buzzy a cada abertura e apagados depois de o menu ser destruído, mesmo com erro. Uma falha do Windows deixa a opção sem ícone e vai para o log só com o código.
+      - O submenu continua habilitado com o Buzzy escondido: o núcleo grava a escolha, e a cara aparece quando ele voltar.
+      - O id que o Windows devolve vira a emoção por uma lista fixa, nunca por conversão do número; qualquer outro id não escolhe nada.
+- **Alternativas consideradas:**
+  - a emoção mudar os pesos das ações: o pedido fala em cara de base e na mais frequente; mudar o comportamento exige um pedido novo do usuário;
+  - 19 opções, com as caras de efeito e sem dormindo e bocejando: contraria o "use as expressões png" e a lista fechada;
+  - um sorteio com peso 6 contra 2 que nunca repete a cara atual: ficou o de cima, com a dominante na tela em 60% das trocas;
+  - manter o esquema na v1, com o campo só quando há escolha: um build antigo apagaria o campo ao gravar, e a versão descreve o formato do arquivo, não quem o grava;
+  - um ícone de 32 × 32 com o contorno refeito: não seria a célula de `expressoes.png` que o usuário citou;
+  - menu do WPF, recusado na DEC-016 por foco e ativação; menu desenhado pelo próprio Buzzy, com mais código e acessibilidade própria; bitmaps guardados a sessão inteira, que ocupariam objetos GDI à toa.
+- **Motivo:** atende o pedido com as caras que o usuário já viu, sem mudar o determinismo nem as reproduções; a v2 impede que um build antigo grave por cima do campo novo. O menu nativo já tem teclado e leitor de tela prontos.
+- **Trade-offs:**
+  - parte das trocas não muda a cara (item 3);
+  - a 96 DPI, o ícone de 40 × 32 deixa cada opção do submenu com cerca de 32 px de altura, perto do dobro do normal, e o queixo sai cortado reto na borda de baixo. O passo T2 manteve a célula como está, e a conferência no menu de verdade é [MANUAL];
+  - a cada abertura do menu, o dono temporário recebe o primeiro plano (DEC-016): nos testes de integração, que abrem o menu muitas vezes, o foco pisca;
+  - até o passo P7, o app parte das preferências padrão e só registra `GravarPreferencias` no log: a escolha não sobrevive a reabrir o app.
+- **Desvios na implementação do menu (2026-10-01):**
+  - a abertura inteira (montar, mostrar, destruir o menu e só então apagar os bitmaps) é uma função testável sem exibir, e também o estado e o DPI lidos na abertura; a revisão de correção pediu as duas últimas, porque o caminho real do menu não tinha teste;
+  - `AppendMenuW` saiu: todo item entra por `InsertMenuItemW`, numa posição explícita;
+  - o log leva o lado do rosto como texto (`lado=40x32`), porque o ícone não é quadrado.
+- **Pendente** ([TODO.md](TODO.md), seção "Interação"):
+  - [MANUAL]: a marca de rádio ao lado do rosto nos temas claro, escuro e de alto contraste; o Narrador lendo o submenu; a altura das opções e o queixo do recorte; o menu a 125%, 150%, 175% e 200%, porque os fatores 2 e 3 dos ícones só foram testados sem janela;
+  - a persistência entre execuções, no passo P7 da Fase 5; a verificação V16 fica N/A até lá.
+- **Consequências:**
+  - ARCHITECTURE.md 2.6 (dimensão, evento, transição e invariantes 4 e 27), 2.12 (esquema v2), 2.13.3 e 2.16 (menu); SECURITY.md 3.1, 5 e 7;
+  - dois oráculos do teste de propriedade foram refinados, sem mudar as contagens: no invariante 4, começar é entrar no estado, e a transição para o mesmo estado não conta; a conferência das trocas de cara sem transição deixa a carga de fora;
+  - testes `EmocaoDominanteTestes`, `EsquemaDeConfiguracoesTestes`, `PropriedadesDaPersistenciaTestes`, `ReproducaoTestes`, `InvariantesTestes`, `ArbitroPropriedadesTestes`, `InvarianteDezoito`, `ChaveLigadaTestes`, `ArquivoDeConfiguracoesTestes` e `IconesDoMenuTestes`; do menu, `MenuNativoTestes`, `MontagemDoMenuTestes`, `BitmapsDoMenuTestes`, `PlataformaTestes` e, na integração, `MenuIntegracaoTestes`.
+
+## DEC-028 — Tamagotchi adulto: itens invocados pelo menu e usados por arrastar e soltar
+
+- **Data:** 2026-09-30; detalhada em 2026-10-01, com o núcleo, a arte e o app implementados.
+- **Estado da decisão:** pedido do usuário, com as respostas dele às três escolhas de desenho; desenho técnico de Claude sob DEC-015.
+- **STATUS:** PLANNED. O núcleo (passos T3–T6 da seção "Interação" de [TODO.md](TODO.md)), a arte (A1–A4) e o app (T7–T9), com as correções das revisões, estão implementados e verificados por testes automatizados, por integração com mensagens postadas às janelas do próprio Buzzy e, em 2026-10-01, pela verificação de tela com input SINTÉTICO (V1–V15, X1 com os dois monitores na mesma escala, a regra da calma e o foco depois dos menus) e pelo repouso de 10 minutos com a onda de uma vodka (V13). A chave `Tamagotchi` está ligada no aplicativo desde o passo T9, que está fechado: o usuário já invoca e usa os itens pelo menu. A decisão continua sem VERIFIED pelas pendências [MANUAL] e [HW]: a revisão visual e de tom pelo usuário, os temas claro, escuro e de alto contraste, o Narrador, o conforto para agarrar os itens pequenos e as escalas de 125% a 200%, também entre monitores de escalas diferentes.
+- **Pedido do usuário (2026-09-30):** um "tamagotchi virtual adulto". Pelo menu de contexto, "Itens", o usuário invoca itens em pixel art: baseado, banana, água, vodka, cocaína, MD, lança-perfume "e tudo mais".
+  - O item só é invocado quando o usuário clica nele no menu e só é usado quando o usuário o arrasta e solta sobre o personagem.
+  - Cada uso tem uma animação própria (fumar, cheirar, ingerir) e afeta o comportamento: "mais animado", "meio chapado de erva", "bêbado" e assim por diante.
+- **Respostas do usuário:**
+  1. **Sem necessidades que mudam com o tempo:** nada de fome, sede ou sono decaindo. Só os itens e as interações mudam humor e comportamento.
+  2. **Primeira leva, 13 itens:** banana, água, vodka, cerveja, baseado, cigarro, cocaína, MD, lança-perfume, café, energético, cogumelo e bala (doce).
+  3. **Onde o item aparece:** no chão, ao lado do personagem, caindo com física de desenho, e fica esperando.
+- **Decisão (princípios):**
+  - **Tom:** cartunesco e cômico, para uso privado de um adulto. Nenhuma informação real sobre drogas (dose, obtenção, preparo); só efeitos de desenho animado no comportamento, nas caras e nas animações.
+  - **Regras que continuam valendo:**
+    - o usuário prevalece: pressionar e arrastar interrompem o uso;
+    - nenhum timer periódico em repouso: os efeitos acabam por disparos únicos;
+    - o núcleo continua determinístico;
+    - sem rede, texto, conversa ou voz;
+    - as janelas dos itens são do próprio Buzzy e não leem nada de outros aplicativos.
+  - **Exceção à física por energia:** os efeitos podem mudar a velocidade de propósito (um bêbado cambaleia, um agitado corre). Isso é uma exceção cartunesca documentada ao invariante 12, que continua valendo para o nível de energia.
+- **Decisão (desenho), no núcleo** (tabelas e regras exatas em ARCHITECTURE.md 2.16; estado, eventos, transições e invariantes em 2.6):
+  1. **O item é uma entidade do núcleo.** A invocação, a queda, o arraste e o teste de "solto sobre ele" ficam no núcleo, e a reprodução gravada cobre o ciclo inteiro. O app só desenha uma janela por item, a partir dos efeitos (ARCHITECTURE.md 2.3).
+  2. **Itens e verbos.** O enum `Item` segue a ordem da resposta do usuário: Banana, Agua, Vodka, Cerveja, Baseado, Cigarro, Cocaina, Md, LancaPerfume, Cafe, Energetico, Cogumelo e Bala. A chave da arte é o nome em minúsculas (`lancaperfume`, `md`). O verbo de cada item fica numa tabela só, no núcleo:
+     - comer: banana e cogumelo;
+     - beber: água, vodka, cerveja, café e energético;
+     - fumar: baseado e cigarro;
+     - cheirar: cocaína;
+     - engolir: MD e bala;
+     - inalar: lança-perfume.
+  3. **A duração do uso é a do verbo**, igual à soma dos quadros da animação na arte: comer 150 passos, beber 120, fumar 210, cheirar 120, engolir 90 e inalar 120, isto é, de 1,5 s a 3,5 s a 60 passos por segundo.
+  4. **Estado novo `USING`,** no grupo do usuário: o relógio corre, nada autônomo chega, `PRESS` o segura no mesmo evento e, no fim, a acomodação o devolve ao mesmo apoio.
+  5. **Sete caras de efeito e seis gestos novos, no fim dos enums.** As caras (`Bebado`, `Enjoado`, `Chapado`, `Eletrico`, `Apaixonado`, `Tonto` e `Viajando`) só aparecem pela onda. Os gestos (`Soluco`, `Danca`, `Gargalhada`, `Espirro`, `Tosse` e `Tremedeira`) só acontecem em `IDLE`, e só a onda os sorteia. Os sorteios de sempre usam listas fixas, e as referências 01–05 não mudaram.
+  6. **A onda de desenho animado.** Cada item, menos a água, começa uma onda: Satisfeito, Alegre, Relaxado, Ligado, Bebado, Chapado, Eletrico, Euforico, Tonto ou Viajando.
+     - Ela passa por subida, pico com níveis de 1 a 3 e queda; algumas ondas não têm queda.
+     - Cada fase, e cada nível do pico, dura um disparo único de 1 s ou mais de um temporizador só (`AgendarOnda`, `ITEM_EFFECT_TIMER` e `CancelarOnda`), sem relógio de passo fixo. Uma onda gera no máximo 2 + nível disparos, e o episódio mais longo dura 530 s.
+     - A onda vale desde o soltar: interromper o uso não a desfaz. Ela continua com o personagem escondido e só é cancelada ao sair.
+     - O disparo não reagenda a agenda autônoma; com a autonomia pausada, só troca a cara.
+  7. **Combinação de itens.**
+     - Do mesmo tipo da onda da frente: os níveis somam até 3, e a fase recomeça (a queda volta ao pico).
+     - De precedência maior ou igual: vai para a frente, e a anterior fica atrás, congelada. Só cabem duas: uma terceira descarta a de fundo.
+     - De precedência menor: é absorvida, sem mudar a onda nem o temporizador.
+     - Do mesmo tipo da onda de fundo: os níveis dela somam, e ela continua congelada; se estava na queda, volta ao pico.
+     - A água refresca: baixa um nível ou encerra a queda.
+     - Quando a da frente acaba, a de fundo volta com a fase recomeçada, na duração cheia.
+  8. **Comportamento pelo perfil efetivo (`PerfilEfetivo`).** A fase da onda aplica percentuais ao perfil de energia: intervalos entre decisões e de descanso, pesos das ações, altura do pulo e chance do foguete. Cada fase também tem os próprios gestos e caras, com pesos. Com a velocidade da fase abaixo de 100%, o tempo na parede e o tempo pendurado crescem por 100/velocidade, para a agenda não cortar a subida mais lenta (o problema do item 5 da DEC-022); acima de 100%, ficam os mesmos.
+  9. **Física pela física efetiva (`FisicaEfetiva`), a exceção documentada ao invariante 12.** A onda multiplica só as velocidades de andar, escalar e pendurar, de 50% a 200%. A gravidade, a queda máxima, o quique, a velocidade do foguete, o agarrar, as colisões e os limites não mudam, e o nível de energia continua sem mexer na física.
+  10. **Cambaleio:** nas ondas do bêbado e do tonto, o passo da caminhada oscila numa onda triangular de 48 passos (0,8 s), e o bêbado no nível mais forte dá pequenos recuos. As contas são inteiras até a última divisão, para dar o mesmo resultado em qualquer máquina. Ele fica sempre no chão, preso entre as laterais, e o recuo devolve distância ao percurso.
+  11. **Precedência das caras:** a cara da fase vence a emoção dominante (DEC-027), que volta quando a onda acaba. Em `RESTING`, `REACTING` e `USING`, a cara da fase espera o fim do estado.
+  12. **Itens no mundo:**
+      - no máximo 6: o sétimo tira o mais antigo que não está na mão do usuário, e "Recolher itens" tira todos;
+      - o item nasce 140 DIP acima dos pés dele, ao lado, primeiro do lado para onde ele olha. Cai com a mesma gravidade e a mesma queda máxima dele, quica uma vez, de leve, e não achata ao pousar;
+      - parado e sem onda, ele fica empolgado com o item novo;
+      - os itens só existem em memória e somem ao sair.
+  13. **"Solto sobre ele":** o retângulo do item, já preso na área útil, cruza o retângulo do sprite do personagem encolhido 20% de cada lado. O núcleo decide sozinho, sem a raiz informar a transparência.
+  14. **Aceitação do soltar:**
+      - aceito com ele parado, andando (o plano é descartado), na parede ou no cipó (preso ou não), escondido na borda, descansando (acorda antes), reagindo ou pousando (os dois são cortados);
+      - recusado com ele pulando, caindo, usando outro item, pressionado ou arrastado: o item cai de onde foi solto;
+      - clique, clique duplo ou captura perdida sobre o item nunca o usam;
+      - o fim do arraste de um item só segurado, sem o começo do arraste, larga o item, como o clique.
+  15. **Volta ao mesmo apoio:**
+      - o apoio do uso sai primeiro do estado e depois da posição: esconderijo, parede (fora do chão, inclusive na quina), cipó ou chão;
+      - no fim do uso, do chão ele volta a `IDLE`; da parede e do cipó, agarrado, e preso se já estava (DEC-024); do esconderijo, a `PEEKING` na mesma borda (DEC-025);
+      - na parede ou no cipó, volta agarrado mesmo a menos de 32 DIP do chão, sem ficar preso se não estava.
+  16. **Atento:** enquanto o usuário segura um item, a agenda pausa e o personagem fica onde está:
+      - andando, para; descansando, acorda;
+      - na parede e no cipó, fica agarrado, e o foguete apaga;
+      - pulo e queda seguem até o chão;
+      - sem onda, olha curioso.
+
+      Quando o item sai da mão, a agenda volta depois do intervalo de acomodação.
+  17. **Visibilidade e captura:**
+      - o item na mão do usuário sempre aparece, para o gesto nunca sumir no meio;
+      - fora da mão, o item só aparece com o personagem visível e fora de um monitor ocupado pela tela cheia, com o modo ligado (Q-09);
+      - um item que cai e deixa de aparecer vai direto ao chão: o relógio nunca corre por um item invisível;
+      - esconder, sair, recolher ou pegar outro item soltam a captura do item que estava na mão, e ele fica no chão.
+  18. **Regra da calma:** com a autonomia pausada ou o painel aberto, quem está agarrado à parede ou ao cipó sem estar preso desce ou se solta, no fim de qualquer evento. O preso fica (DEC-024), e o atento também, até o item sair da mão. Ela não depende da chave: vale no app desde já (notas na DEC-022, item 4, e na DEC-024).
+  19. **Chave:** tudo o que é do tamagotchi fica atrás de `ConfiguracaoDoNucleo.Tamagotchi`, desligada por padrão e ligada em `DoAplicativo` desde o passo T9.
+      - Desligada, os eventos dos itens e da onda são descartados antes de encerrar qualquer gesto, uma onda no estado não vale e nenhum efeito novo sai do núcleo.
+      - Ela ligou no passo T9, com o app pronto e os testes de equivalência verdes (`ChaveLigadaTestes`): a chave ligada sem itens dá o mesmo resultado que desligada, e a dominante só muda a cara, mesmo com itens e ondas.
+      - A emoção dominante (DEC-027) não tem chave.
+- **Desenho da arte** (passos A1–A4; regras e arquivos em [IDENTIDADE_VISUAL.md](IDENTIDADE_VISUAL.md)):
+  - **Itens:** 24 × 24 pixels de arte, mostrados em 48 DIP, na densidade do boneco. Pousam na última linha, com 1 px livre no topo e nas laterais e alfa só 0 ou 255. Não têm texto, marca nem folha, têm pelo menos 8 px de altura e de largura, para dar para agarrar, e não usam as cores do pelo. O desenho do chão também é o ícone do menu.
+  - **Itens na mão:** variantes por verbo, com a pega, onde fica a mão, e a ponta, o pixel que encosta na boca ou no nariz.
+  - **Caras:** as 7 de efeito, com as chaves do núcleo (`eletrico`, não `acelerado`), e 7 passageiras, que só a arte usa nas poses de uso. O chapéu do bêbado entorta 12°, e o bêbado e o enjoado ganham um rubor maior, forte ou verde.
+  - **Poses de uso:** só no chão e de frente, uma sequência de quadros por verbo cuja soma é a duração do núcleo. O braço leva a ponta do item à boca ou ao nariz por cinemática inversa, qualquer que seja o tamanho do item, e a cara é a da própria pose. Na parede, no cipó e no esconderijo, a apresentação mostra a pose do apoio com a cara do uso e a sobreposição, sem o objeto; poses de uso por apoio ficam para depois.
+  - **Sobreposições:** 8 efeitos em 3 fases, com a fase 0 parada para quando não há relógio, mais modificadores de pose só no chão. Nunca cobrem os traços do rosto.
+  - **Gestos da onda:** poses provisórias, feitas das que já existem.
+  - **Ícones do menu:** o rosto da DEC-027 e o desenho do chão de cada item, ampliados por um fator inteiro do DPI.
+- **Decisão (desenho), no app** (passos T7–T9; regras exatas em ARCHITECTURE.md 2.3, 2.7, 2.10, 2.13 e 2.16):
+  20. **Apresentação (passo T7):** o quadro do sprite passa a levar o item na mão, a sobreposição da onda da frente e a fase dela.
+      - No chão, o uso mostra a sequência de quadros do verbo na arte, com a cara de cada quadro. Na parede, no cipó e no esconderijo, aparece a pose de quem está ali, sem o objeto, com a cara do item durante o uso, que o núcleo fixa do começo ao fim.
+      - Os gestos da onda usam as poses provisórias da arte, com a cara delas.
+      - A sobreposição vale por cima de qualquer pose e só troca de fase com o relógio ligado; parado, fica na fase 0.
+      - O cache de quadros passou a ter um orçamento de 16 MiB de pixels: os menos usados saem primeiro.
+  21. **Uma janela por item (passo T8),** com a receita da janela do personagem: do tamanho do item (48 × 48 DIP), transparente fora do desenho, sempre no topo, fora da barra de tarefas e sem nunca ativar nem tirar o foco. A captura do mouse só existe no gesto sobre o item, e só a raiz fecha a janela.
+  22. **Ordem Z por evento:** o item fica logo abaixo do personagem; no gesto sobre ele, vai para o topo, para não sumir atrás do personagem justamente quando vai ser solto sobre ele, e volta para baixo no fim. Quando o personagem reaparece, a ordem é reafirmada. Nunca por timer (SECURITY.md 2).
+  23. **Árbitro dos itens:** uma segunda instância do árbitro de gestos da DEC-021, com as mesmas regras do personagem. Os gestos viram eventos do item em que o botão foi pressionado; clique, clique duplo ou gesto cancelado viram `ITEM_RELEASE`, e o item fica no chão, ou cai de onde está, sem uso. O botão direito num item abre o mesmo menu do personagem; tirar um item da tela é pelo "Recolher itens".
+  24. **Temporizador da onda:** um segundo temporizador do app, ao lado do da agenda, só de disparo único: ele se desliga antes de avisar, nunca fica periódico e para ao encerrar.
+  25. **Submenu "Itens" (passo T8):** só existe com a chave ligada e fica desabilitado com o Buzzy escondido. Tem os 13 itens na ordem do enum, só com o nome e o desenho do chão como ícone, um separador e "Recolher itens", desabilitado sem itens na tela. O id escolhido vira o item por uma lista fixa.
+  26. **Diagnóstico:** linhas `ITEM` e `ONDA` no log de diagnóstico, só com `--diagnostico` e sem dado pessoal, para os testes de integração e a verificação de tela (contrato em ARCHITECTURE.md 2.13.4).
+  27. **Chave ligada (passo T9)** em `DoAplicativo`, com os testes de integração dos itens. A verificação de tela (`--fase tamagotchi`) e a medição do repouso com onda (`tools/medir-desempenho.ps1 -Modo onda`) foram escritas e compiladas no mesmo passo, para Claude rodar depois de avisar o usuário.
+- **Desvios do desenho, na implementação (2026-09-30) e nas revisões (2026-10-01):**
+  - **Núcleo:**
+    - a revisão adversarial, com mutações temporárias, achou um defeito real: no fim de um uso na parede perto do chão, ele caía. Agora volta agarrado (item 15);
+    - os invariantes 22 e 27 passaram a ser conferidos também com a física e a chave ligada (`ChaveLigadaTestes`), condição para ligar a chave (item 19);
+    - a regra da calma ficou no fim de todo evento, e não só ao pausar, para cobrir pausar com o item ainda na mão e o agarre que acontece já pausado (item 18);
+    - o fim de arraste sem o começo larga o item (item 14), e o formato de reprodução lê `emocao=` e `item=` por lista fechada;
+    - um item do mesmo tipo da onda de fundo na queda a leva de volta ao pico: a regra literal do desenho deixaria uma queda no nível 2, que o invariante 25 proíbe;
+    - o tempo na parede e pendurado só cresce com a velocidade abaixo de 100% (item 8);
+    - a onda continua com o personagem escondido; pegar um item no ar é aceito (ele para e fica na mão); ao sair, o núcleo não emite efeitos de janela de item, e a raiz fecha todas.
+  - **Arte** (revisão adversarial, depois retoques olhando as prévias):
+    - o espelhinho vai numa mão só: segurado com as duas mãos na altura da barriga, parecia roupa;
+    - os cotovelos vão para fora na tragada e no inalar: o braço cruzava o queixo, e os dois braços pareciam um colete;
+    - a fumaça e as bolhas saem do canto da boca, de frente: saindo da orelha, pareciam raiva e suor. A área protegida do rosto virou uma máscara dos traços, no lugar de um retângulo;
+    - com o chapéu eriçado, a copa desce 1 pixel em escalando-2, para o preenchimento não chegar à borda do quadro; em andando-2, andando-4 e escalando-1, o contorno fica na linha 0, inteiro, como exceção documentada;
+    - itens refeitos: o baseado aceso, o espelhinho com moldura, o lenço dobrado em triângulo, a bala sem o papel na boca, o energético verde-neon (escuro, tinha as cores do pelo e lembrava a paleta de uma marca conhecida) e o cigarro com 8 px de altura;
+    - os testes passaram a achar a boca e o nariz pelo desenho, e conferem que os olhos ficam à vista com o item no rosto;
+    - **descartados:** aumentar os itens na mão, que seguem a escala do boneco, com até 14 px, e refazer o contorno do recorte do rosto, que mudaria `expressoes.png`.
+  - **App** (passos T7–T9, uma revisão de correção, uma das regras do projeto e um corretor, 2026-10-01):
+    - o quadro de uso no chão não espelha pela direção, como nenhuma pose de frente: a luz vem da esquerda, a trama do chapéu é fixa e o item fica na mão B;
+    - a sobreposição também cobre os quadros de uso, porque a onda começa ao soltar o item. Onde o quadro já tem efeito próprio, como a fumaça do fumar, podem aparecer dois juntos; fica para a revisão visual;
+    - nos apoios, a cara vem do retrato, e não direto da tabela: no núcleo as duas são a mesma durante o uso, e assim a apresentação respeita uma tabela trocada pela configuração;
+    - uma chave de arte ausente continua lançando exceção, sem quadro de reserva; a proteção é um teste que desenha todo quadro que a escolha pode pedir, com todos os valores dos enums, e outro que compara os enums do núcleo com as listas da arte;
+    - o gerente das janelas, o árbitro dos itens, o temporizador da onda e a ligação da raiz com eles são classes pequenas, testadas sem janela, com janelas falsas. A revisão de correção achou a ligação da raiz e a montagem real do menu sem teste; as duas viraram funções testáveis;
+    - um `MoverItem` só é pulado se o próximo do mesmo Id vier antes de um mostrar, esconder ou remover desse Id; o lugar final é o mesmo;
+    - o pouso de um item vai para o log uma vez por pouso, no fim do processamento, mesmo quando o último passo não move a janela; a revisão achou casos em que a linha não saía, e os testes passaram a exigi-la;
+    - "sobre ele" é recalculado na raiz só para o log, com a mesma função do núcleo; quem decide continua sendo o núcleo;
+    - o ícone do item no menu tem os 24 × 24 pixels da arte vezes o fator do DPI, e não os 32 px do desenho do app; com a chave ligada, cada abertura do menu cria e apaga 27 bitmaps, mesmo com o submenu "Itens" desabilitado;
+    - antes de ligar a chave, a ligação inteira foi exercitada numa cópia isolada, com a chave ligada só lá: invocar, cair, arrastar até ele e usar, a onda agendada e disparada, o botão direito no item, recolher e sair, com a ordem Z certa nas janelas reais;
+    - esconder ou minimizar no meio do arraste de um item não tinha teste de integração; agora tem, com a captura solta e o soltar tardio sem efeito;
+    - os leitores do log nos testes de integração e na verificação de tela perdiam linhas quando o log rotacionava; agora reconhecem a rotação pelo conteúdo (ARCHITECTURE.md 2.13.4). A medição de desempenho manteve a leitura dela, que avança a cada leitura;
+    - na verificação de tela, três critérios (o tempo até o pouso, a agenda cancelada ao segurar um item e o recuo do bêbado) dariam falha sem defeito no app e foram corrigidos antes de rodar, conferidos contra o núcleo com a topologia desta máquina; o critério dos quadros de uso sai INCONCLUSIVO, pedindo repetição, quando a interface atrasa e pula quadros;
+    - o repouso com onda dura 60 s na verificação de tela; os 10 minutos ficam no modo `-Modo onda` da medição. Uma vodka dura cerca de 5 min 20 s, então o relatório separa a CPU com a onda e depois dela;
+    - duas mutações sobreviventes da revisão foram descartadas como equivalentes na prática: uma só importaria com um item à vista e o personagem escondido no meio do arraste, e a outra repetia uma captura e uma ordem Z que já valiam;
+    - mutações temporárias em todos os passos e na correção, cerca de 150 aplicações: as que escaparam viraram testes mais fortes ou eram código equivalente, e as que não compilavam foram reescritas.
+- **Alternativas consideradas:**
+  - o efeito do item como uma alteração única, que substitui a anterior, com a água e a banana como restauradoras: um lança-perfume de 30 s "curaria" uma bebedeira;
+  - a raiz decidir "solto sobre ele" pela transparência da janela: a regra ficaria no adaptador e fora da reprodução;
+  - consumir o item no fim da animação e recriá-lo se o uso fosse interrompido, ou pegar o item no ar e usá-lo ao pousar: mais estado, sem ganho para o usuário;
+  - ficar atento só quando o arraste do item começa: no pressionar, ele já para e facilita o soltar;
+  - um pulso periódico ou um decaimento contínuo da onda: violam a DEC-011;
+  - `Math.Sin` no cambaleio: sem garantia de resultado idêntico entre máquinas;
+  - ligar a chave desde o começo: o app pararia com um efeito ou uma pose que ainda não conhece;
+  - itens de 20 px, no máximo 5 na tela e nascendo 24 DIP acima, com impulso: ficaram o tamanho, o limite e a queda acima;
+  - desenhar os itens na janela do personagem, que teria de ficar grande, contra a regra da janela do tamanho do sprite, ou numa janela Win32 crua, com mais código nativo e sem a validação de P1;
+  - o botão direito num item removê-lo: ficou abrir o mesmo menu, como no personagem;
+  - reafirmar a ordem Z das janelas por timer: proibido (SECURITY.md 2).
+- **Motivo:** cumpre o pedido com regras pequenas e testáveis sem janela, sem relaxar os limites duros: o usuário prevalece, não há relógio em repouso, o núcleo é determinístico e nada sai da máquina.
+- **Trade-offs:**
+  - as tabelas são grandes, com números de jogo escolhidos para o comportamento se ler na tela, sem relação com nada real;
+  - a onda muda a velocidade de propósito, uma exceção ao invariante 12;
+  - os usos só têm pose no chão; nos outros apoios, ele usa sem o objeto à vista;
+  - as poses dos gestos da onda são provisórias;
+  - itens pequenos podem ser difíceis de agarrar, mesmo com o mínimo de 8 px de lado;
+  - a suíte do núcleo ficou mais lenta: de cerca de 6,7 s para cerca de 10,6 s em Release;
+  - os nomes dos itens ficam visíveis no código e nos textos do menu; se o repositório virar público (Q-10), a decisão é do usuário, como foi com o chapéu na DEC-019;
+  - cada item é uma janela do WPF: a correção de DPI e a recuperação da minimização da Fase 5 (passos P12 e P14) valem também para elas. Até lá, uma janela de item minimizada pelo Windows volta ao normal na hora, sem esconder o personagem;
+  - a 300%, o cache de 16 MiB guarda só 28 quadros do personagem, e andar com uma sobreposição já usa cerca de 24: pode haver redesenho repetido (conferência [MANUAL]; o log conta os quadros descartados).
+- **Pendente** ([TODO.md](TODO.md), seção "Interação"): a revisão visual e de tom pelo usuário; as outras pendências [MANUAL] e [HW]; e os pontos herdados pelos blocos seguintes da Fase 5 (passos P7, P8, P12, P13 e P14).
+- **Consequências:**
+  - o roadmap ganhou a seção "Interação — emoção dominante e tamagotchi adulto", intercalada com a Fase 5;
+  - ARCHITECTURE.md 1, 2.3, 2.6, 2.7, 2.9, 2.10, 2.12, 2.13 e 2.16; SECURITY.md 2, 3.1, 3.2, 5, 6, 7 e 10; IDENTIDADE_VISUAL.md; PRODUCT_SPEC.md, seção "Emoção dominante e tamagotchi adulto"; notas na DEC-022 e na DEC-024;
+  - testes do núcleo `TabelaDoTamagotchiTestes`, `OndaTestes`, `ItensTestes`, `UsoTestes`, `ChaveLigadaTestes`, `InvariantesTestes` (invariantes 22–29) e a referência `07-tamagotchi.txt`; da arte, `CarimboTestes`, `ItensPixelTestes`, `RostosNovosTestes`, `UsosPixelTestes`, `EfeitosPixelTestes`, `IconesDoMenuTestes`, `GestosPixelTestes` e `RostoDoDesenhoTestes`; do app, `NucleoEArteTestes`, `PoseDeUsoTestes`, `PoseTestes`, `CacheDeQuadrosTestes`, `SpriteDoItemTestes`, `GestosDosItensTestes`, `TemporizadorDaOndaTestes`, `GerenteDosItensTestes`, `JanelaDoItemTestes`, `LigacaoDosItensTestes` e `LeituraDoLogTestes`; na integração, `ItensIntegracaoTestes` e `MenuIntegracaoTestes`;
+  - a verificação de tela ganhou `--fase tamagotchi`, e a medição de desempenho, `-Modo onda`.
+
+## DEC-029 — Persistência mínima da posição: esquema v1, arquivo atômico e perfis de teste (Fase 5)
+
+- **Data:** 2026-09-30
+- **Estado da decisão:** ACCEPTED por Claude sob a autorização de DEC-015 (decisão técnica dentro de DEC-010, DEC-011, ARCHITECTURE.md 2.12 e SECURITY.md 5). O item 11 é uma escolha de produto que o usuário deixou com Claude em 2026-09-30, às 20:40 ("faz o que achar melhor").
+- **STATUS:** PLANNED até o gate da Fase 5 ser registrado em TODO.md. O esquema, o arquivo, a política de gravação e o isolamento dos testes (passos P3–P5) estão implementados e cobertos por testes automatizados; o app ainda não lê nem grava o arquivo (passo P7).
+- **Problema:** a Fase 5 precisa restaurar a posição entre execuções (DEC-010):
+  - sem nunca deixar o arquivo ilegível;
+  - sem gravação periódica (DEC-011);
+  - sem dado pessoal no arquivo nem no log (SECURITY.md 5 e 6);
+  - sem que testes e ferramentas leiam ou gravem as configurações reais do usuário.
+- **Decisão** (regras exatas em ARCHITECTURE.md 2.12):
+  1. **Onde mora cada parte:**
+     - no núcleo puro (`Buzzy.Core.Persistencia`): o esquema v1 (tipos, padrões, validação, normalização e conversão de bytes) e a política de quando gravar;
+     - no adaptador: a pasta, a leitura dos arquivos e o protocolo atômico (`PastaDeDados`, `ArquivoDeConfiguracoes`);
+     - na raiz, no passo P7: o atraso, a gravação na hora e a gravação ao encerrar.
+
+     A máquina de estados não ganha evento nem efeito: `GravarPosicao` e `GravarPreferencias` já existem, e a raiz recebe o evento que gerou cada efeito. A restauração na partida é da DEC-030.
+  2. **Formato:** JSON em UTF-8 sem BOM, com `schemaVersion` inteiro e nomes em português, em camelCase. A leitura extrai campo a campo de um `JsonDocument`, e a escrita usa `Utf8JsonWriter`. Não há `JsonSerializer` nem reflexão no núcleo ou no app, e System.Text.Json vem do framework, sem pacote NuGet (DEC-016).
+  3. **Conteúdo do v1:**
+     - a posição do efeito `GravarPosicao`, com a tela do monitor da época (DEC-030);
+     - as preferências que o núcleo conhece: energia, modo de tela cheia e atravessar monitores (Q-05).
+
+     `Preferencias` ganha `AtravessarMonitores` como parâmetro posicional com padrão ligado. Ainda não tem efeito: a travessia entra nos passos seguintes da Fase 5. Guardá-la desde já evita uma migração só por ela, e, a partir do passo P7, editar o arquivo com o Buzzy fechado é o jeito de desligá-la antes da tela de configurações da Fase 8.
+  4. **Qual posição vai para o disco:** exatamente a do efeito `GravarPosicao`, isto é, onde o Buzzy estava ao soltar, cancelar o arraste, esconder, bloquear, suspender, redefinir ou sair.
+     - Inclui o lugar a que o passeio autônomo o levou.
+     - Com retorno de tela cheia guardado, vai o retorno, nunca a posição temporária (invariante 16).
+     - A raiz nunca lê o estado do núcleo para gravar.
+     - Fica registrada, sem bloquear, a alternativa de gravar só a última posição escolhida pelo usuário (arraste ou redefinição). Ela faria o Buzzy "voltar para casa" a cada partida e exigiria um campo novo no estado do núcleo; o usuário pode pedi-la.
+  5. **Leitura tolerante:** só a estrutura torna o arquivo ilegível; o resto é avaliado campo a campo, com aviso e o padrão do campo. A energia só vale pelos três nomes, nunca por `Enum.Parse`, que aceita `"1"` e `"Baixa,Alta"`. Comentários e vírgula final são aceitos, porque o arquivo pode ser editado à mão. Detalhes de implementação:
+     - a chave exige UTF-16 válido: um surrogate solto não tem representação em JSON, e aceitá-lo faria a escrita lançar ou a posição não voltar igual da leitura;
+     - um escape de surrogate solto num texto lido torna o arquivo inteiro ilegível, única exceção à tolerância campo a campo;
+     - as frações usam a mesma regra de saneamento da restauração, e um `-0` vira `0`;
+     - escrever ou normalizar um argumento nulo lança, porque o defeito é de quem chamou; preferências nulas valem o padrão, e uma chave nula descarta a posição;
+     - os avisos têm texto fixo, só com nomes de campo do esquema e o motivo.
+  6. **Versão futura:** o arquivo com `schemaVersion` maior é lido pelas regras da versão atual, e a gravação fica bloqueada nesta execução. Toda ampliação do esquema incrementa `schemaVersion`.
+  7. **Leitura em cascata, sem efeito colateral:** principal, depois `.bak`, depois os padrões. Um principal inacessível depois de 3 tentativas faz valer a reserva ou os padrões e bloqueia a gravação nesta execução. Isso muda o critério 3 da Fase 8: um arquivo corrompido dá os valores do `.bak` ou, sem ele, os padrões.
+  8. **Protocolo atômico:**
+     - o temporário é apagado e recriado com `CreateNew`, sem buffer, e descarregado com `Flush(true)`;
+     - o principal é conferido de novo, e a troca é por `File.Move` ou `File.Replace`;
+     - o `.bak` só recebe um arquivo recém-validado, literalmente "o último arquivo bom";
+     - a cópia de diagnóstico sai na mesma troca e substitui a anterior;
+     - o temporário nunca é lido.
+
+     Recriar o temporário evita gravar através de um link, físico ou simbólico, que já exista com esse nome.
+  9. **Quando gravar** (`PoliticaDeGravacao`):
+     - 2 s depois do último pedido, com a espera reiniciada a cada pedido;
+     - na hora em `SUSPENDING`, `SESSION_ENDING`, `CMD_EXIT` e também `SESSION_LOCKED`: bloquear e depois suspender é o caminho comum antes do sono, e a suspensão com o personagem já escondido pela sessão não gera outro pedido;
+     - novas tentativas em 2, 10 e 60 s; na hora, 3 tentativas com 50 ms entre elas.
+
+     No passo P7, a agenda da raiz também:
+     - não grava o que já está no disco;
+     - durante um gesto do usuário, espera o fim do gesto, em vez de rearmar a espera a cada 2 s;
+     - descarrega o pendente ao encerrar e na suspensão;
+     - faz a E/S de forma síncrona, na thread da interface: o arquivo tem menos de 1 KiB, e o custo vai para o log.
+  10. **Isolamento dos testes:** `--perfil-de-teste NOME` põe os dados em `%LOCALAPPDATA%\Buzzy\testes\NOME`; o log de diagnóstico continua na pasta do Buzzy.
+      - **Falha fechada:** nome inválido, opção sem nome ou opção escrita de outro jeito desligam a persistência naquela execução.
+      - **Nome:** validado caractere a caractere, sem expressão regular, porque `$` numa regex do .NET aceita um `\n` no fim. Os nomes reservados incluem `com0` e `lpt0`.
+      - **Regra única:** só uma função escolhe a pasta (`PastaDeDados.DasConfiguracoes`), e só ela cria o arquivo (`ArquivoDeConfiguracoes.DaExecucao`), com teste de tabela e teste de fonte.
+      - **Lançadores:** os testes de integração (`integracao`), o `Buzzy.Verificacao` (`verificacao`) e a medição de desempenho (`desempenho`) passam o perfil e apagam a pasta dele antes de abrir o Buzzy, recusando junção ou link no caminho.
+  11. **Esconderijo e "preso pelo usuário" também vão para o disco** (escolha de produto, 2026-09-30). O bloco A grava só a posição:
+      - quem saía escondido reaparecia inteiro, na mesma borda;
+      - quem estava preso na parede ou no cipó voltava agarrado, mas a agenda podia tirá-lo de lá.
+
+      No passo P7, o esquema passa a guardar a borda do esconderijo (DEC-025) e a marca de preso (DEC-024). Ao reabrir, ele volta escondido no mesmo lado e continua preso onde o usuário o deixou. A ampliação incrementa `schemaVersion` (item 6). *Atualização de 2026-10-01 (DEC-027):* a v2 já é a da emoção dominante; o esconderijo e o preso entram na v3, e a versão futura dos testes passa de 3 a 4.
+  12. **Log sem dado pessoal:**
+      - erros do sistema vão só com o tipo e o código da exceção, nunca com a mensagem, que pode trazer um caminho com o nome do usuário ou o SID da conta. Isso já vale para a gravação, a instância única e o erro não tratado;
+      - o nome de perfil recusado e a chave lida do arquivo não vão para o log;
+      - no passo P7, as linhas `CONFIG` levarão só enums, contagens e tempos. Nunca a pasta, valores do arquivo, nomes de campos desconhecidos nem o texto automático dos registros, que imprime a chave e a tela.
+  13. **Reproduções gravadas:** as preferências escrevem `travessia=nao` só quando a travessia está desligada, em `Loaded`, `SettingsChanged` e `GravarPreferencias`. As referências 01–05 não mudam.
+- **Alternativas consideradas:**
+  - tudo no app, com a validação testável só com arquivos; E/S no núcleo, que quebraria a pureza; um efeito novo para descarregar a gravação, que mudaria as referências sem ganho;
+  - `JsonSerializer`, por reflexão ou com contexto gerado: é tudo ou nada por tipo, sem tolerância por campo;
+  - desligar a reflexão do JSON no projeto do app: ganha pouco e quebraria `Buzzy.Visual/Boneco.cs`, se ele voltar a ser usado;
+  - versão futura tratada como ilegível, que destrói os dados novos num downgrade, ou gravada por cima, que apaga os campos novos;
+  - escrever no próprio arquivo, ou `Move` com sobrescrita e cópia manual do `.bak`: deixam o arquivo rasgado ou um instante sem principal; recuperar pelo `.tmp`, com risco de ler um arquivo parcial;
+  - padrões puros mesmo com um `.bak` bom;
+  - gravar só ao sair, gravar a cada soltar sem atraso ou gravar numa thread de fundo;
+  - isolar os testes por caminho arbitrário, que gravaria fora da pasta do Buzzy (SECURITY.md 3.1), ou por variável de ambiente, invisível.
+- **Motivo:** DEC-007 e ARCHITECTURE.md 2.13.2 põem o esquema no núcleo e a E/S no adaptador. Assim o formato, a validação e a cascata são testados sem disco, e o protocolo, com disco real e sem abrir janela.
+- **Trade-offs:**
+  - um escape de surrogate solto num texto torna o arquivo inteiro ilegível, mais rígido que o resto da leitura;
+  - um principal preso por cerca de 200 ms na partida bloqueia a gravação a sessão inteira;
+  - a cópia de diagnóstico pode ficar registrada de forma imprecisa quando uma tentativa anterior de `File.Replace` já tinha movido o arquivo ilegível;
+  - `File.Replace` exige NTFS local, e a queda de energia no meio da gravação não é testável (SECURITY.md 9);
+  - os testes de queda com processo real deixaram a suíte do app sem janelas mais lenta: de menos de 1 s para cerca de 8 s.
+- **Adiado, com dono:**
+  - **passo P7:** `Iniciar` vai proteger a leitura contra qualquer exceção. Hoje uma exceção que não é de E/S ainda escapa de `ArquivoDeConfiguracoes.Ler()`, por exemplo com um link plantado pelo próprio usuário para algo que não é arquivo, e fecharia o app na partida. Com a proteção, a persistência fica desligada naquela execução, e o log leva só o tipo e o código. A captura ampla dentro da leitura do esquema será estreitada junto;
+  - **aceito:** o `diagnostico.log`, anterior à Fase 5, segue um link que já exista (SECURITY.md 9).
+- **Consequências:**
+  - ARCHITECTURE.md 1, 2.6 (invariante 18), 2.12 e 2.13; SECURITY.md 3.1, 5, 6, 7, 8, 9 e 10; TODO.md, Fase 5 (passos e evidências) e Fase 8 (critério 3);
+  - notas nas DEC-010, DEC-024 e DEC-025;
+  - testes `EsquemaDeConfiguracoesTestes`, `PropriedadesDaPersistenciaTestes`, `InvariantesTestes`, `ArquivoDeConfiguracoesTestes`, `IsolamentoTestes` e `PlataformaTestes`;
+  - todo teste, verificação ou ferramenta que abre o `Buzzy.exe` passa `--perfil-de-teste` ([PROMPT_MESTRE_BUZZY.md](PROMPT_MESTRE_BUZZY.md)).
+
+## DEC-030 — Chave do monitor e topologia (Fase 5)
+
+- **Data:** 2026-09-30
+- **Estado da decisão:** ACCEPTED por Claude sob a autorização de DEC-015 (decisão técnica dentro de DEC-008 e de ARCHITECTURE.md 2.4 e 2.8).
+- **STATUS:** PLANNED até o gate da Fase 5 ser registrado em TODO.md. A restauração na partida (passos P1–P2) está implementada no núcleo e coberta por testes automatizados; o app só entrega a posição salva no passo P7. A chave estável e a topologia em execução são dos passos P6, P8 e P9 e entram nesta decisão quando forem implementadas.
+- **Problema:**
+  - até a Fase 4, a carga restaurava como a execução: pela mesma chave ou pelo monitor mais próximo da âncora absoluta salva. Numa partida com outra topologia (outro principal, monitor ausente, chave nova), essa âncora fica noutro referencial;
+  - a posição não guardava o retângulo do monitor que ARCHITECTURE.md 2.8 pede;
+  - uma carga com fração NaN deixava NaN no estado do núcleo e, depois, num `GravarPosicao`.
+- **Decisão:**
+  1. **Tela do monitor na posição:** `PosicaoDoPersonagem.TelaDoMonitor` é `RetanguloPx?`, com `init` e fora do construtor posicional; nula quer dizer desconhecida.
+     - Semântica única: a tela do monitor da chave na última vez em que a posição foi descrita nele.
+     - Quem preenche: `Descrever`, os dois casos de `Reacomodar`, a validação da máquina e `Restaurar`.
+     - Nunca é deslocada por cálculo; no passo P8, a posição que acompanhar a translação da topologia não translada a tela. Assim o arquivo nunca guarda uma tela que não existiu.
+  2. **Restauração na partida, numa função só:** `Posicionador.Restaurar`, com `OrigemDaRestauracao` = `PelaChave`, `PeloRetangulo` ou `NoPrincipal`. Vai ao monitor da chave; senão, ao primeiro com a mesma tela; senão, ao principal.
+     - Nos três passos valem as frações salvas, saneadas: NaN vira 0,5, e o resto é preso em [0, 1].
+     - A âncora salva não é usada.
+     - A posição nova fica com a chave e a tela do destino, e restaurar de novo não move o personagem.
+     - Durante a execução continua valendo `Reacomodar`.
+  3. **Texto da regra:** "BOOTING: configurações e topologia carregadas; posição salva restaurada pela chave | pelo retângulo do monitor | no monitor principal". O caminho "HIDDEN: pedido de mostrar anterior à carga" recebe o mesmo sufixo. Sem posição salva, o texto não muda, e as referências 01–05 ficam idênticas.
+  4. **Pixel dos pés:** o monitor do personagem é o que contém `(x, y − 1)` (`Posicionador.PixelDosPes`). Vale em `Maquina.MonitorDaAncora`, sem mudança de comportamento, e no caso do monitor ausente de `Reacomodar`, que passou a medir a distância a partir dele. Com a barra oculta, a âncora no chão fica na base da tela, que já é o primeiro pixel do monitor de baixo, e a âncora crua escolheria o monitor errado.
+  5. **Reproduções gravadas:** a posição salva do `Loaded` usa 9 campos (`chave;fx;fy;ax;ay;esquerda;topo;direita;base`) só quando a tela é conhecida e não vazia, para a reprodução restaurar pelo retângulo como a partida; senão, 5. `GravarPosicao` continua com 5 campos, e a leitura aceita 5 ou 9.
+  6. **Fica para os passos seguintes, nesta decisão:**
+     - a chave estável (passo P6): um resumo do caminho do dispositivo, para não gravar nem registrar o identificador de hardware; o protótipo P5 confere a estabilidade dela;
+     - a topologia em execução: o que acontece quando o monitor do personagem muda, é transladado ou some com o app aberto (passo P8);
+     - a releitura robusta no app (passo P9).
+- **Alternativas consideradas:**
+  - continuar carregando por `Reacomodar`, que escolhe o monitor mais próximo de uma âncora de outra sessão;
+  - "monitor mais próximo da âncora salva" no último passo: menos previsível, porque o Buzzy poderia surgir numa TV recém-ligada;
+  - a tela como quinto parâmetro posicional, que quebraria as construções de posição nos testes, ou guardada só no arquivo, que a perderia quando o monitor some com o personagem escondido;
+  - um retângulo vazio para "desconhecido", em vez de nulo;
+  - duas funções de restauração, com textos de regra diferentes.
+- **Motivo:** é a cascata que DEC-008 e ARCHITECTURE.md 2.8 já descreviam. A fração é estável entre sessões; a âncora absoluta não é.
+- **Trade-offs:**
+  - a igualdade de `PosicaoDoPersonagem` passou a incluir a tela: compare campo a campo ou obtenha as duas posições pelas funções do `Posicionador`;
+  - o pixel dos pés muda a escolha em execução em casos de borda: a âncora exatamente na base da tela com um monitor logo abaixo, ou um empate de distância deslocado em 1 px;
+  - com monitores clonados ou sobrepostos, a escolha "pela tela" é determinística, mas arbitrária.
+- **Adiado para o passo P8:** um clique depois de o monitor mudar com o botão pressionado valida a posição com a tela nova, mas com as frações da área antiga, até o fim da reação. Se o usuário esconder ou sair nesse intervalo, a partida seguinte restaura noutro ponto. O passo P8 resolve, validando a partir da posição que acompanhou a topologia.
+- **Consequências:**
+  - ARCHITECTURE.md 2.6 (linha de `BOOTING`) e 2.8; nota na DEC-008;
+  - testes `RestaurarTestes` (cascata, S1–S7, S9, S11, frações inválidas, idempotência, carga e reprodução), `PropriedadesDaPersistenciaTestes`, `ReacomodarTestes`, `PosicionadorTestes`, `PropriedadesTestes` e a conferência da carga em `InvariantesTestes`;
+  - o mapa dos cenários S1–S12 fica em TODO.md, Fase 5.
 
 ## Decisões de produto registradas pelo usuário
 

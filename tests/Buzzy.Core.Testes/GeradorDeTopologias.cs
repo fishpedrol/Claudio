@@ -222,8 +222,11 @@ internal sealed class GeradorDeTopologias(Random aleatorio)
         _ => aleatorio.Next(-ladoNovo - 300, ladoDoVizinho + 301),
     };
 
-    /// <summary>Torna principal o monitor do índice e move a origem (0,0) para ele, como o Windows faz.</summary>
-    private static void Rebasear(List<MonitorDoDesktop> lista, int principal)
+    /// <summary>
+    /// Torna principal o monitor do índice e move a origem (0,0) para ele, como o Windows faz. Também serve às topologias
+    /// de exemplo da Fase 5 (<see cref="TopologiasDeExemplo.Rebaseada"/>), fora do fluxo aleatório.
+    /// </summary>
+    internal static void Rebasear(List<MonitorDoDesktop> lista, int principal)
     {
         int dx = -lista[principal].Tela.Esquerda;
         int dy = -lista[principal].Tela.Topo;

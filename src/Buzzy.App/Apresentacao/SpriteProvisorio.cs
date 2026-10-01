@@ -29,11 +29,29 @@ internal static class SpriteProvisorio
 
     private static readonly Lazy<Tela> Parado = new(() => BonecoPixel.Desenhar(PosesPixel.Todas.First(p => p.Nome == "parado")));
 
-    /// <summary>Quadros já renderizados por pose, espelho, expressão e DPI (só na thread da interface).</summary>
-    private static readonly Dictionary<(QuadroDoSprite Quadro, int Dpi), BitmapSource> Cache = [];
+    /// <summary>
+    /// Orçamento do cache de quadros (crítica, C28): 16 MiB de pixels. A 100% cada quadro tem 64 KiB, e cabem 256; a
+    /// 200%, 256 KiB, e cabem 64; a 300%, 576 KiB, e cabem 28.
+    /// </summary>
+    internal const long OrcamentoDoCache = 16L * 1024 * 1024;
+
+    /// <summary>
+    /// Quadros já renderizados, pelo quadro inteiro (pose, espelho, cara, item, efeito, fase, deformação e giro) e pelo
+    /// DPI, limitados por <see cref="OrcamentoDoCache"/> (só na thread da interface).
+    /// </summary>
+    private static readonly CacheDeQuadros<(QuadroDoSprite Quadro, int Dpi)> Cache = new(OrcamentoDoCache);
 
     /// <summary>Quantos quadros estão no cache (diagnóstico de memória).</summary>
-    internal static int QuadrosEmCache => Cache.Count;
+    internal static int QuadrosEmCache => Cache.Quantos;
+
+    /// <summary>Quantos bytes de pixels os quadros do cache ocupam (diagnóstico de memória).</summary>
+    internal static long BytesEmCache => Cache.Bytes;
+
+    /// <summary>Quantos quadros o cache já descartou para caber no orçamento.</summary>
+    internal static long QuadrosDescartados => Cache.Descartados;
+
+    /// <summary>Quantos quadros já foram desenhados, por não estarem no cache (o log SPRITE sai a cada um).</summary>
+    internal static long QuadrosRenderizados { get; private set; }
 
     /// <summary>
     /// Renderiza o sprite no DPI do monitor (tamanho físico = <see cref="TamanhoLogico"/> no DPI
@@ -46,27 +64,43 @@ internal static class SpriteProvisorio
     }
 
     /// <summary>
-    /// O quadro pedido (pose provisória da Fase 4) no DPI do monitor, renderizado uma vez e guardado.
-    /// Mesmo tamanho lógico em todas as poses: a janela e a âncora (centro da base) não mudam.
+    /// O quadro pedido (pose provisória da Fase 4, ou de uso, gesto e onda do tamagotchi) no DPI do monitor, renderizado
+    /// e guardado no cache limitado: enquanto estiver lá, não é desenhado de novo. Mesmo tamanho lógico em todas as
+    /// poses: a janela e a âncora (centro da base) não mudam.
     /// </summary>
     internal static BitmapSource Renderizar(QuadroDoSprite quadro, int dpi)
     {
-        if (Cache.TryGetValue((quadro, dpi), out BitmapSource? pronto)) return pronto;
-        PosePixel pose = PosesPixel.Todas.FirstOrDefault(p => p.Nome == quadro.Pose)
+        if (Cache.TentarObter((quadro, dpi), out BitmapSource? pronto)) return pronto;
+        Tela tela = Compor(quadro);
+        TamanhoPx tamanho = TamanhoLogico.ParaPixels(dpi);
+        BitmapSource bmp = Bitmap(tela, tamanho.Largura, tamanho.Altura, dpi);
+        QuadrosRenderizados++;
+        Cache.Guardar((quadro, dpi), bmp);
+        return bmp;
+    }
+
+    /// <summary>
+    /// O quadro pedido em pixels de arte (64 × 64), antes da ampliação pelo DPI. A pose vem de
+    /// <see cref="PosesPixel.PorNome"/>, que acha também as poses de uso e as dos gestos da onda (DEC-028). Nas poses de
+    /// uso, a cara é a da própria pose (crítica, C10). A sobreposição da onda entra por cima de qualquer pose, e o
+    /// modificador de pose dela só onde a pose o aceita (<see cref="EfeitosPixel.Modificavel"/>: no chão, nunca no uso).
+    /// Espelho, giro e deformação vêm depois, como antes.
+    /// </summary>
+    internal static Tela Compor(QuadroDoSprite quadro)
+    {
+        PosePixel pose = PosesPixel.PorNome(quadro.Pose)
             ?? throw new ArgumentException($"Pose desconhecida: {quadro.Pose}.", nameof(quadro));
-        Tela tela = BonecoPixel.Desenhar(pose, quadro.Expressao);
+        string? expressao = UsosPixel.EhDeUso(pose) ? null : quadro.Expressao;
+        if (EfeitosPixel.Modificavel(pose)) pose = EfeitosPixel.Modificar(pose, quadro.Efeito, quadro.Fase);
+        Tela tela = BonecoPixel.Desenhar(pose, expressao, quadro.Item, quadro.Efeito, quadro.Fase);
         if (quadro.Espelhado) tela = tela.Espelhada();
         if (quadro.Giro != Giro.Nenhum) tela = tela.Girada(horario: quadro.Giro == Giro.Horario);
-        tela = quadro.Deformacao switch
+        return quadro.Deformacao switch
         {
             Deformacao.Achatado => tela.Deformada(EscalaAchatada.X, EscalaAchatada.Y),
             Deformacao.Esticado => tela.Deformada(EscalaEsticada.X, EscalaEsticada.Y),
             _ => tela,
         };
-        TamanhoPx tamanho = TamanhoLogico.ParaPixels(dpi);
-        BitmapSource bmp = Bitmap(tela, tamanho.Largura, tamanho.Altura, dpi);
-        Cache[(quadro, dpi)] = bmp;
-        return bmp;
     }
 
     /// <summary>PNG do ícone da bandeja (cabeça desenhada em 16 × 16), ampliado sem suavização.</summary>
@@ -128,8 +162,11 @@ internal static class SpriteProvisorio
         }
     }
 
-    /// <summary>Amplia a tela por vizinho mais próximo até largura × altura e gera um bitmap congelado.</summary>
-    private static BitmapSource Bitmap(Tela tela, int largura, int altura, int dpi)
+    /// <summary>
+    /// Amplia a tela por vizinho mais próximo até largura × altura e gera um bitmap congelado, com alfa só 0 ou 255. Serve
+    /// também ao sprite das janelas dos itens (<see cref="SpriteDoItem"/>).
+    /// </summary>
+    internal static BitmapSource Bitmap(Tela tela, int largura, int altura, int dpi)
     {
         uint[] origem = tela.ParaArgb();
         int[] pixels = new int[largura * altura];

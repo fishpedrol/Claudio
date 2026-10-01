@@ -67,6 +67,24 @@ public sealed record ParametrosDeMovimento
 
     /// <summary>Maior passeio, em DIP, de quem está preso pelo usuário.</summary>
     public int PasseioPresoMaximo { get; init; } = 220;
+
+    // Itens do tamagotchi (DEC-028): o item invocado nasce ao lado do personagem, acima do chão, e cai com a mesma
+    // gravidade e a mesma queda máxima dele, quicando uma vez só, de leve.
+
+    /// <summary>Altura, em DIP, acima dos pés do personagem, de onde o item invocado começa a cair.</summary>
+    public double AlturaDaQuedaDoItem { get; init; } = 140;
+
+    /// <summary>Folga, em DIP, entre o item que nasce e o personagem, e entre dois itens.</summary>
+    public double FolgaDoItem { get; init; } = 8;
+
+    /// <summary>Quique do item: fração da velocidade de impacto devolvida para cima.</summary>
+    public double RestituicaoDoItem { get; init; } = 0.35;
+
+    /// <summary>Menor velocidade de impacto, em DIP/s, que faz o item quicar; abaixo dela, ele para no chão.</summary>
+    public double ImpactoMinimoDoItem { get; init; } = 300;
+
+    /// <summary>Quiques do item, no máximo, antes de parar.</summary>
+    public int QuiquesDoItem { get; init; } = 1;
 }
 
 /// <summary>

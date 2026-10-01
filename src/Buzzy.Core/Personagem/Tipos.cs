@@ -56,6 +56,14 @@ public enum Estado
     /// as mãos para fora (DEC-025). Entra e sai pelo clique duplo; sem relógio; a agenda só troca a cara.
     /// </summary>
     Peeking,
+
+    /// <summary>
+    /// Usa o item que o usuário soltou sobre ele (DEC-028): come, bebe, fuma, cheira, engole ou inala, de desenho
+    /// animado, por um número fixo de passos, no apoio em que estava (chão, parede, cipó ou esconderijo). O relógio
+    /// corre; no grupo do usuário, nada autônomo chega; um PRESS o segura na hora. No fim, a acomodação o devolve ao
+    /// mesmo apoio.
+    /// </summary>
+    Using,
 }
 
 /// <summary>Em que borda o personagem está escondido (DEC-025).</summary>
@@ -102,7 +110,9 @@ public enum NivelDeEnergia
 
 /// <summary>
 /// Expressão do rosto, dimensão independente do estado (invariante 6). Uma por expressão de
-/// docs/IDENTIDADE_VISUAL.md, seção 6; o manifesto da Fase 6 precisa cobrir todas.
+/// docs/IDENTIDADE_VISUAL.md, seção 6; o manifesto da Fase 6 precisa cobrir todas. As 14 primeiras são as de humor
+/// (<see cref="Expressoes.DeHumor"/>); as sete do fim são as caras de efeito do tamagotchi (DEC-028,
+/// <see cref="Expressoes.DeEfeito"/>), que só a onda de um item mostra. A chave da arte é o nome em minúsculas.
 /// </summary>
 public enum Expressao
 {
@@ -120,11 +130,79 @@ public enum Expressao
     Pensativo,
     Empolgado,
     Determinado,
+
+    // Caras de efeito (DEC-028): de desenho animado, só na onda de um item.
+    Bebado,
+    Enjoado,
+    Chapado,
+    Eletrico,
+    Apaixonado,
+    Tonto,
+    Viajando,
+}
+
+/// <summary>
+/// Listas fixas de expressões (DEC-027). A troca de cara da agenda e a emoção dominante usam só as 14 caras de
+/// humor, numa lista fixa: um valor novo no fim de <see cref="Expressao"/> não muda os sorteios nem as
+/// reproduções gravadas.
+/// </summary>
+public static class Expressoes
+{
+    /// <summary>
+    /// As 14 caras de humor, na ordem do enum e de expressoes.png: o sorteio automático da troca de cara e as
+    /// opções da emoção dominante, além de "Automática".
+    /// </summary>
+    public static IReadOnlyList<Expressao> DeHumor { get; } =
+    [
+        Expressao.Neutro, Expressao.Feliz, Expressao.Rindo, Expressao.Curioso, Expressao.Surpreso, Expressao.Assustado, Expressao.Sonolento,
+        Expressao.Bocejando, Expressao.Dormindo, Expressao.Travesso, Expressao.Entediado, Expressao.Pensativo, Expressao.Empolgado, Expressao.Determinado,
+    ];
+
+    /// <summary>
+    /// As sete caras de efeito do tamagotchi (DEC-028), no fim do enum: só a onda de um item as mostra, pela cara da fase
+    /// e pelos sorteios dela (<see cref="TabelaDoTamagotchi"/>). Nunca são a emoção dominante nem saem da troca automática.
+    /// </summary>
+    public static IReadOnlyList<Expressao> DeEfeito { get; } =
+    [
+        Expressao.Bebado, Expressao.Enjoado, Expressao.Chapado, Expressao.Eletrico, Expressao.Apaixonado, Expressao.Tonto, Expressao.Viajando,
+    ];
+
+    /// <summary>
+    /// As quatro companheiras de cada cara de humor, na ordem de <see cref="DeHumor"/>: sorteadas com peso 1 cada,
+    /// contra 6 da dominante.
+    /// </summary>
+    private static readonly IReadOnlyList<Expressao>[] TabelaDeCompanheiras =
+    [
+        [Expressao.Feliz, Expressao.Curioso, Expressao.Pensativo, Expressao.Entediado],      // Neutro
+        [Expressao.Rindo, Expressao.Empolgado, Expressao.Travesso, Expressao.Curioso],       // Feliz
+        [Expressao.Feliz, Expressao.Travesso, Expressao.Empolgado, Expressao.Surpreso],      // Rindo
+        [Expressao.Pensativo, Expressao.Surpreso, Expressao.Feliz, Expressao.Travesso],      // Curioso
+        [Expressao.Assustado, Expressao.Curioso, Expressao.Empolgado, Expressao.Rindo],      // Surpreso
+        [Expressao.Surpreso, Expressao.Pensativo, Expressao.Curioso, Expressao.Neutro],      // Assustado
+        [Expressao.Bocejando, Expressao.Dormindo, Expressao.Entediado, Expressao.Neutro],    // Sonolento
+        [Expressao.Sonolento, Expressao.Entediado, Expressao.Neutro, Expressao.Pensativo],   // Bocejando
+        [Expressao.Sonolento, Expressao.Bocejando, Expressao.Neutro, Expressao.Feliz],       // Dormindo
+        [Expressao.Rindo, Expressao.Feliz, Expressao.Curioso, Expressao.Empolgado],          // Travesso
+        [Expressao.Sonolento, Expressao.Bocejando, Expressao.Pensativo, Expressao.Neutro],   // Entediado
+        [Expressao.Curioso, Expressao.Neutro, Expressao.Entediado, Expressao.Determinado],   // Pensativo
+        [Expressao.Feliz, Expressao.Rindo, Expressao.Surpreso, Expressao.Determinado],       // Empolgado
+        [Expressao.Empolgado, Expressao.Pensativo, Expressao.Neutro, Expressao.Feliz],       // Determinado
+    ];
+
+    /// <summary>Se a cara é uma das 14 de humor (<see cref="DeHumor"/>), as únicas que podem ser a emoção dominante.</summary>
+    public static bool EhDeHumor(Expressao expressao) => expressao is >= Expressao.Neutro and <= Expressao.Determinado;
+
+    /// <summary>As quatro caras que acompanham a <paramref name="dominante"/> no sorteio. Fora das 14 de humor, lança.</summary>
+    public static IReadOnlyList<Expressao> Companheiras(Expressao dominante)
+        => EhDeHumor(dominante)
+            ? TabelaDeCompanheiras[(int)dominante]
+            : throw new ArgumentOutOfRangeException(nameof(dominante), dominante, "A emoção dominante é uma das 14 caras de humor.");
 }
 
 /// <summary>
 /// Gesto curto (ARCHITECTURE.md 2.6): ação visual de duração limitada na superfície atual,
-/// que não muda estado, posição nem superfície (invariante 15).
+/// que não muda estado, posição nem superfície (invariante 15). A agenda sorteia de <see cref="Espiar"/> a
+/// <see cref="Brincar"/>; os seis do fim são os da onda de um item (DEC-028), que só ela sorteia, também só em IDLE.
 /// </summary>
 public enum Gesto
 {
@@ -134,6 +212,14 @@ public enum Gesto
     Cocar,
     Espreguicar,
     Brincar,
+
+    // Gestos da onda (DEC-028): de desenho animado, só em IDLE e só pelos sorteios da onda.
+    Soluco,
+    Danca,
+    Gargalhada,
+    Espirro,
+    Tosse,
+    Tremedeira,
 }
 
 /// <summary>Para onde o personagem está virado. As poses de perfil são desenhadas para a direita.</summary>
@@ -207,7 +293,7 @@ public static class Estados
         Estado.Booting or Estado.Hidden or Estado.Exiting => GrupoDoEstado.Sistema,
         Estado.Idle or Estado.Walking or Estado.Climbing or Estado.Hanging or Estado.Jumping or Estado.Resting or Estado.Peeking => GrupoDoEstado.Autonomo,
         Estado.Falling or Estado.Landing => GrupoDoEstado.Fisico,
-        Estado.Pressed or Estado.Dragging or Estado.Settling or Estado.Reacting => GrupoDoEstado.Usuario,
+        Estado.Pressed or Estado.Dragging or Estado.Settling or Estado.Reacting or Estado.Using => GrupoDoEstado.Usuario,
         _ => throw new ArgumentOutOfRangeException(nameof(estado), estado, "Estado desconhecido."),
     };
 
@@ -221,7 +307,10 @@ public static class Estados
     public static bool EmMovimento(this Estado estado)
         => estado is Estado.Walking or Estado.Climbing or Estado.Hanging or Estado.Jumping or Estado.Falling or Estado.Landing;
 
-    /// <summary>Estados que aceitam <c>PRESS</c>: autônomos, físicos e <see cref="Estado.Reacting"/> (DEC-004).</summary>
+    /// <summary>
+    /// Estados que aceitam <c>PRESS</c>: autônomos, físicos, <see cref="Estado.Reacting"/> (DEC-004) e
+    /// <see cref="Estado.Using"/> (DEC-028: o usuário prevalece, e o uso acaba na hora).
+    /// </summary>
     public static bool AceitaPressionar(this Estado estado)
-        => estado.Grupo() is GrupoDoEstado.Autonomo or GrupoDoEstado.Fisico || estado == Estado.Reacting;
+        => estado.Grupo() is GrupoDoEstado.Autonomo or GrupoDoEstado.Fisico || estado is Estado.Reacting or Estado.Using;
 }

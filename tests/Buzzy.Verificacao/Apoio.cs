@@ -5,6 +5,8 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
+using Buzzy.App.Plataforma;
+using Buzzy.App.Testes.Integracao;
 
 namespace Buzzy.Verificacao;
 
@@ -49,6 +51,12 @@ internal sealed record EventoBuzzy(string Chave, IReadOnlyDictionary<string, str
 
     internal string this[string campo] => Campos.TryGetValue(campo, out string? v) ? v : "";
 
+    /// <summary>
+    /// Instante da linha, do prefixo <c>[hh:mm:ss.fff]</c>: o tempo desde o início do processo do Buzzy que a gravou.
+    /// Serve para medir durações entre linhas do mesmo Buzzy; nulo sem o prefixo.
+    /// </summary>
+    internal TimeSpan? Instante { get; init; }
+
     internal static EventoBuzzy? Ler(string linha)
     {
         int i = linha.IndexOf("BUZZY|", StringComparison.Ordinal);
@@ -60,7 +68,10 @@ internal sealed record EventoBuzzy(string Chave, IReadOnlyDictionary<string, str
             int igual = parte.IndexOf('=', StringComparison.Ordinal);
             if (igual > 0) campos[parte[..igual]] = parte[(igual + 1)..];
         }
-        return new EventoBuzzy(partes[0], campos);
+        int fim = linha.IndexOf(']', StringComparison.Ordinal);
+        TimeSpan? instante = linha.StartsWith('[') && fim > 1
+            && TimeSpan.TryParseExact(linha.AsSpan(1, fim - 1), @"hh\:mm\:ss\.fff", CultureInfo.InvariantCulture, out TimeSpan t) ? t : null;
+        return new EventoBuzzy(partes[0], campos) { Instante = instante };
     }
 
     internal static Nativo.POINT Ponto(string texto)
@@ -85,18 +96,29 @@ internal static class LogDoBuzzy
     internal static string Arquivo { get; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Buzzy", "diagnostico.log");
 
-    internal static long Tamanho() => File.Exists(Arquivo) ? new FileInfo(Arquivo).Length : 0;
+    /// <summary>
+    /// A cópia que o Buzzy faz do log ao passar de 1 MB (Diagnostico.cs): o arquivo vira <c>diagnostico.1.log</c> e o
+    /// <see cref="Arquivo"/> recomeça vazio.
+    /// </summary>
+    internal static string ArquivoRotacionado { get; } = Path.Combine(Path.GetDirectoryName(Arquivo)!, "diagnostico.1.log");
 
-    internal static List<EventoBuzzy> Desde(long inicio)
+    /// <summary>
+    /// A marca do fim atual do log, para ler depois só o que vier dali (<see cref="Desde"/>). É um número opaco
+    /// (<see cref="LeituraDoLog"/>, a mesma leitura dos testes de integração, compilada junto): reconhece a rotação do log
+    /// pelo arquivo, e não pelo tamanho.
+    /// </summary>
+    internal static long Marca() => LeituraDoLog.Marcar(Arquivo);
+
+    /// <summary>
+    /// Os eventos escritos desde a <paramref name="marca"/> (uma <see cref="Marca"/> lida antes). Se o log foi rotacionado
+    /// depois dela, o trecho da marca em diante está na cópia <see cref="ArquivoRotacionado"/> e vem antes do arquivo atual
+    /// inteiro, mesmo que o arquivo novo já tenha passado do deslocamento da marca: uma verificação longa, com marcas
+    /// antigas como a da abertura do Buzzy, atravessa a rotação sem perder linhas.
+    /// </summary>
+    internal static List<EventoBuzzy> Desde(long marca)
     {
-        if (!File.Exists(Arquivo)) return [];
-        using var fs = new FileStream(Arquivo, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-        if (inicio > fs.Length) inicio = 0;
-        fs.Seek(inicio, SeekOrigin.Begin);
-        using var sr = new StreamReader(fs, new UTF8Encoding(false));
         var eventos = new List<EventoBuzzy>();
-        string? linha;
-        while ((linha = sr.ReadLine()) is not null)
+        foreach (string linha in LeituraDoLog.LinhasDesde(Arquivo, ArquivoRotacionado, marca))
         {
             if (EventoBuzzy.Ler(linha) is { } e) eventos.Add(e);
         }
@@ -117,6 +139,49 @@ internal static class LogDoBuzzy
             if (e is not null) return e;
             if (DateTime.UtcNow > fim || desistir?.Invoke() == true) return null;
             Thread.Sleep(100);
+        }
+    }
+}
+
+/// <summary>
+/// Isolamento da verificação (Fase 5): todo Buzzy aberto por ela usa o perfil de teste <c>verificacao</c>
+/// (<c>--perfil-de-teste</c>), com os dados em <c>%LOCALAPPDATA%\Buzzy\testes\verificacao</c>, nunca nas
+/// configurações reais do usuário. A pasta do perfil é apagada antes de abrir cada primeira instância, para o
+/// Buzzy partir da posição inicial que a verificação calcula (<c>Posicionador.Inicial</c>); o log de
+/// diagnóstico continua na raiz da pasta do Buzzy. O caminho e a limpeza não são escritos aqui: vêm do
+/// próprio Buzzy (<see cref="PastaDeDados"/>) e dos testes de integração (<see cref="PerfilDeTeste"/>), cujos
+/// fontes o projeto compila junto (Buzzy.Verificacao.csproj), com os testes deles.
+/// </summary>
+internal static class PerfilDaVerificacao
+{
+    internal const string Nome = "verificacao";
+
+    /// <summary>Um Buzzy.exe com o log de diagnóstico, o perfil da verificação e os argumentos dados.</summary>
+    internal static ProcessStartInfo Descrever(string exeBuzzy, params string[] argumentos)
+    {
+        var psi = new ProcessStartInfo(exeBuzzy) { UseShellExecute = false };
+        psi.ArgumentList.Add("--diagnostico");
+        psi.ArgumentList.Add("--perfil-de-teste");
+        psi.ArgumentList.Add(Nome);
+        foreach (string argumento in argumentos) psi.ArgumentList.Add(argumento);
+        return psi;
+    }
+
+    /// <summary>
+    /// Apaga a pasta do perfil (<see cref="PastaDeDados.DoPerfilDeTeste"/>), se existir, com tudo o que houver
+    /// dentro, pela mesma limpeza dos testes de integração (<see cref="PerfilDeTeste.Limpar(string)"/>). Só com
+    /// nenhum Buzzy aberto. Não segue junção nem link simbólico no caminho até ela: nunca apaga nada fora da pasta
+    /// do Buzzy.
+    /// </summary>
+    internal static void Limpar()
+    {
+        try
+        {
+            PerfilDeTeste.Limpar(Nome);
+        }
+        catch (InvalidOperationException e)
+        {
+            throw new FalhaDeVerificacao($"{e.Message} Nada foi iniciado.");
         }
     }
 }

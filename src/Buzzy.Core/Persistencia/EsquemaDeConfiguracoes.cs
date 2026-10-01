@@ -7,8 +7,12 @@ using Buzzy.Core.Personagem;
 namespace Buzzy.Core.Persistencia;
 
 /// <summary>
-/// Esquema v1 do settings.json (Fase 5; ARCHITECTURE.md 2.12; SECURITY.md 7): converte bytes em
-/// <see cref="ConfiguracoesSalvas"/> e de volta, sem E/S.
+/// Esquema v3 do settings.json (Fase 5; ARCHITECTURE.md 2.12; SECURITY.md 7): converte bytes em
+/// <see cref="ConfiguracoesSalvas"/> e de volta, sem E/S. A v2 acrescentou a emoção dominante
+/// (<c>preferencias.emocaoDominante</c>, DEC-027); a v3, a postura gravada com a posição (DEC-029, item 11): a borda do
+/// esconderijo (<c>posicao.esconderijo</c>, DEC-025) e a marca "preso pelo usuário" (<c>posicao.presoPeloUsuario</c>,
+/// DEC-024). Os campos novos são sempre escritos; arquivos v1 e v2, sem eles, são lidos sem migração e sem aviso, com a
+/// emoção automática, sem esconderijo e solto.
 ///
 /// A leitura é tolerante campo a campo e nunca lança. Só é ilegível o arquivo grande demais, fora de
 /// UTF-8, que não é JSON (comentários e vírgula final são aceitos), fundo demais, sem objeto na raiz ou
@@ -25,8 +29,12 @@ namespace Buzzy.Core.Persistencia;
 /// </summary>
 public static class EsquemaDeConfiguracoes
 {
-    /// <summary>Versão escrita no campo <c>schemaVersion</c>. Toda ampliação do esquema a incrementa.</summary>
-    public const int VersaoAtual = 1;
+    /// <summary>
+    /// Versão escrita no campo <c>schemaVersion</c>. Toda ampliação do esquema a incrementa: a 2 acrescentou a emoção
+    /// dominante, e a 3, a borda do esconderijo e a marca de preso; um build de uma versão anterior vê o arquivo novo como
+    /// versão futura e não grava por cima.
+    /// </summary>
+    public const int VersaoAtual = 3;
 
     /// <summary>Tamanho máximo do arquivo, contando um BOM; maior, é ilegível sem ser interpretado.</summary>
     public const int TamanhoMaximoEmBytes = 65_536;
@@ -40,14 +48,26 @@ public static class EsquemaDeConfiguracoes
     /// <summary>Faixa das coordenadas gravadas (âncora e tela do monitor), em pixels físicos.</summary>
     public const int CoordenadaMinima = -32_768, CoordenadaMaxima = 32_767;
 
-    // Campos do esquema v1, na ordem em que são escritos.
+    // Campos do esquema v3, na ordem em que são escritos.
     private static readonly string[] CamposDaRaiz = ["schemaVersion", "posicao", "preferencias"];
-    private static readonly string[] CamposDaPosicao = ["chaveMonitor", "telaDoMonitor", "fracaoX", "fracaoY", "ancoraAbsoluta"];
+    private static readonly string[] CamposDaPosicao = ["chaveMonitor", "telaDoMonitor", "fracaoX", "fracaoY", "ancoraAbsoluta", "esconderijo", "presoPeloUsuario"];
     private static readonly string[] CamposDaTela = ["esquerda", "topo", "direita", "base"];
     private static readonly string[] CamposDaAncora = ["x", "y"];
-    private static readonly string[] CamposDasPreferencias = ["energia", "modoTelaCheia", "atravessarMonitores"];
+    private static readonly string[] CamposDasPreferencias = ["energia", "modoTelaCheia", "atravessarMonitores", "emocaoDominante"];
 
     private static readonly NivelDeEnergia[] NiveisDeEnergia = [NivelDeEnergia.Baixa, NivelDeEnergia.Media, NivelDeEnergia.Alta];
+
+    /// <summary>As quatro bordas do esconderijo, a lista fechada da leitura (<see cref="TentarLerEsconderijo"/>).</summary>
+    private static readonly LadoDoEsconderijo[] Bordas = [LadoDoEsconderijo.Nenhum, LadoDoEsconderijo.Baixo, LadoDoEsconderijo.Esquerda, LadoDoEsconderijo.Direita];
+
+    /// <summary>A emoção dominante "Automática" (nula) no arquivo.</summary>
+    private const string EmocaoAutomatica = "automatica";
+
+    /// <summary>
+    /// Os 14 nomes da emoção dominante no arquivo, na ordem de <see cref="Expressoes.DeHumor"/>: o nome da cara em
+    /// minúsculas ASCII. É a lista fechada da leitura (<see cref="TentarLerEmocao"/>).
+    /// </summary>
+    private static readonly string[] NomesDasEmocoes = [.. Expressoes.DeHumor.Select(e => e.ToString().ToLowerInvariant())];
 
     private static readonly JsonDocumentOptions OpcoesDeLeitura = new()
     {
@@ -92,10 +112,12 @@ public static class EsquemaDeConfiguracoes
             {
                 return Extrair(documento.RootElement);
             }
-            catch (Exception)
+            catch (InvalidOperationException)
             {
-                // Qualquer outra falha ao extrair, como um escape que não vira UTF-16 válido: a leitura
-                // nunca lança, e o arquivo conta como JSON ilegível.
+                // Um texto do arquivo que não vira UTF-16 válido (um escape de surrogate solto, num nome de campo ou num
+                // valor): o System.Text.Json lança ao transcodificar, e o arquivo conta como JSON ilegível. A captura é só
+                // dessa falha: um defeito da extração não pode passar por arquivo ilegível, que a gravação seguinte
+                // trocaria pela cópia de diagnóstico, perdendo a posição; ele escapa, e a partida desliga a persistência.
                 return Ilegivel("json");
             }
         }
@@ -133,12 +155,15 @@ public static class EsquemaDeConfiguracoes
                 json.WriteNumber("x", p.AncoraAbsoluta.X);
                 json.WriteNumber("y", p.AncoraAbsoluta.Y);
                 json.WriteEndObject();
+                json.WriteString("esconderijo", NomeDoEsconderijo(normalizadas.Esconderijo));
+                json.WriteBoolean("presoPeloUsuario", normalizadas.PresoPeloUsuario);
                 json.WriteEndObject();
             }
             json.WriteStartObject("preferencias");
             json.WriteString("energia", NomeDaEnergia(normalizadas.Preferencias.Energia));
             json.WriteBoolean("modoTelaCheia", normalizadas.Preferencias.ModoTelaCheia);
             json.WriteBoolean("atravessarMonitores", normalizadas.Preferencias.AtravessarMonitores);
+            json.WriteString("emocaoDominante", NomeDaEmocao(normalizadas.Preferencias.EmocaoDominante));
             json.WriteEndObject();
             json.WriteEndObject();
         }
@@ -149,13 +174,19 @@ public static class EsquemaDeConfiguracoes
     /// As configurações como o arquivo as guarda: posição sem chave válida (vazia, longa demais, com
     /// caractere de controle ou surrogate solto) vira nenhuma; frações saneadas (NaN vira 0,5, o resto é
     /// preso em [0, 1]); coordenadas presas na faixa; tela que fica vazia vira desconhecida; energia fora dos
-    /// três níveis vira Média; preferências nulas, as padrão. É o que <see cref="Ler"/> devolve do que
-    /// <see cref="Escrever"/> escreveu.
+    /// três níveis vira Média; emoção dominante fora das 14 caras de humor vira automática; preferências nulas, as
+    /// padrão; a postura só existe com a posição (sem ela, nenhuma borda e solto), e uma borda fora do enum vira
+    /// nenhuma. É o que <see cref="Ler"/> devolve do que <see cref="Escrever"/> escreveu.
     /// </summary>
     public static ConfiguracoesSalvas Normalizar(ConfiguracoesSalvas configuracoes)
     {
         ArgumentNullException.ThrowIfNull(configuracoes);
-        return new ConfiguracoesSalvas(NormalizarPosicao(configuracoes.Posicao), NormalizarPreferencias(configuracoes.Preferencias));
+        PosicaoDoPersonagem? posicao = NormalizarPosicao(configuracoes.Posicao);
+        return new ConfiguracoesSalvas(posicao, NormalizarPreferencias(configuracoes.Preferencias))
+        {
+            Esconderijo = posicao is not null && Enum.IsDefined(configuracoes.Esconderijo) ? configuracoes.Esconderijo : LadoDoEsconderijo.Nenhum,
+            PresoPeloUsuario = posicao is not null && configuracoes.PresoPeloUsuario,
+        };
     }
 
     /// <summary>Nome do nível no arquivo: <c>"baixa"</c>, <c>"media"</c> ou <c>"alta"</c>; fora dos três, <c>"media"</c>.</summary>
@@ -186,6 +217,66 @@ public static class EsquemaDeConfiguracoes
         return false;
     }
 
+    /// <summary>
+    /// Nome da emoção dominante no arquivo (DEC-027): <c>"automatica"</c> para nula, ou o nome da cara de humor em
+    /// minúsculas ASCII, como <c>"feliz"</c>; fora das 14 caras de humor, <c>"automatica"</c>.
+    /// </summary>
+    public static string NomeDaEmocao(Expressao? emocao)
+        => emocao is { } e && Expressoes.EhDeHumor(e) ? NomesDasEmocoes[(int)e] : EmocaoAutomatica;
+
+    /// <summary>
+    /// Emoção dominante por um dos nomes do arquivo (<see cref="NomeDaEmocao"/>: <c>"automatica"</c> ou uma das 14 caras
+    /// de humor), sem diferenciar maiúsculas, e nunca pelo Enum.Parse, que aceitaria números, listas e as caras que
+    /// não são de humor (SECURITY.md 7). Falso, <paramref name="emocao"/> é nula: a automática, o padrão seguro.
+    /// </summary>
+    public static bool TentarLerEmocao(string texto, out Expressao? emocao)
+    {
+        ArgumentNullException.ThrowIfNull(texto);
+        emocao = null;
+        if (string.Equals(texto, EmocaoAutomatica, StringComparison.OrdinalIgnoreCase)) return true;
+        for (int i = 0; i < NomesDasEmocoes.Length; i++)
+        {
+            if (string.Equals(texto, NomesDasEmocoes[i], StringComparison.OrdinalIgnoreCase))
+            {
+                emocao = Expressoes.DeHumor[i];
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Nome da borda do esconderijo no arquivo (DEC-025): <c>"nenhum"</c>, <c>"baixo"</c>, <c>"esquerda"</c> ou
+    /// <c>"direita"</c>; fora do enum, <c>"nenhum"</c>.
+    /// </summary>
+    public static string NomeDoEsconderijo(LadoDoEsconderijo lado) => lado switch
+    {
+        LadoDoEsconderijo.Baixo => "baixo",
+        LadoDoEsconderijo.Esquerda => "esquerda",
+        LadoDoEsconderijo.Direita => "direita",
+        _ => "nenhum",
+    };
+
+    /// <summary>
+    /// Borda do esconderijo pelos quatro nomes do arquivo (<see cref="NomeDoEsconderijo"/>), sem diferenciar maiúsculas,
+    /// e nunca pelo Enum.Parse, que aceitaria números e listas (SECURITY.md 7). Falso, <paramref name="lado"/> é nenhum,
+    /// o padrão seguro.
+    /// </summary>
+    public static bool TentarLerEsconderijo(string texto, out LadoDoEsconderijo lado)
+    {
+        ArgumentNullException.ThrowIfNull(texto);
+        foreach (LadoDoEsconderijo candidato in Bordas)
+        {
+            if (string.Equals(texto, NomeDoEsconderijo(candidato), StringComparison.OrdinalIgnoreCase))
+            {
+                lado = candidato;
+                return true;
+            }
+        }
+        lado = LadoDoEsconderijo.Nenhum;
+        return false;
+    }
+
     // ---------------------------------------------------------------- leitura campo a campo
 
     private static LeituraDasConfiguracoes Extrair(JsonElement raiz)
@@ -197,7 +288,8 @@ public static class EsquemaDeConfiguracoes
         if (campos[0] is not { ValueKind: JsonValueKind.Number } versaoLida || !versaoLida.TryGetInt32(out int versao) || versao < 1)
             return Ilegivel("schemaVersion");
 
-        var configuracoes = new ConfiguracoesSalvas(LerPosicao(campos[1], avisos), LerPreferencias(campos[2], avisos));
+        (PosicaoDoPersonagem? posicao, LadoDoEsconderijo esconderijo, bool preso) = LerPosicao(campos[1], avisos);
+        var configuracoes = new ConfiguracoesSalvas(posicao, LerPreferencias(campos[2], avisos)) { Esconderijo = esconderijo, PresoPeloUsuario = preso };
         SituacaoDaLeitura situacao = versao > VersaoAtual ? SituacaoDaLeitura.VersaoFutura : SituacaoDaLeitura.Valida;
         return new LeituraDasConfiguracoes(situacao, versao, configuracoes, avisos.AsReadOnly(), null);
     }
@@ -229,16 +321,17 @@ public static class EsquemaDeConfiguracoes
 
     /// <summary>
     /// A posição, tudo ou nada nos campos obrigatórios: sem a chave ou uma das frações, ou com uma delas
-    /// inválida, não há posição. A tela do monitor e a âncora são opcionais: inválidas, valem desconhecida
-    /// e (0, 0), porque a partida recalcula a âncora de qualquer forma (Posicionador.Restaurar).
+    /// inválida, não há posição, nem a postura que vem com ela. A tela do monitor e a âncora são opcionais: inválidas,
+    /// valem desconhecida e (0, 0), porque a partida recalcula a âncora de qualquer forma (Posicionador.Restaurar). A
+    /// postura (v3) também é opcional: ausente, como num arquivo v1 ou v2, vale nenhuma borda e solto, sem aviso.
     /// </summary>
-    private static PosicaoDoPersonagem? LerPosicao(JsonElement? valor, List<string> avisos)
+    private static (PosicaoDoPersonagem? Posicao, LadoDoEsconderijo Esconderijo, bool Preso) LerPosicao(JsonElement? valor, List<string> avisos)
     {
-        if (valor is not { } posicao || posicao.ValueKind == JsonValueKind.Null) return null;
+        if (valor is not { } posicao || posicao.ValueKind == JsonValueKind.Null) return default;
         if (posicao.ValueKind != JsonValueKind.Object)
         {
             avisos.Add("posicao: não é um objeto; sem posição");
-            return null;
+            return default;
         }
 
         JsonElement?[] campos = Campos(posicao, CamposDaPosicao, "posicao", avisos);
@@ -246,11 +339,24 @@ public static class EsquemaDeConfiguracoes
         if (!ChaveValida(chave))
         {
             avisos.Add("posicao.chaveMonitor: ausente ou inválida; sem posição");
-            return null;
+            return default;
         }
         if (!LerFracao(campos[2], "posicao.fracaoX", avisos, out double fracaoX) || !LerFracao(campos[3], "posicao.fracaoY", avisos, out double fracaoY))
-            return null;
-        return new PosicaoDoPersonagem(chave, fracaoX, fracaoY, LerAncora(campos[4], avisos)) { TelaDoMonitor = LerTela(campos[1], avisos) };
+            return default;
+        var lida = new PosicaoDoPersonagem(chave, fracaoX, fracaoY, LerAncora(campos[4], avisos)) { TelaDoMonitor = LerTela(campos[1], avisos) };
+        return (lida, LerEsconderijo(campos[5], avisos), LerBooleano(campos[6], "posicao.presoPeloUsuario", false, avisos));
+    }
+
+    /// <summary>
+    /// Borda do esconderijo, opcional: um dos quatro nomes (<see cref="TentarLerEsconderijo"/>). Ausente ou nula vale
+    /// nenhuma, sem aviso, como a emoção; outro valor vale nenhuma, com um aviso que não repete o valor do arquivo.
+    /// </summary>
+    private static LadoDoEsconderijo LerEsconderijo(JsonElement? valor, List<string> avisos)
+    {
+        if (valor is not { ValueKind: not JsonValueKind.Null } borda) return LadoDoEsconderijo.Nenhum;
+        if (borda.ValueKind == JsonValueKind.String && TentarLerEsconderijo(borda.GetString()!, out LadoDoEsconderijo lado)) return lado;
+        avisos.Add("posicao.esconderijo: não é nenhum, baixo, esquerda nem direita; vale nenhum");
+        return LadoDoEsconderijo.Nenhum;
     }
 
     /// <summary>Fração obrigatória: um número finito, preso em [0, 1]. Falso se ausente ou de outro tipo.</summary>
@@ -312,7 +418,10 @@ public static class EsquemaDeConfiguracoes
         return true;
     }
 
-    /// <summary>Preferências campo a campo: ausente vale o padrão, sem aviso; inválido vale o padrão, com aviso.</summary>
+    /// <summary>
+    /// Preferências campo a campo: ausente vale o padrão, sem aviso; inválido vale o padrão, com aviso. A emoção
+    /// dominante nula ou ausente (um arquivo v1) é a automática, sem aviso.
+    /// </summary>
     private static Preferencias LerPreferencias(JsonElement? valor, List<string> avisos)
     {
         Preferencias padrao = Preferencias.Padrao;
@@ -327,10 +436,17 @@ public static class EsquemaDeConfiguracoes
         NivelDeEnergia energia = padrao.Energia;
         if (campos[0] is { } nivel && (nivel.ValueKind != JsonValueKind.String || !TentarLerEnergia(nivel.GetString()!, out energia)))
             avisos.Add("preferencias.energia: não é baixa, media nem alta; vale media");
+        Expressao? emocao = null;
+        if (campos[3] is { ValueKind: not JsonValueKind.Null } nomeDaEmocao
+            && (nomeDaEmocao.ValueKind != JsonValueKind.String || !TentarLerEmocao(nomeDaEmocao.GetString()!, out emocao)))
+            avisos.Add("preferencias.emocaoDominante: não é uma das expressões; vale automatica");
         return new Preferencias(
             energia,
             LerBooleano(campos[1], "preferencias.modoTelaCheia", padrao.ModoTelaCheia, avisos),
-            LerBooleano(campos[2], "preferencias.atravessarMonitores", padrao.AtravessarMonitores, avisos));
+            LerBooleano(campos[2], "preferencias.atravessarMonitores", padrao.AtravessarMonitores, avisos))
+        {
+            EmocaoDominante = emocao,
+        };
     }
 
     private static bool LerBooleano(JsonElement? valor, string nome, bool padrao, List<string> avisos)
@@ -365,7 +481,9 @@ public static class EsquemaDeConfiguracoes
     private static Preferencias NormalizarPreferencias(Preferencias? preferencias)
     {
         if (preferencias is null) return Preferencias.Padrao;
-        return Enum.IsDefined(preferencias.Energia) ? preferencias : preferencias with { Energia = Preferencias.Padrao.Energia };
+        if (!Enum.IsDefined(preferencias.Energia)) preferencias = preferencias with { Energia = Preferencias.Padrao.Energia };
+        if (preferencias.EmocaoDominante is { } emocao && !Expressoes.EhDeHumor(emocao)) preferencias = preferencias with { EmocaoDominante = null };
+        return preferencias;
     }
 
     /// <summary>

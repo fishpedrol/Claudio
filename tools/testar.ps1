@@ -90,11 +90,13 @@ try {
         Executar (Join-Path $raiz "tests\Buzzy.App.Testes\bin\$Configuracao\net10.0-windows\Buzzy.App.Testes.exe") $argsIntegracao
     }
 
+    # As mesmas fontes que o portão do build (Buzzy.App.csproj) confere: aplicativo, núcleo e pixel art.
     Etapa 'portão de APIs proibidas (relatório)' {
         Executar (Join-Path $raiz "tools\Buzzy.PortaoApis\bin\$Configuracao\net10.0\Buzzy.PortaoApis.exe") @(
             '--binarios', $binApp,
             '--fonte', (Join-Path $raiz 'src\Buzzy.App'),
             '--fonte', (Join-Path $raiz 'src\Buzzy.Core'),
+            '--fonte', (Join-Path $raiz 'src\Buzzy.Visual'),
             '--manifesto', (Join-Path $raiz 'src\Buzzy.App\app.manifest'))
     }
 

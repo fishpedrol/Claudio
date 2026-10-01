@@ -30,4 +30,24 @@
     <ProjectReference Include="..\..\src\Buzzy.Core\Buzzy.Core.csproj" />
   </ItemGroup>
 
+  <!--
+    Perfil de teste (Fase 5): a pasta do perfil e a limpeza dela são as do próprio Buzzy e as dos testes de
+    integração, compiladas junto, e não uma cópia: o que a verificação apaga é o que Buzzy.App.Testes testa.
+  -->
+  <ItemGroup>
+    <Compile Include="..\..\src\Buzzy.App\Plataforma\PastaDeDados.cs" Link="Compartilhado\PastaDeDados.cs" />
+    <Compile Include="..\Buzzy.App.Testes\Integracao\PerfilDeTeste.cs" Link="Compartilhado\PerfilDeTeste.cs" />
+    <!-- A leitura do log que atravessa a rotação (marca com assinatura), a mesma dos testes de integração. -->
+    <Compile Include="..\Buzzy.App.Testes\Integracao\LeituraDoLog.cs" Link="Compartilhado\LeituraDoLog.cs" />
+  </ItemGroup>
+
+  <!--
+    Tamagotchi (DEC-028): as sementes dos cenários com a agenda ligada são escolhidas pelo simulador de tempo dos testes do
+    núcleo, compilado junto (o mesmo arquivo, não uma cópia), e a ordem dos quadros de uso vem da pixel art.
+  -->
+  <ItemGroup>
+    <Compile Include="..\Buzzy.Core.Testes\Movimento\SimuladorDeTempo.cs" Link="Compartilhado\SimuladorDeTempo.cs" />
+    <ProjectReference Include="..\..\src\Buzzy.Visual\Buzzy.Visual.csproj" />
+  </ItemGroup>
+
 </Project>

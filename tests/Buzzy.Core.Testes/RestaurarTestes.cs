@@ -293,8 +293,9 @@ internal static class RestaurarTestes
 
     // A posição é gravada onde ele estava, inclusive no ar, na parede ou no cipó. Na partida, com a
     // física da Fase 4, SETTLING decide como na mão do usuário (DEC-024): perto da borda de cima
-    // agarra o cipó, junto a uma lateral gruda na parede, e no meio do ar cai até o chão. A marca de
-    // "preso pelo usuário" não é gravada: agarrado na partida, ele volta à agenda comum.
+    // agarra o cipó, junto a uma lateral gruda na parede, e no meio do ar cai até o chão. Sem a marca de
+    // "preso pelo usuário" na carga (um arquivo v1 ou v2, ou uma gravação longe da parede e do cipó), agarrado na
+    // partida, ele volta à agenda comum; com ela (esquema v3), continua preso (PosturaSalvaTestes).
     [Teste]
     public static void Carga_SalvaNoAr_AgarraPertoDoTetoOuDeUmaLateralESenaoCai()
     {
@@ -369,6 +370,15 @@ internal static class RestaurarTestes
             Gravacao.Escrever(new Loaded(UmMonitor, semTela, Preferencias.Padrao), _ => "UmMonitor"), "sem a tela, 5 campos");
         Afirmar.Igual(semTela, Gravacao.LerPosicao(@"\\.\DISPLAY2;0.25;1;-1440;1032"), "5 campos: tela desconhecida");
 
+        // Uma tela vazia também é desconhecida: 5 campos, que a leitura aceita (9 campos com ela, a leitura recusaria).
+        foreach (RetanguloPx vazia in new RetanguloPx[] { default, Ret(-1920, 0, -1920, 1080), Ret(0, 1080, 1920, 0) })
+        {
+            string escrita = Gravacao.Escrever(new Loaded(UmMonitor, comTela with { TelaDoMonitor = vazia }, Preferencias.Padrao), _ => "UmMonitor");
+            Afirmar.Igual(@"Loaded topologia=UmMonitor energia=Media telaCheia=sim posicao=\\.\DISPLAY2;0.25;1;-1440;1032", escrita, $"tela vazia {vazia}: 5 campos");
+            Loaded relida = (Loaded)Gravacao.Ler(escrita, _ => UmMonitor, EstadoDoNucleo.Inicial(1)).Single();
+            Afirmar.Igual(semTela, relida.PosicaoSalva, $"tela vazia {vazia}: volta com a tela desconhecida");
+        }
+
         Afirmar.Igual(@"GravarPosicao posicao=\\.\DISPLAY2;0.25;1;-1440;1032", Gravacao.DescreverEfeito(new GravarPosicao(comTela)), "o efeito continua com 5 campos");
 
         // Outra quantidade de campos, ou uma tela vazia, é erro de formato.
@@ -395,6 +405,32 @@ internal static class RestaurarTestes
         PosicaoDoPersonagem escondido = c.Efeito<GravarPosicao>().Posicao;
         Afirmar.Igual(Display2, escondido.ChaveMonitor, "continua no DISPLAY2");
         Afirmar.Igual(Ret(1920, 0, 4480, 1440), escondido.TelaDoMonitor, "tela nova ao esconder");
+    }
+
+    // Com o botão pressionado, TOPOLOGY_CHANGED só atualiza o cache; o CLICK valida, porque o monitor do
+    // personagem mudou: ficou mais largo (2560x1080), com o mesmo chão. A âncora continua válida na área útil
+    // nova, no mesmo monitor, e então a validação mantém a posição de antes do gesto, trocando só a âncora e a
+    // tela, que passa a ser a nova. É o único caminho em que a tela antiga chega à validação. Esconder durante a
+    // reação grava essa tela, e não a de antes do gesto.
+    [Teste]
+    public static void CliqueDepoisDeOMonitorMudarNoGesto_GravaATelaNova()
+    {
+        Cenario c = Cenario.Em(Estado.Pressed);
+        Afirmar.Igual(Ret(0, 0, 1920, 1080), Afirmar.NaoNulo(c.Atual.Posicao).TelaDoMonitor, "tela de antes do gesto");
+
+        Topologia maisLargo = ComMonitor(UmMonitor, Display1, m => m with { Tela = Ret(0, 0, 2560, 1080), AreaUtil = Ret(0, 0, 2560, 1032) });
+        c.Aplicar(new TopologyChanged(maisLargo)).Esta(Estado.Pressed, "o gesto não é interrompido");
+        Afirmar.Igual(Ret(0, 0, 1920, 1080), Afirmar.NaoNulo(c.Atual.Posicao).TelaDoMonitor, "no gesto, só o cache muda");
+
+        c.Aplicar(new Click()).Percorreu(Estado.Pressed, Estado.Reacting);
+        Afirmar.Igual(Cenario.AncoraInicial, c.Ancora, "a âncora continua válida na área útil nova");
+        Afirmar.Igual(Ret(0, 0, 2560, 1080), Afirmar.NaoNulo(c.Atual.Posicao).TelaDoMonitor, "validada no clique, com a tela nova");
+
+        c.Aplicar(new CmdHide()).EstaEscondido(MotivoDoOcultamento.PorUsuario);
+        PosicaoDoPersonagem gravada = c.Efeito<GravarPosicao>().Posicao;
+        Afirmar.Igual(Display1, gravada.ChaveMonitor, "no mesmo monitor");
+        Afirmar.Igual(Cenario.AncoraInicial, gravada.AncoraAbsoluta, "onde ele estava");
+        Afirmar.Igual(Ret(0, 0, 2560, 1080), gravada.TelaDoMonitor, "grava a tela nova");
     }
 
     // ---------------------------------------------------------------- auxiliares

@@ -88,7 +88,7 @@ internal sealed partial class Verificacao
         const string Criterio = "critério 3 — pressionar o personagem no meio da queda o segura na hora";
         Nativo.POINT p = ExigirPontoOpaco("queda");
         Nativo.RECT inicio = Nativo.Retangulo(_hBuzzy);
-        long marca = LogDoBuzzy.Tamanho();
+        long marca = LogDoBuzzy.Marca();
 
         // Leva o personagem 320 px para cima e solta: sem apoio, ele cai (Fase 4).
         _inj.Pressionar(p.X, p.Y, _hBuzzy);
@@ -105,7 +105,7 @@ internal sealed partial class Verificacao
         // injetor). O ponto já está bem longe do soltar anterior, então não há clique duplo a evitar.
         Nativo.RECT r = Nativo.Retangulo(_hBuzzy);
         var alvo = new Nativo.POINT(r.Left + (p.X - inicio.Left), r.Top + r.Altura / 2);
-        long marcaPress = LogDoBuzzy.Tamanho();
+        long marcaPress = LogDoBuzzy.Marca();
         try
         {
             _inj.Pressionar(alvo.X, alvo.Y, _hBuzzy, esperarCliqueDuplo: false);
@@ -255,7 +255,7 @@ internal sealed partial class Verificacao
         const string Criterio = "critério 8 (toon force) — solto do alto, quica como borracha e depois pousa";
         AbrirBuzzyComAutonomia(SementeCalma(topologia));
         Nativo.POINT p = ExigirPontoOpaco("quique");
-        long marca = LogDoBuzzy.Tamanho();
+        long marca = LogDoBuzzy.Marca();
         // Leva o personagem 500 px para cima e solta: cai de uns 500 px e quica.
         _inj.Pressionar(p.X, p.Y, _hBuzzy);
         for (int i = 1; i <= 25; i++)
@@ -307,7 +307,7 @@ internal sealed partial class Verificacao
         Nativo.POINT p = ExigirPontoOpaco("lateral interna");
         Nativo.RECT r = Nativo.Retangulo(_hBuzzy);
         var soltar = new Nativo.POINT(alvo.X + (p.X - (r.Left + r.Largura / 2)), alvo.Y + (p.Y - r.Bottom));
-        long marca = LogDoBuzzy.Tamanho();
+        long marca = LogDoBuzzy.Marca();
         ArrastarEmPassos(p, soltar, 40);
         bool soltou = LogDoBuzzy.Esperar(marca, e => e.Chave == "NUCLEO" && e["evento"] == "DragEnd" && e["para"] == "Idle", 2000) is not null;
         EventoBuzzy? subiu = LogDoBuzzy.Esperar(marca, e => e.Chave == "NUCLEO" && e["para"] == "Climbing", (int)escolha.Atraso.TotalMilliseconds + 15000, () => _buzzy is { HasExited: true });
@@ -357,7 +357,7 @@ internal sealed partial class Verificacao
         (bool ficouNaParede, string resumoParede) = Observar("Climbing", q => q.Right == area.Direita, TimeSpan.FromSeconds(12));
 
         // 3. De volta ao chão: livre.
-        long marcaChao = LogDoBuzzy.Tamanho();
+        long marcaChao = LogDoBuzzy.Marca();
         bool noChao = ArrastarAncoraPara(new PontoPx((sup.Esquerda + sup.Direita) / 2, sup.Chao), null)
             && LogDoBuzzy.Esperar(marcaChao, e => e.Chave == "NUCLEO" && e["evento"] == "DragEnd" && e["para"] == "Idle", 2000) is not null;
 
@@ -408,7 +408,7 @@ internal sealed partial class Verificacao
     private bool CliqueDuploEspera(string para)
     {
         Nativo.POINT p = PontoDoCorpo();
-        long marca = LogDoBuzzy.Tamanho();
+        long marca = LogDoBuzzy.Marca();
         _inj.CliqueDuploEsquerdo(p.X, p.Y, _hBuzzy);
         return LogDoBuzzy.Esperar(marca, e => e.Chave == "NUCLEO" && e["evento"] == "DoubleClick" && e["para"] == para, 3000) is not null;
     }
@@ -422,7 +422,7 @@ internal sealed partial class Verificacao
         Nativo.RECT r = Nativo.Retangulo(_hBuzzy);
         Nativo.POINT p = PontoDoCorpo();
         var soltar = new Nativo.POINT(alvo.X + (p.X - (r.Left + r.Largura / 2)), alvo.Y + (p.Y - r.Bottom));
-        long marca = LogDoBuzzy.Tamanho();
+        long marca = LogDoBuzzy.Marca();
         ArrastarEmPassos(p, soltar, 30);
         if (regra is null) return true;
         return LogDoBuzzy.Esperar(marca, e => e.Chave == "NUCLEO" && e["regra"].Contains(regra, StringComparison.Ordinal), 2000) is not null;
@@ -434,7 +434,7 @@ internal sealed partial class Verificacao
     /// </summary>
     private (bool Ficou, string Resumo) Observar(string estado, Func<Nativo.RECT, bool> encostada, TimeSpan duracao)
     {
-        long marca = LogDoBuzzy.Tamanho();
+        long marca = LogDoBuzzy.Marca();
         int amostras = 0, encostadas = 0;
         var relogio = Stopwatch.StartNew();
         while (relogio.Elapsed < duracao)
@@ -552,12 +552,12 @@ internal sealed partial class Verificacao
     /// <summary>Abre o Buzzy com a autonomia ligada e a semente dada; confere que as janelas são deste processo.</summary>
     private void AbrirBuzzyComAutonomia(ulong semente)
     {
-        _inicioLogBuzzy = LogDoBuzzy.Tamanho();
-        var psi = new ProcessStartInfo(_exeBuzzy) { UseShellExecute = false };
-        psi.ArgumentList.Add("--diagnostico");
-        psi.ArgumentList.Add("--semente");
-        psi.ArgumentList.Add(semente.ToString(CultureInfo.InvariantCulture));
+        _inicioLogBuzzy = LogDoBuzzy.Marca();
+        ProcessStartInfo psi = PerfilDaVerificacao.Descrever(_exeBuzzy, "--semente", semente.ToString(CultureInfo.InvariantCulture));
         ExigirNenhumBuzzyAberto();
+        // A escolha da semente simula a partida sem posição salva: a pasta do perfil é apagada antes de cada abertura.
+        PerfilDaVerificacao.Limpar();
+        ExigirNenhumBuzzyAberto(); // repetida imediatamente antes de iniciar
         _buzzy = Process.Start(psi) ?? throw new FalhaDeVerificacao("Buzzy.exe não iniciou.");
         _inicioBuzzy = _buzzy.StartTime;
         _buzzyEncerrado = false;

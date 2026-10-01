@@ -1,13 +1,16 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Buzzy.App.Plataforma;
 
 namespace Buzzy.App.Testes.Integracao;
 
 /// <summary>
 /// Chamadas ao Windows usadas SÓ pelos testes, fora do produto. Agem sobre as janelas do
 /// Buzzy aberto pelo próprio teste, conferem a qual processo uma janela pertence, consultam o
-/// contexto de DPI do próprio processo de testes e listam processos filhos do Buzzy.
+/// contexto de DPI do próprio processo de testes e listam processos filhos do Buzzy. Também
+/// contam os objetos GDI e USER do processo de testes e do Buzzy que ele abriu, e leem os
+/// bitmaps que o próprio processo de testes criou.
 /// </summary>
 internal static class NativoTeste
 {
@@ -129,6 +132,320 @@ internal static class NativoTeste
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool CloseHandle(nint hObject);
+
+    // ---- objetos GDI e USER (bitmaps do menu, DEC-027) ------------------------------------
+
+    internal const uint GR_GDIOBJECTS = 0;
+    internal const uint GR_USEROBJECTS = 1;
+
+    /// <summary>Quantos objetos GDI ou USER o processo tem abertos: só para o próprio processo de testes e o Buzzy que ele abriu.</summary>
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern uint GetGuiResources(nint hProcess, uint uiFlags);
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct BITMAP
+    {
+        public int bmType;
+        public int bmWidth;
+        public int bmHeight;
+        public int bmWidthBytes;
+        public ushort bmPlanes;
+        public ushort bmBitsPixel;
+        public nint bmBits;
+    }
+
+    /// <summary>DIBSECTION: 104 bytes em x64. <c>dsBm.bmBits</c> aponta para os pixels do DIB, na memória deste processo.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct DIBSECTION
+    {
+        public BITMAP dsBm;
+        public Win32.BITMAPINFOHEADER dsBmih;
+        public uint dsBitfields0;
+        public uint dsBitfields1;
+        public uint dsBitfields2;
+        public nint dshSection;
+        public uint dsOffset;
+    }
+
+    [DllImport("gdi32.dll", EntryPoint = "GetObjectW")]
+    private static extern int GetObject(nint objeto, int tamanho, out DIBSECTION dib);
+
+    /// <summary>Lê o cabeçalho e o endereço dos pixels de um bitmap criado por CreateDIBSection neste processo.</summary>
+    internal static DIBSECTION LerDib(nint bitmap)
+    {
+        int lidos = GetObject(bitmap, Marshal.SizeOf<DIBSECTION>(), out DIBSECTION dib);
+        if (lidos != Marshal.SizeOf<DIBSECTION>())
+            throw new InvalidOperationException($"GetObject devolveu {lidos} bytes: {bitmap} não é uma seção DIB viva.");
+        return dib;
+    }
+
+    /// <summary>Se o handle ainda é um objeto GDI vivo (depois de DeleteObject, GetObject devolve 0).</summary>
+    internal static bool ObjetoGdiVivo(nint objeto) => GetObject(objeto, Marshal.SizeOf<DIBSECTION>(), out _) != 0;
+
+    /// <summary>BITMAPINFO de 32 bits, com espaço para as máscaras de cor que GetDIBits pode escrever.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BITMAPINFO32
+    {
+        public Win32.BITMAPINFOHEADER bmiHeader;
+        public uint mascara0;
+        public uint mascara1;
+        public uint mascara2;
+        public uint mascara3;
+    }
+
+    /// <summary>DC de memória, sem ligação com a tela: só o formato que GetDIBits pede.</summary>
+    [DllImport("gdi32.dll")]
+    private static extern nint CreateCompatibleDC(nint hdc);
+
+    [DllImport("gdi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DeleteDC(nint hdc);
+
+    [DllImport("gdi32.dll")]
+    private static extern int GetDIBits(nint hdc, nint bitmap, uint primeiraLinha, uint linhas, [Out] int[] pixels, ref BITMAPINFO32 info, uint uso);
+
+    /// <summary>
+    /// A imagem que o Windows enxerga num bitmap criado por este processo, pedida de cima para baixo em 32 bits: confere a
+    /// orientação pelo que o GDI desenharia, não pelo cabeçalho (GetObject informa a altura sem o sinal).
+    /// </summary>
+    internal static uint[] ImagemDoBitmap(nint bitmap, int largura, int altura)
+    {
+        nint dc = CreateCompatibleDC(0);
+        if (dc == 0) throw new InvalidOperationException("CreateCompatibleDC falhou.");
+        try
+        {
+            var info = new BITMAPINFO32
+            {
+                bmiHeader = new Win32.BITMAPINFOHEADER
+                {
+                    biSize = Marshal.SizeOf<Win32.BITMAPINFOHEADER>(),
+                    biWidth = largura,
+                    biHeight = -altura, // pedido de cima para baixo
+                    biPlanes = 1,
+                    biBitCount = 32,
+                    biCompression = Win32.BI_RGB,
+                },
+            };
+            int[] pixels = new int[largura * altura];
+            int lidas = GetDIBits(dc, bitmap, 0, (uint)altura, pixels, ref info, Win32.DIB_RGB_COLORS);
+            if (lidas != altura) throw new InvalidOperationException($"GetDIBits leu {lidas} de {altura} linhas.");
+            return [.. pixels.Select(p => unchecked((uint)p))];
+        }
+        finally
+        {
+            DeleteDC(dc);
+        }
+    }
+
+    internal static uint ObjetosDesteProcesso(uint tipo)
+    {
+        using Process atual = Process.GetCurrentProcess();
+        return GetGuiResources(atual.Handle, tipo);
+    }
+
+    // ---- leitura de um menu montado pelo próprio processo de testes ----------------------
+
+    /// <summary>MENUITEMINFOW para leitura: o texto vem num buffer alocado pelo teste.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MENUITEMINFO_LEITURA
+    {
+        public int cbSize;
+        public uint fMask;
+        public uint fType;
+        public uint fState;
+        public uint wID;
+        public nint hSubMenu;
+        public nint hbmpChecked;
+        public nint hbmpUnchecked;
+        public nint dwItemData;
+        public nint dwTypeData;
+        public uint cch;
+        public nint hbmpItem;
+    }
+
+    [DllImport("user32.dll")]
+    internal static extern int GetMenuItemCount(nint hMenu);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool IsMenu(nint hMenu);
+
+    [DllImport("user32.dll", EntryPoint = "GetMenuItemInfoW", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetMenuItemInfo(nint hMenu, uint item, [MarshalAs(UnmanagedType.Bool)] bool porPosicao, ref MENUITEMINFO_LEITURA mii);
+
+    /// <summary>Um item lido de volta do HMENU: tipo (MFT_*), estado (MFS_*), id, submenu, bitmap e texto.</summary>
+    internal sealed record ItemDoMenuLido(uint Tipo, uint Estado, uint Id, nint Submenu, nint Bitmap, string Texto);
+
+    /// <summary>Lê o item da posição dada de um menu criado por este processo.</summary>
+    internal static ItemDoMenuLido LerItemDoMenu(nint menu, uint posicao)
+    {
+        const uint MIIM_STATE = 0x1, MIIM_ID = 0x2, MIIM_SUBMENU = 0x4, MIIM_STRING = 0x40, MIIM_BITMAP = 0x80, MIIM_FTYPE = 0x100;
+        var mii = new MENUITEMINFO_LEITURA
+        {
+            cbSize = Marshal.SizeOf<MENUITEMINFO_LEITURA>(),
+            fMask = MIIM_STATE | MIIM_ID | MIIM_SUBMENU | MIIM_STRING | MIIM_BITMAP | MIIM_FTYPE,
+        };
+        if (!GetMenuItemInfo(menu, posicao, true, ref mii))
+            throw new InvalidOperationException($"GetMenuItemInfoW falhou na posição {posicao} (erro {Marshal.GetLastPInvokeError()}).");
+
+        string texto = "";
+        if (mii.cch > 0)
+        {
+            // Com dwTypeData nulo, cch volta com o tamanho do texto; a segunda chamada o copia, com o terminador.
+            uint tamanho = mii.cch + 1;
+            nint buffer = Marshal.AllocHGlobal((int)tamanho * sizeof(char));
+            try
+            {
+                var leitura = new MENUITEMINFO_LEITURA { cbSize = mii.cbSize, fMask = MIIM_STRING, dwTypeData = buffer, cch = tamanho };
+                if (!GetMenuItemInfo(menu, posicao, true, ref leitura))
+                    throw new InvalidOperationException($"GetMenuItemInfoW (texto) falhou na posição {posicao}.");
+                texto = Marshal.PtrToStringUni(buffer) ?? "";
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(buffer);
+            }
+        }
+        return new ItemDoMenuLido(mii.fType, mii.fState, mii.wID, mii.hSubMenu, mii.hbmpItem, texto);
+    }
+
+    // ---- ordem Z e primeiro plano (itens do tamagotchi, DEC-028) -------------------------
+
+    internal const int WM_CHAR = 0x0102;
+    internal const int WM_CONTEXTMENU = 0x007B;
+    internal const uint GW_HWNDNEXT = 2;
+
+    /// <summary>A janela seguinte na ordem Z (GW_HWNDNEXT): só para conferir a ordem das janelas do Buzzy aberto pelo teste.</summary>
+    [DllImport("user32.dll")]
+    internal static extern nint GetWindow(nint hWnd, uint uCmd);
+
+    /// <summary>
+    /// A janela em primeiro plano, só para conferir que nenhuma janela do Buzzy aberto pelo teste a tomou (o produto não
+    /// usa esta função); o teste compara só o PID dela, sem ler nada da janela.
+    /// </summary>
+    [DllImport("user32.dll")]
+    internal static extern nint GetForegroundWindow();
+
+    /// <summary>
+    /// Quantas janelas há descendo a ordem Z de <paramref name="de"/> até <paramref name="ate"/> (1 = logo abaixo), só entre
+    /// janelas do processo de <paramref name="de"/>; -1 se <paramref name="ate"/> não está abaixo dela ou se uma janela de
+    /// outro processo aparece antes (o percurso para nela: de outros aplicativos, só o PID de uma janela é lido).
+    /// </summary>
+    internal static int PosicoesAbaixo(nint de, nint ate)
+    {
+        uint pid = PidDe(de);
+        nint h = de;
+        for (int i = 1; i <= 1000; i++)
+        {
+            h = GetWindow(h, GW_HWNDNEXT);
+            if (h == 0) return -1;
+            if (h == ate) return i;
+            if (PidDe(h) != pid) return -1;
+        }
+        return -1;
+    }
+
+    // ---- janela intrusa na ordem Z (itens do tamagotchi ao mostrar de novo) -------------------
+
+    private const uint WS_POPUP = 0x80000000;
+    private const uint SWP_NOMOVE = 0x0002;
+
+    [DllImport("user32.dll", EntryPoint = "CreateWindowExW", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern nint CreateWindowEx(uint estiloEstendido, string classe, string? titulo, uint estilo, int x, int y, int largura, int altura,
+        nint pai, nint menu, nint instancia, nint parametro);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DestroyWindow(nint hWnd);
+
+    /// <summary>
+    /// Uma janela ESCONDIDA do próprio processo de testes (classe STATIC do sistema, nunca mostrada nem ativada), posta no
+    /// topo do grupo "sempre no topo": faz o papel de outra janela "sempre no topo" que passa à frente do Buzzy enquanto
+    /// ele está escondido (um player de vídeo, a barra de tarefas). Uma janela escondida também tem lugar na ordem Z. Tem de
+    /// ser destruída na mesma thread que a criou.
+    /// </summary>
+    internal sealed class JanelaIntrusa : IDisposable
+    {
+        internal JanelaIntrusa()
+        {
+            Hwnd = CreateWindowEx((uint)(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE), "STATIC", null, WS_POPUP, 0, 0, 1, 1, 0, 0, 0, 0);
+            if (Hwnd == 0) throw new InvalidOperationException($"CreateWindowExW falhou (erro {Marshal.GetLastPInvokeError()}).");
+        }
+
+        internal nint Hwnd { get; private set; }
+
+        /// <summary>No topo do grupo "sempre no topo", sem mostrar nem ativar.</summary>
+        internal void PorNoTopo()
+        {
+            if (!SetWindowPos(Hwnd, -1, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE))
+                throw new InvalidOperationException("SetWindowPos da janela intrusa falhou.");
+        }
+
+        public void Dispose()
+        {
+            if (Hwnd == 0) return;
+            DestroyWindow(Hwnd);
+            Hwnd = 0;
+        }
+    }
+
+    internal const uint GW_HWNDPREV = 3;
+
+    /// <summary>
+    /// Se <paramref name="alto"/> está acima de <paramref name="baixo"/> na ordem Z, subindo de <paramref name="baixo"/> por
+    /// GW_HWNDPREV: só handles são comparados, nada de janela alguma é lido (as duas janelas são deste teste ou do Buzzy
+    /// que ele abriu; outras podem estar no meio, porque outros aplicativos também têm janelas "sempre no topo").
+    /// </summary>
+    internal static bool EstaAcima(nint alto, nint baixo)
+    {
+        nint h = baixo;
+        for (int i = 0; i < 5000; i++)
+        {
+            h = GetWindow(h, GW_HWNDPREV);
+            if (h == 0) return false;
+            if (h == alto) return true;
+        }
+        return false;
+    }
+
+    // ---- captura do mouse (fim do gesto num item do tamagotchi) ---------------------------
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct GUITHREADINFO
+    {
+        public int cbSize;
+        public uint flags;
+        public nint hwndActive;
+        public nint hwndFocus;
+        public nint hwndCapture;
+        public nint hwndMenuOwner;
+        public nint hwndMoveSize;
+        public nint hwndCaret;
+        public RECT rcCaret;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetGUIThreadInfo(uint idThread, ref GUITHREADINFO gui);
+
+    /// <summary>
+    /// A janela com a captura do mouse na thread que criou <paramref name="janela"/> (0 = nenhuma), só para conferir que
+    /// uma janela do Buzzy aberto pelo teste soltou o mouse. Lê só a thread dessa janela; lança se o Windows não informar.
+    /// </summary>
+    internal static nint CapturaNaThreadDe(nint janela)
+    {
+        uint thread = GetWindowThreadProcessId(janela, out _);
+        if (thread == 0) throw new InvalidOperationException($"A janela {janela} não existe: sem thread para consultar.");
+        var info = new GUITHREADINFO { cbSize = Marshal.SizeOf<GUITHREADINFO>() };
+        if (!GetGUIThreadInfo(thread, ref info))
+            throw new InvalidOperationException($"GetGUIThreadInfo falhou (erro {Marshal.GetLastPInvokeError()}).");
+        return info.hwndCapture;
+    }
+
+    /// <summary>MAKELPARAM(baixo, alto), com o sinal de cada metade preservado (coordenadas negativas).</summary>
+    internal static nint MakeLParam(int baixo, int alto)
+        => unchecked((nint)(int)(((uint)(ushort)(short)alto << 16) | (ushort)(short)baixo));
 
     internal static long EstiloEstendido(nint hwnd) => (long)GetWindowLongPtr(hwnd, GWL_EXSTYLE);
 

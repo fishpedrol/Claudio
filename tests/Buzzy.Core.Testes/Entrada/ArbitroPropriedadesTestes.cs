@@ -302,7 +302,8 @@ internal static class ArbitroPropriedadesTestes
             case < 92:
                 return new FullscreenTargetsChanged(new MonitoresOcupados(topologia.Monitores.Select(m => m.Chave).Where(_ => rnd.Next(2) == 0)));
             case < 96:
-                return new ExpressionChange((Expressao)rnd.Next(Enum.GetValues<Expressao>().Length));
+                // As 14 caras de humor: um valor novo no fim do enum não muda os sorteios do gerador.
+                return new ExpressionChange((Expressao)rnd.Next(14));
             default:
                 return rnd.Next(4) == 0 ? new CmdExit() : new CmdResetPosition();
         }

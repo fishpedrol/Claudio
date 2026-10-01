@@ -13,9 +13,10 @@ public enum Orientacao
 /// Um monitor do desktop virtual, em pixels físicos (DEC-008).
 /// </summary>
 /// <param name="Chave">
-/// Identificador do monitor nesta execução. Na Fase 1 é o nome GDI do dispositivo
-/// (<c>\\.\DISPLAYn</c>), que pode mudar entre sessões; a chave estável por caminho de
-/// dispositivo depende de P5 e entra na Fase 5.
+/// Identificador opaco do monitor. No app é a chave estável da Fase 5 (DEC-030): <c>mon:</c> e um
+/// resumo do caminho do dispositivo, ou, sem ele, a reserva <c>gdi:</c> e o nome GDI. O núcleo só a
+/// compara por igualdade; nenhuma decisão depende do texto, e as topologias de exemplo dos testes
+/// usam o nome GDI (<c>\\.\DISPLAYn</c>).
 /// </param>
 /// <param name="Tela">Retângulo do monitor inteiro.</param>
 /// <param name="AreaUtil">Retângulo sem a barra de tarefas e outras barras reservadas.</param>

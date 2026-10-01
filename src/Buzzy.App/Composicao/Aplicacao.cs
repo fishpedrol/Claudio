@@ -21,14 +21,15 @@ namespace Buzzy.App.Composicao;
 /// comportamento (diagnóstico e testes). Sem ela, a semente vem do relógio do sistema.
 /// </param>
 /// <param name="PerfilDeTeste">
-/// <c>--perfil-de-teste NOME</c>, já validado (<see cref="PastaDeDados.NomeDePerfilValido"/>): os dados
-/// do Buzzy ficam em <c>%LOCALAPPDATA%\Buzzy\testes\NOME</c> (<see cref="PastaDeDados.DoPerfilDeTeste"/>),
-/// para os testes e as ferramentas que o abrem nunca lerem nem gravarem as configurações reais do
-/// usuário. Nulo sem a opção. O log de diagnóstico continua na raiz da pasta do Buzzy.
+/// <c>--perfil-de-teste NOME</c>, validado na leitura da linha de comando (<see cref="PastaDeDados.NomeDePerfilValido"/>)
+/// e de novo na escolha da pasta (<see cref="PastaDeDados.DasConfiguracoes(string?, bool)"/>): os dados do Buzzy
+/// ficam em <c>%LOCALAPPDATA%\Buzzy\testes\NOME</c>, para os testes e as ferramentas que o abrem nunca lerem
+/// nem gravarem as configurações reais do usuário. Nulo sem a opção. O log de diagnóstico continua na raiz da
+/// pasta do Buzzy.
 /// </param>
 /// <param name="PersistenciaDesligada">
-/// <c>--perfil-de-teste</c> veio sem nome ou com um nome inválido: nesta execução nada é lido nem
-/// gravado como configuração (falha fechada), em vez de cair na pasta real do usuário.
+/// <c>--perfil-de-teste</c> veio sem nome, com um nome inválido ou escrito de outro jeito: nesta execução nada
+/// é lido nem gravado como configuração (falha fechada), em vez de cair na pasta real do usuário.
 /// </param>
 internal sealed record OpcoesDaAplicacao(bool MovimentoPausado, ulong? Semente, string? PerfilDeTeste = null, bool PersistenciaDesligada = false)
 {
@@ -43,13 +44,18 @@ internal sealed record OpcoesDaAplicacao(bool MovimentoPausado, ulong? Semente, 
 /// Ocioso por eventos (DEC-011): em repouso, nada roda em timer periódico. Os timers são de uma
 /// vez só — o agrupamento das mensagens de topologia (300 ms depois de uma mensagem, com até
 /// três novas tentativas se a leitura vier incoerente), novas tentativas de pôr o ícone na
-/// bandeja e a próxima decisão da agenda autônoma. O relógio de passo fixo só corre enquanto o
+/// bandeja, a próxima decisão da agenda autônoma, o fim de cada fase da onda de um item do
+/// tamagotchi (DEC-028) e a gravação do settings.json com atraso, com as novas tentativas dela
+/// (Fase 5, passo P7; <see cref="AgendaDeGravacao"/>). O relógio de passo fixo só corre enquanto o
 /// núcleo pede (reação, pouso, gesto curto e movimento) e anda junto com os quadros do
 /// compositor do WPF (<see cref="CompositionTarget.Rendering"/>): a janela se move no máximo uma
 /// vez por quadro, com a posição mais recente. O arraste não usa relógio: cada movimento do
 /// mouse vira posição da janela no mesmo tratamento da mensagem.
+///
+/// As janelas dos itens, o árbitro dos gestos sobre elas e o temporizador da onda ficam em
+/// Aplicacao.Itens.cs; aqui ficam só os ganchos.
 /// </summary>
-internal sealed class Aplicacao
+internal sealed partial class Aplicacao
 {
     /// <summary>
     /// Espera depois da última mensagem de topologia antes de reler (ARCHITECTURE.md 2.4).
@@ -82,6 +88,22 @@ internal sealed class Aplicacao
     private Bandeja? _bandeja;
     private Nucleo? _nucleo;
     private Topologia _topologia = null!;
+
+    /// <summary>
+    /// A gravação do settings.json desta execução (Fase 5, passo P7; DEC-029): a leitura da partida, o atraso, a gravação
+    /// na hora e a do encerramento. Criada no começo de <see cref="Iniciar"/>, antes de qualquer efeito do núcleo.
+    /// </summary>
+    private AgendaDeGravacao? _gravacao;
+
+    /// <summary>Se o erro não tratado já descarregou a gravação (uma vez só, sem reentrar).</summary>
+    private bool _descarregouNoErro;
+
+    /// <summary>
+    /// A última leitura coerente da topologia, a mesma de <see cref="_topologia"/>, atualizada em todo caminho que relê:
+    /// guarda o nome GDI de cada chave estável, que só vai para o log (DEC-030).
+    /// </summary>
+    private LeituraDaTopologia? _leitura;
+
     private Posicionamento _posicionamento = null!;
     private DispatcherTimer? _decisaoAutonoma;
     private EventHandler? _aoDispararDecisao;
@@ -132,18 +154,31 @@ internal sealed class Aplicacao
         _app.SessionEnding += (_, _) => Enviar(new SessionEnding(), "fim de sessão");
         _app.DispatcherUnhandledException += (_, e) =>
         {
-            Diagnostico.Evento("ERRO", ("tipo", e.Exception.GetType().Name), ("mensagem", e.Exception.Message));
+            // Só o tipo e o código: a mensagem de uma exceção do sistema pode trazer um caminho, com o nome do usuário (SECURITY.md 6).
+            Diagnostico.Evento("ERRO", ("tipo", e.Exception.GetType().Name), ("hresult", $"0x{e.Exception.HResult:X8}"));
+            DescarregarNoErro();
             _bandeja?.Remover();
         };
 
-        Topologia? topologia = LerTopologiaNaPartida();
-        if (topologia is null)
+        // 1. As configurações (crítica, C18): o arquivo desta execução, escolhido só pela regra da pasta (perfil de teste,
+        // persistência desligada ou a pasta do Buzzy), uma instância por execução, lido uma vez e sem derrubar a partida.
+        _gravacao = AgendaDeGravacao.NaPartida(
+            ArquivoDeConfiguracoes.DaExecucao(_opcoes.PerfilDeTeste, _opcoes.PersistenciaDesligada),
+            _opcoes.PersistenciaDesligada,
+            perfil: _opcoes.PerfilDeTeste is not null,
+            GestoDoUsuarioEmCurso,
+            AgendaDeGravacao.AgendarNoDispatcher);
+
+        LeituraDaTopologia? leitura = LerTopologiaNaPartida();
+        if (leitura is null)
         {
             _app.Shutdown(CodigosDeSaida.TopologiaIlegivel);
             return;
         }
+        Topologia topologia = leitura.Topologia;
+        _leitura = leitura;
         _topologia = topologia;
-        Diagnostico.Evento("TOPOLOGIA", ("motivo", "início"), ("impressao", topologia.ImpressaoDigital));
+        Diagnostico.Evento("TOPOLOGIA", [("motivo", "início"), ("impressao", topologia.ImpressaoDigital), .. CamposDasChaves(leitura)]);
 
         _servico = new JanelaDeServico();
         _servico.BandejaAcionada += AoAcionarBandeja;
@@ -167,11 +202,15 @@ internal sealed class Aplicacao
         // do núcleo a colocam em pixels físicos antes de torná-la visível.
         new WindowInteropHelper(_personagem).EnsureHandle();
         Diagnostico.Evento("JANELA", ("hwnd", _personagem.Hwnd));
+        IniciarItens();
 
         ulong semente = _opcoes.Semente ?? unchecked((ulong)Environment.TickCount64);
         _nucleo = new Nucleo(ConfiguracaoDoNucleo.DoAplicativo(SpriteProvisorio.TamanhoLogico), semente);
         Diagnostico.Evento("NUCLEO", ("semente", semente), ("pausado", _opcoes.MovimentoPausado ? "sim" : "nao"));
-        Enviar(new Loaded(topologia, PosicaoSalva: null, Preferencias.Padrao), "início");
+        // A carga leva o que a partida leu (DEC-029 e DEC-030): a posição salva, com a tela do monitor da época, que o
+        // núcleo restaura pela cascata; a borda do esconderijo e a marca de preso; e as preferências, com a emoção
+        // dominante (DEC-027) e a travessia. Sem arquivo, as padrão.
+        Enviar(_gravacao.Lidas.ParaACarga(topologia), "início");
         if (_opcoes.MovimentoPausado) Enviar(new CmdPauseAutonomy(), "linha de comando --pausado");
 
         _dpiDoIcone = topologia.Principal.Dpi;
@@ -263,8 +302,11 @@ internal sealed class Aplicacao
         // mesma mensagem): o ícone é refeito no tamanho do DPI atual.
         Diagnostico.Evento("BANDEJA", ("barraDeTarefasRecriada", "sim"));
         if (_bandeja is null) return;
-        Topologia? atual = LeitorDeTopologia.Ler(out _);
-        if (atual is not null) _topologia = atual;
+        if (LeitorDeTopologia.LerDetalhado(out _) is { } atual)
+        {
+            _leitura = atual;
+            _topologia = atual.Topologia;
+        }
         _dpiDoIcone = _topologia.Principal.Dpi;
         _bandeja.TrocarIcone(CriarIcone(_dpiDoIcone), aplicar: false);
         _tentativasDaBandeja = 0;
@@ -288,8 +330,8 @@ internal sealed class Aplicacao
         if (_encerrando) return;
         string motivos = string.Join(",", _motivosPendentes);
 
-        Topologia? nova = LeitorDeTopologia.Ler(out string? erro);
-        if (nova is null)
+        LeituraDaTopologia? leitura = LeitorDeTopologia.LerDetalhado(out string? erro);
+        if (leitura is null)
         {
             // Leitura incoerente (troca de modo em andamento): mantém a anterior e tenta de
             // novo algumas vezes, com esperas crescentes. Não vira atividade periódica.
@@ -308,7 +350,9 @@ internal sealed class Aplicacao
         }
 
         _motivosPendentes.Clear();
+        Topologia nova = leitura.Topologia;
         bool mudou = !nova.MesmaConfiguracao(_topologia);
+        _leitura = leitura;
         _topologia = nova;
         Enviar(new TopologyChanged(nova), motivos);
         ReafirmarLugarDaJanela(motivos);
@@ -319,8 +363,23 @@ internal sealed class Aplicacao
             _bandeja.TrocarIcone(CriarIcone(_dpiDoIcone), aplicar: true);
         }
 
-        Diagnostico.Evento("TOPOLOGIA", ("motivo", motivos), ("mudou", mudou ? "sim" : "nao"), ("visivel", _visivel), ("impressao", nova.ImpressaoDigital));
+        Diagnostico.Evento("TOPOLOGIA",
+            [("motivo", motivos), ("mudou", mudou ? "sim" : "nao"), ("visivel", _visivel), ("impressao", nova.ImpressaoDigital), .. CamposDasChaves(leitura)]);
     }
+
+    /// <summary>
+    /// As chaves de uma leitura, para a linha TOPOLOGIA do log (DEC-030): <c>chaves=chave=nomeGdi;…</c> na ordem do
+    /// Windows, <c>consulta=ok</c> ou o motivo da falha (função e código), e as contagens de chaves do cache, da reserva
+    /// e de alvos sem nome. A chave é o resumo opaco; nem o caminho do dispositivo nem o nome do monitor vão ao log.
+    /// </summary>
+    private static (string Campo, object? Valor)[] CamposDasChaves(LeituraDaTopologia leitura) =>
+    [
+        ("chaves", string.Join(";", leitura.Chaves.Select(c => $"{c.Chave}={c.NomeGdi}"))),
+        ("consulta", leitura.ErroDaConsulta ?? "ok"),
+        ("cache", leitura.ChavesDoCache),
+        ("reserva", leitura.ChavesDeReserva),
+        ("semNome", leitura.CaminhosSemNome),
+    ];
 
     // ------------------------------------------------------------------ ações
 
@@ -342,13 +401,13 @@ internal sealed class Aplicacao
         AplicarNaJanela(lugar);
     }
 
-    private static Topologia? LerTopologiaNaPartida()
+    private static LeituraDaTopologia? LerTopologiaNaPartida()
     {
         string? erro = null;
         for (int tentativa = 1; tentativa <= 5; tentativa++)
         {
-            Topologia? t = LeitorDeTopologia.Ler(out erro);
-            if (t is not null) return t;
+            LeituraDaTopologia? leitura = LeitorDeTopologia.LerDetalhado(out erro);
+            if (leitura is not null) return leitura;
             Thread.Sleep(200);
         }
         Diagnostico.Evento("ERRO", ("etapa", "topologia inicial"), ("mensagem", erro));
@@ -397,6 +456,7 @@ internal sealed class Aplicacao
         }
         Diagnostico.Evento("POSICAO",
             ("monitor", p.Monitor.Chave),
+            ("gdi", _leitura?.NomeGdi(p.Monitor.Chave) ?? "-"),
             ("retangulo", p.Retangulo),
             ("ancora", p.Ancora),
             ("dpi", p.Monitor.Dpi),
@@ -412,17 +472,19 @@ internal sealed class Aplicacao
 
         // O núcleo usa a topologia que conhece. Atualize-a antes de CMD_SHOW para que uma
         // mudança ocorrida enquanto estava escondido seja validada antes de a janela reaparecer.
-        Topologia? atual = LeitorDeTopologia.Ler(out _);
-        if (atual is not null)
+        if (LeitorDeTopologia.LerDetalhado(out _) is { } atual)
         {
-            _topologia = atual;
-            Enviar(new TopologyChanged(atual), $"revalidar antes de mostrar: {motivo}");
+            _leitura = atual;
+            _topologia = atual.Topologia;
+            Enviar(new TopologyChanged(atual.Topologia), $"revalidar antes de mostrar: {motivo}");
         }
 
         Enviar(new CmdShow(), motivo);
         if (_encerrando || !_visivel) return;
 
         _personagem.ReafirmarTopo();
+        // Os itens à vista voltam para logo abaixo do personagem, que acabou de ir para o topo (L17).
+        _itens?.ReordenarAbaixoDoPersonagem();
         if (jaEstavaVisivel) RegistrarVisibilidade(true, motivo);
     }
 
@@ -431,13 +493,18 @@ internal sealed class Aplicacao
         if (_encerrando) return;
         // A decisão usa o estado do momento em que o menu abriu, que é o texto que o
         // usuário leu no item. O laço modal do menu continua despachando operações.
+        // A marca de rádio fica na emoção dominante atual (DEC-027); em alto contraste, o menu fica só com texto. O
+        // submenu "Itens" só existe com a chave do tamagotchi, e "Recolher itens" só vale com itens na tela (DEC-028).
         bool visivelAoAbrir = _visivel;
-        bool pausadoAoAbrir = _nucleo?.Estado.AutonomiaPausada ?? false;
+        ModeloDoMenu modelo = MenuNativo.ModeloAoAbrir(_nucleo, visivelAoAbrir, SystemParameters.HighContrast);
+        bool pausadoAoAbrir = modelo.MovimentoPausado;
+        // Os ícones são ampliados pelo DPI do monitor onde o menu abre: o Windows não amplia o bitmap de um item.
+        int dpi = MenuNativo.DpiAoAbrir(_topologia, ponto);
         Diagnostico.Evento("MENU", ("aberto", origem), ("ponto", ponto), ("peloTeclado", peloTeclado ? "sim" : "nao"));
-        ComandoDoMenu comando = MenuNativo.Mostrar(ponto, visivelAoAbrir, pausadoAoAbrir, abrirParaCima: origem == "bandeja");
+        EscolhaDoMenu escolha = MenuNativo.Mostrar(ponto, modelo, dpi, abrirParaCima: origem == "bandeja");
         if (_encerrando) return;
 
-        switch (comando)
+        switch (escolha.Comando)
         {
             case ComandoDoMenu.AlternarVisibilidade when visivelAoAbrir:
                 Enviar(new CmdHide(), "menu");
@@ -453,6 +520,18 @@ internal sealed class Aplicacao
                 break;
             case ComandoDoMenu.Sair:
                 Enviar(new CmdExit(), "menu");
+                break;
+            case ComandoDoMenu.Emocao:
+                // Uma das 14 caras de humor ou "Automática" (nula). O núcleo grava a preferência (GravarPreferencias), e
+                // ela vai para o settings.json com atraso: sobrevive a reabrir o app (Fase 5, passo P7).
+                Enviar(new CmdSetDominantEmotion(escolha.Emocao), "menu");
+                break;
+            case ComandoDoMenu.Item when escolha.Item is { } item:
+                // Um item do tamagotchi (DEC-028): nasce ao lado do personagem e cai (o núcleo decide onde).
+                Enviar(new CmdSummonItem(item), "menu");
+                break;
+            case ComandoDoMenu.RecolherItens:
+                Enviar(new CmdClearItems(), "menu");
                 break;
             case ComandoDoMenu.Nenhum when peloTeclado:
                 // Quem abriu o menu da bandeja pelo teclado e o cancelou volta para a área de
@@ -524,6 +603,7 @@ internal sealed class Aplicacao
                 if (descartados > 0)
                     Diagnostico.Evento("NUCLEO", ("autonomosDescartados", descartados));
 
+                Efeito[]? soEfeitos = null;
                 for (int i = 0; i < efeitos.Count; i++)
                 {
                     if (_encerrando) break;
@@ -531,6 +611,8 @@ internal sealed class Aplicacao
                     // Num lote (vários passos do relógio no mesmo quadro), só a última posição
                     // antes do próximo mostrar/esconder vai para a janela: uma movimentação por quadro.
                     if (efeito is MoverJanela && MovimentacaoPosterior(efeitos, i)) continue;
+                    // O mesmo para cada janela de item: pula um movimento só com outro do mesmo item adiante (C19).
+                    if (efeito is MoverItem && GerenteDosItens.MovimentoPosterior(soEfeitos ??= [.. efeitos.Select(e => e.Efeito)], i)) continue;
                     ExecutarEfeito(evento, efeito, motivoEvento);
                 }
             }
@@ -541,7 +623,19 @@ internal sealed class Aplicacao
         }
         AtualizarSprite();
         if (_posicaoSemRegistro && _visivel && !_encerrando && !EmMovimentoOuArraste()) RegistrarPosicao(_posicionamento);
+        // Só com --diagnostico: o item que acabou de parar no chão ganha a linha ITEM|movido…|parado=sim, mesmo quando o
+        // passo do pouso não moveu a janela dele.
+        if (Diagnostico.Ligado && !_encerrando) _itens?.RegistrarPousos();
+        // O disparo da gravação que chegou no meio de um gesto do usuário grava quando o gesto acaba (L5 da crítica).
+        if (!_encerrando) _gravacao?.ConferirFimDoGesto();
     }
+
+    /// <summary>
+    /// Se o usuário está no meio de um gesto (o botão pressionado, um arraste ou um item na mão, DEC-028): a gravação com
+    /// atraso espera o fim dele, para a E/S não cair no meio do gesto.
+    /// </summary>
+    private bool GestoDoUsuarioEmCurso()
+        => _nucleo?.Estado is { } s && (s.Estado is Estado.Pressed or Estado.Dragging || s.Atento);
 
     /// <summary>Se há outra <see cref="MoverJanela"/> depois de <paramref name="i"/>, sem mostrar/esconder no meio.</summary>
     private static bool MovimentacaoPosterior(List<(Evento Evento, Efeito Efeito, string Motivo)> efeitos, int i)
@@ -581,19 +675,34 @@ internal sealed class Aplicacao
         var dinamica = new Dinamica(movimento.VY * 96.0 / dpi, movimento.Quiques, movimento.Foguete, movimento.Agarrado, _nucleo.Estado.Esconderijo);
         QuadroDoSprite quadro = PoseDoPersonagem.Escolher(retrato, _nucleo.Estado.Passos - _passoDeEntradaNoEstado, dinamica);
         if (quadro == _quadroAtual && dpi == _dpiDoSprite && _personagem.Sprite is not null) return;
-        int quadrosAntes = SpriteProvisorio.QuadrosEmCache;
+        // Uma linha por quadro desenhado (fora do cache). Com o cache cheio, um quadro novo descarta outro, e a contagem
+        // de quadros no cache não muda: o que conta é o desenho.
+        long desenhadosAntes = SpriteProvisorio.QuadrosRenderizados;
         _personagem.DefinirSprite(SpriteProvisorio.Renderizar(quadro, dpi));
-        if (SpriteProvisorio.QuadrosEmCache != quadrosAntes)
-            Diagnostico.Evento("SPRITE", ("quadrosEmCache", SpriteProvisorio.QuadrosEmCache), ("pose", quadro.Pose), ("expressao", quadro.Expressao ?? "-"), ("deformacao", quadro.Deformacao), ("dpi", dpi));
+        if (SpriteProvisorio.QuadrosRenderizados != desenhadosAntes)
+        {
+            Diagnostico.Evento("SPRITE",
+                ("quadrosEmCache", SpriteProvisorio.QuadrosEmCache),
+                ("bytesEmCache", SpriteProvisorio.BytesEmCache),
+                ("descartados", SpriteProvisorio.QuadrosDescartados),
+                ("pose", quadro.Pose),
+                ("expressao", quadro.Expressao ?? "-"),
+                ("item", quadro.Item ?? "-"),
+                ("efeito", quadro.Efeito),
+                ("fase", quadro.Fase),
+                ("deformacao", quadro.Deformacao),
+                ("dpi", dpi));
+        }
         _quadroAtual = quadro;
         _dpiDoSprite = dpi;
     }
 
     /// <summary>
     /// Memória do processo no log de diagnóstico, só quando o movimento para (nunca por timer):
-    /// o heap gerenciado, o comprometido pelo GC, o conjunto de trabalho e os quadros em cache.
+    /// o heap gerenciado, o comprometido pelo GC, o conjunto de trabalho e os quadros em cache, com os bytes deles
+    /// (limitados a 16 MiB: crítica, C28), e as janelas de item vivas (DEC-028).
     /// </summary>
-    private static void RegistrarMemoria(string quando)
+    private void RegistrarMemoria(string quando)
     {
         if (!Diagnostico.Ligado) return;
         GCMemoryInfo gc = GC.GetGCMemoryInfo();
@@ -604,6 +713,8 @@ internal sealed class Aplicacao
             ("comprometidaGcMB", Math.Round(gc.TotalCommittedBytes / MB, 1)),
             ("conjuntoMB", Math.Round(Environment.WorkingSet / MB, 1)),
             ("quadrosEmCache", SpriteProvisorio.QuadrosEmCache),
+            ("bytesEmCache", SpriteProvisorio.BytesEmCache),
+            ("janelasDeItens", _itens?.Quantas ?? 0),
             ("gc0", GC.CollectionCount(0)), ("gc1", GC.CollectionCount(1)), ("gc2", GC.CollectionCount(2)));
     }
 
@@ -623,6 +734,8 @@ internal sealed class Aplicacao
                 // O WPF pode reaplicar a posição inicial ao mostrar a janela. Confirma o
                 // retângulo físico depois de Show(), como fazia a composição da Fase 1.
                 AplicarNaJanela(_posicionamento);
+                // O personagem reapareceu no topo: os itens à vista ficam logo abaixo dele (L17).
+                _itens?.ReordenarAbaixoDoPersonagem();
                 RegistrarVisibilidade(true, motivo);
                 break;
 
@@ -671,16 +784,25 @@ internal sealed class Aplicacao
                 Adiar(() => ExibirMenuDoDesktop(pedidoMenu.Ponto, "personagem", peloTeclado: false));
                 break;
 
+            case MostrarItem or MoverItem or EsconderItem or RemoverItem or LiberarCapturaDoItem or AgendarOnda or CancelarOnda:
+                // Tamagotchi (DEC-028): as janelas dos itens e o temporizador da onda (Aplicacao.Itens.cs).
+                ExecutarEfeitoDoTamagotchi(efeito);
+                break;
+
             case Encerrar:
                 EncerrarAplicacao(motivo);
                 break;
 
-            case GravarPosicao:
-            case GravarPreferencias:
+            case GravarPosicao or GravarPreferencias:
+                // O settings.json (Fase 5, passo P7; DEC-029): com atraso, ou na hora quando o evento é de suspensão, fim
+                // de sessão, saída ou bloqueio. A posição, a postura e as preferências vêm do efeito, nunca do estado.
+                _gravacao?.Pedir(efeito, evento);
+                break;
+
             case AbrirPainelDeEnergia:
             case FecharPainelDeEnergia:
             case AbrirConfiguracoes:
-                // Estes recursos são ativados nas fases de persistência e configurações.
+                // Estes recursos são ativados na fase de configurações.
                 Diagnostico.Evento("NUCLEO", ("efeitoPendente", efeito.GetType().Name), ("evento", evento.GetType().Name));
                 break;
 
@@ -786,6 +908,11 @@ internal sealed class Aplicacao
         _encerrando = true;
         Diagnostico.Evento("ENCERRANDO", ("motivo", motivo));
 
+        // O pendente vai ao disco antes de desmontar qualquer coisa, e a agenda para (crítica, C18): nenhum disparo da
+        // gravação sobra depois do encerramento.
+        _gravacao?.Descarregar("encerrar");
+        _gravacao?.Parar();
+
         // Um menu aberto nesta thread (por exemplo, fim de sessão com o menu na tela) é
         // fechado antes de destruir as janelas.
         Win32.EndMenu();
@@ -794,6 +921,8 @@ internal sealed class Aplicacao
         _repetirBandeja.Stop();
         PararRelogio();
         CancelarDecisaoAutonoma();
+        // O núcleo não manda efeito de janela de item ao sair: a raiz fecha todas e para o temporizador da onda.
+        EncerrarItens();
         _bandeja?.Dispose();
         _servico?.Dispose();
         _personagem?.Close();
@@ -801,6 +930,24 @@ internal sealed class Aplicacao
     }
 
     // ------------------------------------------------------------------ apoio
+
+    /// <summary>
+    /// Erro não tratado: grava o que der do pendente, uma vez só, sem lançar e sem reentrar (o erro pode ter vindo da
+    /// própria gravação). O log leva só o tipo e o código.
+    /// </summary>
+    private void DescarregarNoErro()
+    {
+        if (_descarregouNoErro) return;
+        _descarregouNoErro = true;
+        try
+        {
+            _gravacao?.Descarregar("erro");
+        }
+        catch (Exception e)
+        {
+            Diagnostico.Evento("CONFIG", ("descarregado", "nao"), ("motivo", "erro"), ("erro", $"{e.GetType().Name} 0x{e.HResult:X8}"));
+        }
+    }
 
     /// <summary>Executa depois de a mensagem atual terminar, na thread da interface.</summary>
     private void Adiar(Action acao) => _app.Dispatcher.BeginInvoke(acao);

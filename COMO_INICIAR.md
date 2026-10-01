@@ -3,9 +3,14 @@
 > **Estado atual:** o Buzzy aparece como o macaquinho em pixel art com o chapéu de palha
 > (`docs/IDENTIDADE_VISUAL.md`). Pode ser arrastado com o mouse e, sozinho, anda pelo chão, escala as
 > laterais da tela (inclusive a que encosta no outro monitor), pendura-se num cipó na borda de cima,
-> pula, quica como borracha e descansa. Por enquanto fica no monitor em que está: atravessar para
-> outro monitor e lembrar a posição chegam na Fase 5. As poses ainda são quadros fixos por estado; as
-> animações completas chegam na Fase 6.
+> pula, quica como borracha e descansa. Pelo menu, você escolhe a emoção dominante dele e invoca itens
+> do "tamagotchi adulto", que ele usa quando você os arrasta até ele (seção 5). Essa parte já passou
+> por testes automáticos e por uma verificação na tela, com cliques e teclas injetados por uma
+> ferramenta de teste, não por uma pessoa; falta você conferir os desenhos, as animações e o tom.
+> Por enquanto fica no monitor em que está e, a cada abertura, começa no canto inferior direito, com
+> a emoção automática: atravessar para outro monitor e lembrar a posição e a emoção chegam com a
+> Fase 5, em andamento. As poses ainda são quadros fixos por estado; as animações completas chegam na
+> Fase 6.
 
 ## 1. Antes da primeira vez
 
@@ -67,16 +72,30 @@ Não use "Executar como administrador": o Buzzy recusa rodar assim e mostra um a
 | Esconder o Buzzy na borda | Dois cliques nele: ele se esconde atrás da barra de tarefas (ou da lateral, se estiver numa parede), só com a cabeça e as mãos para fora. Dois cliques de novo tiram ele de lá |
 | Ver uma reação | Clique nele uma vez |
 | Fazer ele ficar quieto | Menu → **Pausar movimento**. Para voltar a circular: menu → **Retomar movimento** |
-| Abrir o menu | Botão direito no personagem, ou botão direito no ícone da bandeja |
+| Abrir o menu | Botão direito no personagem, num item ou no ícone da bandeja |
+| Escolher a emoção dominante | Menu → **Emoção dominante** → uma das caras, com o rosto ao lado do nome. Ela vira a cara de base e a mais frequente. **Automática** volta ao jeito de sempre. A opção atual fica marcada |
+| Invocar um item | Menu → **Itens** → o item. Ele aparece ao lado do Buzzy, cai no chão e fica esperando. Cabem até 6; o sétimo tira o mais antigo |
+| Dar um item a ele | Arraste o item com o mouse até o Buzzy e solte em cima dele: ele usa o item, com a animação do item e um efeito de desenho animado que passa sozinho. Clicar no item ou soltá-lo longe não faz ele usar: o item fica onde está ou cai de onde foi solto |
+| Interromper o uso | Clique no Buzzy ou arraste-o. O efeito do item continua até passar sozinho |
+| Tirar os itens da tela | Menu → **Itens** → **Recolher itens** |
 | Esconder o Buzzy | Menu → **Esconder Buzzy** |
 | Mostrar de novo | Clique no ícone da bandeja, ou menu da bandeja → **Mostrar Buzzy**, ou abra o `Buzzy.exe` outra vez |
 | Fechar | Menu → **Sair** |
 
+Com o menu aberto, dá para usar o teclado: cada opção tem uma letra, a sublinhada quando o Windows
+mostra os sublinhados. Por exemplo, **D** e depois **F** escolhem a emoção **Feliz**, e **I** e
+depois **B** invocam a **Banana**. Com o Buzzy
+escondido, **Itens** fica indisponível; a emoção pode ser escolhida e aparece quando ele voltar.
+
+Os itens somem quando você fecha o Buzzy. A emoção escolhida também ainda não é lembrada: ao abrir de
+novo, ele volta à automática. Lembrar a emoção depende da persistência da Fase 5 (passo P7).
+
 Abrir o `Buzzy.exe` com ele já aberto não cria um segundo Buzzy: só traz de volta o que já está
 rodando.
 
-O Buzzy não usa a internet e não lê outros programas. Sem a opção `--diagnostico` (abaixo), ele não
-grava nenhum arquivo.
+O Buzzy não usa a internet e não lê outros programas. Por enquanto, sem a opção `--diagnostico`
+(abaixo), ele não grava nenhum arquivo. Quando passar a lembrar a posição e a emoção, ainda na Fase 5,
+vai guardá-las em `%LOCALAPPDATA%\Buzzy\settings.json`.
 
 ## 6. Se algo der errado
 
@@ -87,9 +106,17 @@ grava nenhum arquivo.
 | O personagem sumiu | Clique no ícone da bandeja ou abra o `Buzzy.exe` de novo |
 | Nada aparece, ou para relatar um problema | Abra com `Buzzy.exe --diagnostico`. Ele registra só eventos do próprio Buzzy em `%LOCALAPPDATA%\Buzzy\diagnostico.log` (até 1 MB) |
 | O build falha com o arquivo em uso | Feche o Buzzy (menu → **Sair**) e compile de novo |
+| Ele volta sempre a um lugar ruim e você quer a posição inicial (quando ele já lembrar a posição) | Feche o Buzzy (menu → **Sair**) e apague `settings.json` e `settings.json.bak` em `%LOCALAPPDATA%\Buzzy`. Apague os dois: sem o primeiro, ele usaria a cópia `.bak` |
 
 ## 7. Para quem desenvolve
 
 - Testes sem abrir janelas: `powershell -NoProfile -File tools\testar.ps1`.
 - Testes que abrem janelas ou movem o cursor, e a medição de desempenho: consulte os comandos e limites em
   `docs/PROJECT_CONTEXT.md`. Avise quem estiver usando o computador antes de rodá-los.
+- Para testar sem mexer nas suas configurações, abra o Buzzy com `--perfil-de-teste NOME`, por exemplo
+  `Buzzy.exe --perfil-de-teste meu-teste`. Os dados dele ficam em `%LOCALAPPDATA%\Buzzy\testes\NOME`.
+  O nome tem até 32 caracteres: letras minúsculas sem acento, algarismos e hífen, que não pode vir no
+  começo. Escreva a opção exatamente assim, separada do nome por um espaço: com outra grafia
+  (`--perfil-de-teste=NOME`, maiúsculas, `/perfil-de-teste`) ou com um nome inválido, o Buzzy não lê
+  nem guarda configuração nenhuma naquela vez. Os testes e as ferramentas do projeto já fazem isso
+  sozinhos.

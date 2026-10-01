@@ -60,6 +60,31 @@ public sealed record ConfiguracaoDoNucleo
     public Func<NivelDeEnergia, PerfilDeEnergia> Perfil { get; init; } = PerfilDeEnergia.Padrao;
 
     /// <summary>
+    /// Se o tamagotchi adulto existe (DEC-028): itens, o uso e a onda de desenho animado de cada um. Desligado, nenhum
+    /// efeito novo sai do núcleo, os eventos dele são ignorados e uma onda no estado não vale: tudo é como antes. Desligado
+    /// por padrão; o aplicativo (<see cref="DoAplicativo"/>) o liga desde o passo T9, com o app e a arte prontos.
+    /// </summary>
+    public bool Tamagotchi { get; init; }
+
+    /// <summary>Tamanho lógico do sprite de um item em DIPs (24 × 24 px de arte, ampliados 2×).</summary>
+    public TamanhoDip TamanhoDoItem { get; init; } = new(48, 48);
+
+    /// <summary>Quantos itens ficam na tela no máximo: um item a mais tira o mais antigo que não está na mão do usuário.</summary>
+    public int MaximoDeItens { get; init; } = 6;
+
+    /// <summary>
+    /// Quanto o retângulo do personagem encolhe de cada lado, em %, para o alvo do soltar: o item solto conta "sobre ele"
+    /// se o retângulo do item, já preso na área útil, cruza o retângulo do personagem encolhido.
+    /// </summary>
+    public int MargemDoAlvo { get; init; } = 20;
+
+    /// <summary>A tabela dos itens; os testes podem trocá-la.</summary>
+    public Func<Item, DadosDoItem> TabelaDeItens { get; init; } = TabelaDoTamagotchi.DoItem;
+
+    /// <summary>A tabela das ondas; os testes podem trocá-la, por exemplo por durações curtas ou picos longos.</summary>
+    public Func<Onda, DadosDaOnda> TabelaDeOndas { get; init; } = TabelaDoTamagotchi.DaOnda;
+
+    /// <summary>
     /// A configuração que o aplicativo usa hoje. É a fonte única: o app e as simulações dos testes
     /// que escolhem sementes para ele partem daqui, para nunca divergirem.
     /// </summary>
@@ -71,6 +96,9 @@ public sealed record ConfiguracaoDoNucleo
         QuedaFisica = true,
         Movimento = true,
         EsconderijoNoCliqueDuplo = true,
+        // O tamagotchi adulto (DEC-028), ligado no passo T9, com o app e a arte prontos (D15): itens pelo menu, o uso e a
+        // onda de desenho animado. Sem itens, tudo é como com a chave desligada (invariante 22, ChaveLigadaTestes).
+        Tamagotchi = true,
     };
 }
 

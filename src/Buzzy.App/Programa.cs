@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -13,15 +14,17 @@ namespace Buzzy.App;
 /// Uso: <c>Buzzy.exe [--diagnostico] [--pausado] [--semente N] [--perfil-de-teste NOME]</c>.
 /// <list type="bullet">
 /// <item><c>--diagnostico</c> liga o log em <c>%LOCALAPPDATA%\Buzzy\diagnostico.log</c>; sem ele, o
-/// Buzzy não grava nada.</item>
+/// Buzzy só grava as configurações (<c>settings.json</c>, com a reserva <c>settings.json.bak</c>, o temporário
+/// de cada gravação e, no máximo, uma cópia de um arquivo ilegível), na mesma pasta (Fase 5, passo P7).</item>
 /// <item><c>--pausado</c> começa com o movimento autônomo pausado (o mesmo que "Pausar movimento" no
 /// menu); as verificações de tela usam para ter o personagem parado no lugar inicial.</item>
 /// <item><c>--semente N</c> fixa a semente da agenda autônoma, para reproduzir um comportamento.</item>
 /// <item><c>--perfil-de-teste NOME</c> isola os dados do Buzzy em <c>%LOCALAPPDATA%\Buzzy\testes\NOME</c>
 /// (Fase 5): os testes e as ferramentas que abrem o Buzzy usam, para nunca tocar nas configurações reais
 /// do usuário. NOME tem de 1 a 32 caracteres entre a–z, 0–9 e hífen (sem começar por hífen) e não pode
-/// ser um nome reservado do Windows; sem nome ou com um inválido, a persistência fica desligada nesta
-/// execução.</item>
+/// ser um nome reservado do Windows; sem nome, com um inválido ou com a opção escrita de outro jeito
+/// (<c>--perfil-de-teste=NOME</c>, outra caixa, <c>/perfil-de-teste</c>), a persistência fica desligada
+/// nesta execução.</item>
 /// </list>
 /// </summary>
 internal static class Programa
@@ -57,7 +60,8 @@ internal static class Programa
         }
         catch (Exception e) when (e is UnauthorizedAccessException or WaitHandleCannotBeOpenedException or IOException)
         {
-            Diagnostico.Evento("INSTANCIA", ("erro", e.GetType().Name), ("mensagem", e.Message));
+            // Só o tipo e o código: a mensagem traz o nome dos objetos da instância única, com o SID da conta (SECURITY.md 6).
+            Diagnostico.Evento("INSTANCIA", ("erro", $"{e.GetType().Name} 0x{e.HResult:X8}"));
             Diagnostico.Evento("FIM", ("codigo", CodigosDeSaida.InstanciaUnicaIndisponivel), ("pid", Environment.ProcessId));
             return CodigosDeSaida.InstanciaUnicaIndisponivel;
         }
@@ -97,12 +101,18 @@ internal static class Programa
                 Diagnostico.Evento("ARGUMENTO", ("ignorado", "--semente"), ("motivo", "falta um número inteiro sem sinal"));
         }
 
-        // Perfil de teste: um nome inválido nunca cai na pasta real do usuário, desliga a persistência.
-        // O nome recusado não vai para o log: pode ser um caminho.
+        // Perfil de teste: um nome inválido nunca cai na pasta real do usuário, desliga a persistência. Uma
+        // grafia parecida com a da opção também desliga: quem a escreveu quis isolar o Buzzy e errou a opção.
+        // O argumento recusado não vai para o log: pode ser um caminho.
         string? perfil = null;
         bool persistenciaDesligada = false;
-        int p = Array.IndexOf(argumentos, "--perfil-de-teste");
-        if (p >= 0)
+        if (argumentos.Any(ParecidoComAOpcaoDoPerfil))
+        {
+            persistenciaDesligada = true;
+            Diagnostico.Evento("ARGUMENTO", ("ignorado", OpcaoDoPerfil), ("motivo", "grafia diferente da opção; persistência desligada"));
+        }
+        int p = Array.IndexOf(argumentos, OpcaoDoPerfil);
+        if (p >= 0 && !persistenciaDesligada)
         {
             if (p + 1 < argumentos.Length && PastaDeDados.NomeDePerfilValido(argumentos[p + 1]))
             {
@@ -111,10 +121,31 @@ internal static class Programa
             else
             {
                 persistenciaDesligada = true;
-                Diagnostico.Evento("ARGUMENTO", ("ignorado", "--perfil-de-teste"),
+                Diagnostico.Evento("ARGUMENTO", ("ignorado", OpcaoDoPerfil),
                     ("motivo", p + 1 < argumentos.Length ? "nome inválido; persistência desligada" : "falta o nome; persistência desligada"));
             }
         }
         return new OpcoesDaAplicacao(pausado, semente, perfil, persistenciaDesligada);
+    }
+
+    /// <summary>A opção do perfil de teste, exatamente como tem de ser escrita.</summary>
+    internal const string OpcaoDoPerfil = "--perfil-de-teste";
+
+    /// <summary>
+    /// Se o argumento é outra grafia da opção do perfil de teste: começa por <c>/</c> ou por traços (um, dois,
+    /// travessão) e, contando só as letras, começa por "perfildeteste" em qualquer caixa, mas não é exatamente
+    /// <see cref="OpcaoDoPerfil"/>. Pega <c>--perfil-de-teste=NOME</c>, <c>--Perfil-De-Teste</c>,
+    /// <c>/perfil-de-teste</c>, <c>-perfil-de-teste</c> e <c>--perfil_de_teste</c>. Um argumento sem esse
+    /// prefixo, como o próprio nome do perfil, nunca conta.
+    /// </summary>
+    internal static bool ParecidoComAOpcaoDoPerfil(string argumento)
+    {
+        if (string.Equals(argumento, OpcaoDoPerfil, StringComparison.Ordinal)) return false;
+        int inicio = 0;
+        while (inicio < argumento.Length && (argumento[inicio] == '/' || char.GetUnicodeCategory(argumento[inicio]) == UnicodeCategory.DashPunctuation))
+            inicio++;
+        if (inicio == 0) return false;
+        string letras = string.Concat(argumento.Skip(inicio).Where(char.IsLetter)).ToLowerInvariant();
+        return letras.StartsWith("perfildeteste", StringComparison.Ordinal);
     }
 }

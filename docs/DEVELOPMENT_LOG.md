@@ -2,7 +2,7 @@
 
 > Registro resumido de marcos e correções. Critérios e números técnicos ficam em [TODO.md](TODO.md); decisões permanentes ficam em [DECISIONS.md](DECISIONS.md); evidências brutas ficam em `spikes/resultados/` e `resultados/`.
 >
-> Atualizado em 2026-09-30.
+> Atualizado em 2026-10-01.
 
 ## Marcos
 
@@ -62,6 +62,94 @@
   - Curiosidade (DEC-026) registrada para depois da Fase 5, com o observador de janela ativa do P7.
   - Mais um commit (`803a54b`) foi feito com a identidade git do usuário.
 
+- **2026-09-30 — Fase 5, bloco A (passos P1–P5), implementado e verificado por testes:**
+  - **O que entrou** (a ordem dos passos está em [TODO.md](TODO.md), Fase 5):
+    - passos P1–P2: a posição guarda a tela do monitor da época; a partida restaura em cascata, pela chave, pela tela do monitor ou no principal; a reacomodação mede pelo pixel dos pés (DEC-030);
+    - passo P3: esquema v1 do `settings.json` e política de gravação no núcleo; o esquema já inclui a preferência "atravessar monitores", ligada por padrão e ainda sem efeito (DEC-029);
+    - passo P4: pasta de dados e arquivo de configurações com gravação atômica, `.bak` e cópia de diagnóstico, ainda desligados do app (DEC-029);
+    - passo P5: `--perfil-de-teste NOME` nos testes de integração, no `Buzzy.Verificacao` e na medição de desempenho (DEC-029).
+  - **Como foi feito:** três implementadores (passos P1–P2, P3 e P4–P5), cada fatia de vermelho para verde e com mutações temporárias para provar que os testes pegam defeitos; depois, uma revisão de correção e uma de segurança, sem defeito bloqueante, e um corretor.
+  - **Achados corrigidos:**
+    - o invariante 18 aceitava gravações vindas de eventos proibidos; passou a exigir a lista fechada de eventos e frações já em [0, 1], e também é conferido com a física da Fase 4;
+    - a troca da tela do monitor na validação de um clique não tinha teste;
+    - grafias parecidas com `--perfil-de-teste` caíam na pasta real; agora desligam a persistência;
+    - a escolha da pasta de dados virou uma regra única com falha fechada, com teste de tabela e teste de fonte;
+    - o temporário da gravação podia gravar através de um link já existente; agora é apagado e recriado;
+    - mensagens de exceção do sistema iam para o log; agora vão só o tipo e o código;
+    - a medição de desempenho não limpava o perfil; a verificação de tela montava o caminho do perfil à mão; uma asserção dependia do relógio.
+  - **Adiado, com dono:**
+    - uma exceção que não é de E/S ainda escapa da leitura do arquivo; a proteção entra no passo P7, no ponto de chamada (DEC-029);
+    - a validação de um clique depois de mudar o monitor mantém as frações da área antiga com a tela nova até o fim da reação; resolve-se no passo P8 (DEC-030);
+    - o `diagnostico.log` aberto para acrescentar segue um link já existente; é anterior à Fase 5 e foi aceito ([SECURITY.md](SECURITY.md), seção 9).
+  - **Release travado:** um Buzzy do usuário aberto a partir da pasta Release travava as DLLs (PID 10676 desde as 17:56; depois PID 15008, aberto às 19:43). Os agentes não o fecharam; conferiram o Release em pastas à parte e rodaram a suíte em Debug.
+  - **Commits:** `0699c08` (17:50) e `87c4203` (18:24) foram feitos com a identidade git do usuário no meio dos passos e guardam estados intermediários; o resto está no checkout, sem commit. `ArquivoDeConfiguracoesTestes.cs`, `IsolamentoTestes.cs`, `Integracao/PerfilDeTeste.cs` e `Persistencia/InvarianteDezoito.cs` estão fora do Git, e um commit só dos arquivos rastreados não compila.
+  - **Decisão de produto (20:40):** o usuário deixou com Claude a dúvida sobre o esconderijo e a marca "preso pelo usuário", que o bloco A não grava. Decisão: os dois passam a ser gravados no passo P7, e ele volta escondido no mesmo lado e continua preso onde o usuário o deixou (DEC-029).
+  - **Verificação de Claude, por volta das 20:45, com o Buzzy do usuário fechado:**
+    - `tools/testar.ps1` (Release) código 0: build com 0 avisos, Core 309/309, portão 73/73, App 59 (mais 11 de integração), portão de APIs aprovado, agora também sobre `src\Buzzy.Visual` no relatório, 0 pacotes vulneráveis;
+    - `tools/testar.ps1 -Integracao` código 0: App 70/70;
+    - `Buzzy.Verificacao --injetar-input-na-tela`, com input SINTÉTICO e o perfil `verificacao`: `--fase 1` com 25 OK, 4 SIMULADO e 0 falhas; `--fase 3` com 34 OK, 2 N/A e 0 falhas; `--fase 4` com 28 OK e 0 falhas.
+  - **Não verificado:** nada disso é gesto humano nem teste [MANUAL][HW]; S9 real, o Process Monitor e a persistência ligada continuam pendentes (TODO.md). A limpeza das pastas reais de perfil ainda não apagou nada, porque o app não grava nelas antes do passo P7; ela só foi exercida em pastas temporárias pelos testes.
+
+- **2026-09-30 a 2026-10-01 — Emoção dominante e tamagotchi adulto: núcleo e arte verificados por testes, com a chave desligada:**
+  - **Pedidos do usuário (2026-09-30, por volta das 18:00):** escolher a emoção dominante pelo menu, com as expressões de `expressoes.png` (DEC-027), e um tamagotchi adulto com 13 itens em pixel art, invocados pelo menu e usados ao arrastá-los até o personagem, com efeitos de desenho animado (DEC-028).
+  - **Desenho:** só leitura, em quatro partes: núcleo, app, arte e uma crítica de integração. A crítica resolveu os conflitos entre os três desenhos, apontou testes existentes que quebrariam e deu a ordem de implementação: T1–T9 no código e A1–A4 na arte (TODO.md, seção "Interação").
+  - **O que entrou** (regras em DEC-027, DEC-028 e ARCHITECTURE.md 2.16):
+    - T1: a emoção dominante no núcleo e o esquema v2 do `settings.json`;
+    - T3–T6: tipos e tabelas, a onda de desenho animado, os itens, o estado `USING`, a onda de fundo, os invariantes 22 a 29 e a referência gravada 07, tudo atrás da chave `Tamagotchi`, desligada no aplicativo;
+    - A1–A4: os itens, as caras novas, as poses de uso, as sobreposições, os gestos provisórios e os ícones do menu, feitos numa cópia isolada.
+  - **Como foi feito:** o núcleo na árvore principal e a arte na cópia, em paralelo, com a documentação do bloco A da Fase 5. Cada passo foi de vermelho para verde e teve mutações temporárias para provar que os testes pegam defeitos. Depois, uma revisão adversarial do núcleo e uma da arte, com mutações, e um corretor para cada uma.
+  - **Interrupção:** o trabalho parou às 23:53 de 2026-09-30, por limite de uso, com as revisões no meio. Foi retomado às 01:25 de 2026-10-01 do mesmo ponto, e os resultados já prontos foram aproveitados. Os implementadores de T3–T4 e de A3 tinham achado na árvore uma tentativa anterior do próprio passo, interrompida e sem anotação de passagem; conferiram o que estava sólido e continuaram dali.
+  - **Achados corrigidos, no núcleo:**
+    - um defeito real: no fim de um uso na parede perto do chão, ele caía, em vez de voltar à parede;
+    - os invariantes 22 e 27 não eram conferidos com a física e a chave ligada; agora são (`ChaveLigadaTestes`);
+    - quem ficava agarrado sem estar preso depois de segurar um item continuava agarrado ao pausar; a regra da calma agora o faz descer ou se soltar, no fim de todo evento. Ela mudou um caminho que já existia na Fase 4 e vale no app desde já (DEC-022, item 4);
+    - lacunas de teste (o atento no preso que passeia, a ordem das janelas, a onda de fundo em queda, o recuo do cambaleio), um fim de arraste sem começo e a leitura do formato de reprodução por lista fechada.
+  - **Achados corrigidos, na arte:** o espelhinho, que parecia roupa; o braço que cruzava o queixo na tragada e os braços que pareciam um colete no inalar; o teste da boca e do nariz, que conferia o código contra ele mesmo; os gestos da onda sem pose; o preenchimento do chapéu eriçado na borda de cima em `escalando-2`; a fumaça e as bolhas saindo da orelha; testes de ordem e de caras dos quadros; itens que não se liam (o baseado, o espelhinho, o lenço, a bala na boca e o energético, que tinha as cores do pelo).
+  - **Mescla da arte:** 34 arquivos da cópia, com o hash conferido. A árvore principal tinha a mesma versão de partida da cópia, sem conflito; `ArquivoDeConfiguracoesTestes.cs` ficou com a versão da árvore principal. A folha nativa e as prévias de poses, desatualizadas desde antes do cipó e do esconderijo, foram regeneradas.
+  - **Contagens:** Core de 309 para 321 (T1), 347 (T3–T4), 385 (T5–T6) e 393 (correções); App de 59 para 150 com a arte, mais 11 de integração. A suíte do núcleo em Release passou de cerca de 6,7 s para cerca de 10,6 s.
+  - **Verificação de Claude, por volta das 03:20 de 2026-10-01, depois da mescla:** `tools/testar.ps1` (Release) código 0, com Core 393, portão 73, App 150 (+11 de integração, que não rodaram), portão de APIs aprovado e nenhum pacote vulnerável. As referências 01–05 ficaram idênticas byte a byte.
+  - **Observação informal:** Claude olhou as prévias `itens-8x.png`, `rostos-efeito.png`, `usos.png` e `icones-menu.png` e as achou legíveis e no estilo. Não é aprovação do usuário.
+  - **Não verificado:** a integração e as verificações de tela, que dependem do app; a revisão visual e de tom pelo usuário; a persistência da emoção entre execuções (passo P7). Nada disso é gesto humano nem teste [MANUAL][HW].
+  - **Sem commit:** tudo está no checkout, com arquivos novos fora do Git.
+  - **Próximo passo:** o app (T2 e T7–T9), depois o bloco B da Fase 5.
+
+- **2026-10-01 — Emoção dominante e tamagotchi adulto: o app (passos T2 e T7–T9), com a chave ligada; verificação de tela pendente:**
+  - **O que entrou** (regras em DEC-027, DEC-028 e ARCHITECTURE.md 2.3, 2.7, 2.10, 2.13 e 2.16):
+    - T2: o submenu "Emoção dominante" no menu nativo, com os rostos da pixel art como ícones, ampliados pelo DPI do monitor onde o menu abre, em bitmaps criados e apagados a cada abertura; em alto contraste, só texto;
+    - T7: a apresentação do tamagotchi, com o quadro de uso e o item na mão, as caras de efeito, os gestos da onda, a sobreposição com fase e o cache de quadros limitado a 16 MiB;
+    - T8: uma janela por item, com um árbitro de gestos próprio e a ordem Z por evento; o submenu "Itens", com "Recolher itens"; e o temporizador da onda, de disparo único;
+    - T9: a chave `Tamagotchi` ligada em `DoAplicativo`, os testes de integração dos itens, a verificação de tela `--fase tamagotchi` e o modo `-Modo onda` da medição. Os dois últimos estão escritos e compilados, mas ainda não rodaram.
+  - **Como foi feito:** um implementador por passo, na árvore principal, cada fatia de vermelho para verde e com mutações temporárias. Antes do T9, a ligação foi exercitada numa cópia isolada, com a chave ligada só lá. O T9 retomou uma tentativa anterior, interrompida, e conferiu o que ela deixou. Depois, uma revisão de correção e uma das regras do projeto, e um corretor.
+  - **Achados corrigidos:**
+    - a ligação da raiz com as janelas dos itens e o caminho real do menu (o estado e o DPI lidos na abertura) não tinham teste; viraram funções testáveis sem janela, com testes de unidade e de integração;
+    - esconder ou minimizar no meio do arraste de um item não tinha teste; agora tem, e a captura solta sem que o soltar tardio vire nada;
+    - a linha de pouso de um item no log nem sempre saía; agora sai uma por pouso, no fim do processamento, e os testes a exigem;
+    - os leitores do log nos testes de integração e na verificação de tela perdiam linhas quando o log rotacionava; agora reconhecem a rotação pelo conteúdo;
+    - o caminho de exceção do menu (destruir o menu e apagar os bitmaps mesmo com erro) ganhou teste;
+    - na verificação de tela, ainda antes de rodar: três critérios que acusariam falha sem defeito no app (o tempo até o pouso, a agenda cancelada ao segurar um item e o recuo do bêbado) e o dos quadros de uso, que passa a sair INCONCLUSIVO quando a interface atrasa e pula quadros;
+    - nos testes de ordem Z, a varredura das janelas abaixo do personagem para na primeira janela de outro processo.
+  - **Contagens:** App de 150 para 165 (T2), 184 (T7), 229 (T8), 234 (T9) e 249 (correção), com a integração de 11 para 22; Core 393 e portão 73, sem mudança. Cerca de 150 mutações temporárias nos passos e na correção: as que escaparam viraram testes mais fortes ou eram código equivalente, e as que não compilavam foram reescritas.
+  - **Última rodada da correção, por volta das 08:15 de 2026-10-01:** `tools/testar.ps1` (Release) código 0, com Core 393, portão 73, App 249 (+22 de integração), 0 avisos, portão de APIs aprovado e nenhum pacote vulnerável; `tools/testar.ps1 -Integracao` código 0, com App 271/271: 20 aberturas do menu com GDI 32 → 32 e USER 22 → 22, e o arraste de um item com p95 de 1,125 ms. As referências 01–05 continuam idênticas byte a byte. Nenhum Buzzy ficou aberto.
+  - **Não verificado:** a verificação de tela (V1–V15 e X1, com input SINTÉTICO), o repouso de 10 minutos com uma onda ativa, a revisão visual e de tom pelo usuário e as pendências [MANUAL] e [HW] (TODO.md, seção "Interação"). A escolha da emoção ainda não sobrevive a reabrir o app (passo P7). Nada disso é gesto humano.
+  - **Sem commit:** tudo está no checkout, com arquivos novos fora do Git.
+  - **Próximo passo:** Claude roda a verificação de tela e a medição, depois de avisar o usuário; depois, o bloco B da Fase 5.
+
+- **2026-10-01 — Tamagotchi: verificação de tela com input SINTÉTICO e repouso de 10 minutos com uma onda ativa; passo T9 fechado:**
+  - **Conferência antes de rodar:** Claude repetiu `tools/testar.ps1` (Release), código 0, com Core 393, portão 73 e App 249 (+22 de integração), e `tools/testar.ps1 -Integracao`, código 0, com App 271/271.
+  - **Repouso com a onda de uma vodka (V13), a partir das 08:51** (`tools/medir-desempenho.ps1 -Modo onda`, perfil `desempenho`, `resultados/desempenho-20261001-085153.txt`): a onda foi preparada só com mensagens postadas às janelas do próprio Buzzy e seguiu os tempos da tabela. Em 10 min, CPU média de 0,003% de um núcleo, nenhuma linha de relógio ligado, nenhum processo filho, nenhuma conexão e encerramento limpo. Números em TODO.md, na linha V13.
+  - **Verificação de tela, das 10:26 às 10:31** (`Buzzy.Verificacao --injetar-input-na-tela --fase tamagotchi`, perfil `verificacao`, semente 2028, `resultados/verificacao-tamagotchi.log`): 46 OK, 1 N/A e 0 falhas. Passaram V1–V15; X1, com um item arrastado até o segundo monitor, os dois na mesma escala; "Recolher itens"; pausar com ele agarrado à parede sem estar preso, a regra da calma, que até então só tinha testes automatizados; e o foco de volta ao aplicativo em uso depois de 50 menus. A V16 ficou N/A, porque depende do passo P7. Resultado por caso em TODO.md, seção "Interação".
+  - **Regressão com input SINTÉTICO, no mesmo dia:** `--fase 1` com 25 OK e 4 SIMULADO (a bandeja); `--fase 3` com 34 OK e 2 N/A; `--fase 4` com 28 OK; nenhuma falha.
+  - **Incidentes da execução:**
+    - **Canto coberto:** uma janela sempre no topo de outro programa cobria o canto inferior direito da tela principal, onde o Buzzy nasce. Entre 08:48 e 08:52, as verificações das fases 1, 3 e 4 e do tamagotchi pararam logo no começo: o teste de acerto nos pontos do Buzzy apontava essa janela, e nada foi clicado. A ferramenta não identifica janelas alheias, de propósito. A verificação ficou bloqueada até o usuário liberar o canto, por volta das 10:00; a medição V13, que só usa mensagens postadas, rodou nesse intervalo.
+    - **Mouse mexido:** na rodada seguinte, a fase 4 iniciada às 10:12 saiu INVÁLIDA, porque o mouse foi mexido no meio da execução; a ferramenta detecta a interferência e anula a rodada inteira. Foi repetida às 10:23, com 28 OK.
+    - **Defeitos da ferramenta:** na mesma rodada, a verificação do tamagotchi iniciada às 10:15 teve duas falhas, ambas da ferramenta, não do Buzzy. Claude as corrigiu em `tests/Buzzy.Verificacao/VerificacaoTamagotchi.cs`:
+      - a V1 casava com a linha do efeito pendente (`GravarPreferencias`) em vez da transição do comando; agora exige a linha da transição;
+      - o cenário da parede clicava nele em movimento, e o clique não chegava; mesmo assim, ele desceu pela lateral ao pausar. Agora clica num ponto firme do corpo, cujos vizinhos a 6 px acima e abaixo também são dele, tenta até 3 vezes, cada uma confirmada pelo `PRESS` no log, e sai INCONCLUSIVO, não FALHOU, se nenhuma chegar;
+      - depois da correção, `tools/testar.ps1` saiu de novo com código 0, e a rodada das 10:23 às 10:31 passou sem falhas.
+  - **Não verificado:** nada disso é gesto humano. Continuam pendentes a revisão visual e de tom pelo usuário e as conferências [MANUAL] e [HW]: os temas claro, escuro e de alto contraste, o Narrador, o conforto para agarrar os itens pequenos e as escalas de 125% a 200%, também entre monitores de escalas diferentes. A V16 depende do passo P7. A seção "Interação" continua PLANNED.
+  - **Sem commit:** tudo está no checkout, com arquivos novos fora do Git.
+  - **Próximo passo:** o bloco B da Fase 5.
+
 ## Estado desta atualização documental
 
 - **Fase 0:** P3/Etapa 0B VERIFIED como gate técnico no ambiente medido, com evidência sintética e limite de DPI descrito acima.
@@ -69,5 +157,7 @@
 - **Fase 2:** VERIFIED em 2026-09-30.
 - **Fase 3:** PLANNED até UAC [MANUAL], escalas mistas [HW] e ClickLock [MANUAL].
 - **Fase 4:** PLANNED até a gravação de tela a 120 qps [MANUAL].
+- **Fase 5:** em andamento. O bloco A (passos P1–P5) está implementado e verificado por testes automatizados e pela regressão com input SINTÉTICO; o próximo passo da fase é o P6. Nada da fase é VERIFIED.
+- **Interação (DEC-027, DEC-028):** em andamento, intercalada com a Fase 5. O núcleo, a arte e o app estão implementados, com a chave do tamagotchi ligada no aplicativo, e verificados por testes automatizados, de integração e, em 2026-10-01, pela verificação de tela com input SINTÉTICO e pelo repouso de 10 minutos com uma onda ativa; o passo T9 está fechado. O usuário já escolhe a emoção e usa os itens pelo menu. Estão pendentes a revisão visual e de tom pelo usuário, as conferências [MANUAL] e [HW] e a persistência da emoção (passo P7); a seção continua PLANNED.
 - **Identidade visual:** está em pixel art (DEC-018/019). As poses provisórias por estado entraram na Fase 4; as animações completas continuam previstas para a Fase 6.
 - O código em `spikes/` é descartável.

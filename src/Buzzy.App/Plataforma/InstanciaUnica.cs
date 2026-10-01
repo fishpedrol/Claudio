@@ -64,8 +64,9 @@ internal sealed class InstanciaUnica : IDisposable
             }
             catch (Exception e) when (e is UnauthorizedAccessException or WaitHandleCannotBeOpenedException or IOException)
             {
-                // Por exemplo, a primeira instância rodando com outro nível de acesso.
-                erro = $"{e.GetType().Name}: {e.Message}";
+                // Por exemplo, a primeira instância rodando com outro nível de acesso. Só o tipo e o código, que vão
+                // para o log: a mensagem traz o nome do evento, com o SID da conta (SECURITY.md 6).
+                erro = $"{e.GetType().Name} 0x{e.HResult:X8}";
                 return false;
             }
             Thread.Sleep(100);

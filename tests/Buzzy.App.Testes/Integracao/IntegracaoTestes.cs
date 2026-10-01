@@ -39,8 +39,8 @@ internal sealed class IntegracaoTestes
         Afirmar.Igual("início", carregamento["motivo"], "a carga mantém o motivo de inicialização no log");
         b.Esperar(e => e.Chave == "NUCLEO" && e["evento"] == "Loaded" && e["de"] == "Settling" && e["para"] == "Idle", 5000, "posição inicial acomodada pelo núcleo");
 
-        Topologia topologia = Afirmar.NaoNulo(LeitorDeTopologia.Ler(out string? erro), erro);
-        MonitorDoDesktop principal = topologia.Principal;
+        LeituraDaTopologia leitura = Afirmar.NaoNulo(LeitorDeTopologia.LerDetalhado(out string? erro), erro);
+        MonitorDoDesktop principal = leitura.Topologia.Principal;
         RetanguloPx janela = b.RetanguloDaJanela();
         TamanhoPx esperado = new TamanhoDip(128, 128).ParaPixels(principal.Dpi);
         Afirmar.Igual(esperado, janela.Tamanho, "tamanho da janela = tamanho do sprite no DPI do principal");
@@ -49,7 +49,19 @@ internal sealed class IntegracaoTestes
 
         EventoDoLog posicao = b.Esperar(e => e.Chave == "POSICAO", 5000, "posição");
         Afirmar.Igual(janela, EventoDoLog.Retangulo(posicao["retangulo"]), "retângulo registrado = retângulo real");
-        Afirmar.Igual(principal.Chave, posicao["monitor"]);
+
+        // Chave estável do monitor (DEC-030): o Buzzy e este processo calculam a mesma chave, cada um por si, e o log
+        // leva a chave opaca com o nome GDI ao lado, nunca o caminho do dispositivo.
+        Afirmar.Igual(principal.Chave, posicao["monitor"], "a chave do Buzzy é a calculada por este processo");
+        Afirmar.Igual(leitura.NomeGdi(principal.Chave), posicao["gdi"], "o nome GDI do principal ao lado da chave");
+        Afirmar.Diferente(posicao["gdi"], posicao["monitor"], "a chave não é mais o nome GDI");
+        EventoDoLog inicio = b.Esperar(e => e.Chave == "TOPOLOGIA" && e["motivo"] == "início", 1000, "topologia inicial");
+        Afirmar.Contem($"{principal.Chave}={leitura.NomeGdi(principal.Chave)}", inicio["chaves"], "as chaves da topologia inicial, com o nome GDI");
+        if (leitura.ErroDaConsulta is null)
+        {
+            Afirmar.Verdadeiro(System.Text.RegularExpressions.Regex.IsMatch(posicao["monitor"], "^mon:[0-9a-f]{16}$"), $"chave estável e opaca: {posicao["monitor"]}");
+            Afirmar.Igual(("ok", "0"), (inicio["consulta"], inicio["reserva"]), "a consulta da configuração de vídeo também deu certo no Buzzy");
+        }
 
         EventoDoLog quadro = b.Esperar(e => e.Chave == "PRIMEIRO_QUADRO", 5000, "primeiro quadro (M6)");
         double ms = double.Parse(quadro["ms"], CultureInfo.InvariantCulture);
@@ -101,7 +113,7 @@ internal sealed class IntegracaoTestes
     {
         using BuzzyEmTeste b = BuzzyEmTeste.Iniciar();
         RetanguloPx antes = b.RetanguloDaJanela();
-        long marca = BuzzyEmTeste.TamanhoDoLog();
+        long marca = BuzzyEmTeste.MarcaDoLog();
 
         // As mesmas mensagens que o Windows envia ao trocar resolução e mover a barra de tarefas.
         // A topologia real não mudou, então a releitura precisa concluir "mudou=nao".
@@ -131,7 +143,7 @@ internal sealed class IntegracaoTestes
     public void Bandeja_IconeERecriadoQuandoABarraDeTarefasReinicia()
     {
         using BuzzyEmTeste b = BuzzyEmTeste.Iniciar();
-        long marca = BuzzyEmTeste.TamanhoDoLog();
+        long marca = BuzzyEmTeste.MarcaDoLog();
         int taskbarCreated = NativoTeste.RegisterWindowMessage("TaskbarCreated");
         Afirmar.Verdadeiro(taskbarCreated != 0, "mensagem TaskbarCreated registrada");
 

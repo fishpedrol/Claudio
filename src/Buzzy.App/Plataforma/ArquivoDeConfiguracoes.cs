@@ -67,6 +67,10 @@ internal enum EtapaDaGravacao
 /// </param>
 /// <param name="Versao">O <c>schemaVersion</c> do arquivo usado; nulo com as configurações padrão.</param>
 /// <param name="Avisos">Quantos avisos a leitura do arquivo usado gerou (campo ignorado, repetido, fora da faixa ou do tipo errado).</param>
+/// <param name="TentativasNoPrincipal">
+/// Quantas vezes o settings.json foi aberto, ou tentado: 1 quando foi lido, ou visto ausente, de primeira; até
+/// <see cref="ArquivoDeConfiguracoes.TentativasDeLeitura"/> quando estava preso por outro processo.
+/// </param>
 internal sealed record LeituraDoArquivo(
     ConfiguracoesSalvas Configuracoes,
     OrigemDasConfiguracoes Origem,
@@ -74,7 +78,8 @@ internal sealed record LeituraDoArquivo(
     EstadoDoArquivo? Reserva,
     bool GravacaoBloqueada,
     int? Versao,
-    int Avisos);
+    int Avisos,
+    int TentativasNoPrincipal);
 
 /// <summary>Resultado de <see cref="ArquivoDeConfiguracoes.Gravar"/>.</summary>
 /// <param name="Gravou">Se o principal passou a ter o conteúdo novo.</param>
@@ -103,7 +108,7 @@ internal sealed record ResultadoDaGravacao(
 /// <list type="bullet">
 /// <item><c>settings.json</c>, o principal;</item>
 /// <item><c>settings.json.bak</c>, a reserva: o principal anterior, válido quando foi substituído;</item>
-/// <item><c>settings.json.tmp</c>, o temporário de uma gravação, nunca lido;</item>
+/// <item><c>settings.json.tmp</c>, o temporário de uma gravação, criado do zero a cada uma e nunca lido;</item>
 /// <item><c>settings.corrupt.json</c>, a cópia de diagnóstico: o último principal ilegível substituído, uma só, nunca lida.</item>
 /// </list>
 ///
@@ -161,7 +166,16 @@ internal sealed class ArquivoDeConfiguracoes
     internal bool GravacaoBloqueada => _gravacaoBloqueada;
 
     /// <summary>
-    /// Lê as configurações: principal, depois reserva, depois padrões (4.5 do desenho). Não cria, não altera e não
+    /// O arquivo de configurações desta execução, na pasta que <see cref="PastaDeDados.DasConfiguracoes(string?, bool)"/>
+    /// escolhe pelas opções da linha de comando; nulo sem pasta (persistência desligada, perfil de teste inválido ou
+    /// sem a pasta local do usuário), e então nada é lido nem gravado. É a única forma de o aplicativo criar o
+    /// arquivo: o isolamento dos testes e a falha fechada ficam numa regra só, testada.
+    /// </summary>
+    internal static ArquivoDeConfiguracoes? DaExecucao(string? perfilDeTeste, bool persistenciaDesligada)
+        => PastaDeDados.DasConfiguracoes(perfilDeTeste, persistenciaDesligada) is { } pasta ? new ArquivoDeConfiguracoes(pasta) : null;
+
+    /// <summary>
+    /// Lê as configurações: principal, depois reserva, depois padrões. Não cria, não altera e não
     /// apaga nenhum arquivo nem a pasta, e não impede outro processo de usá-los. O temporário e a cópia de
     /// diagnóstico nunca são lidos. Um arquivo preso é tentado <see cref="TentativasDeLeitura"/> vezes.
     /// </summary>
@@ -169,21 +183,21 @@ internal sealed class ArquivoDeConfiguracoes
     {
         ArquivoLido principal = LerUm(_principal, TentativasDeLeitura);
         if (principal.Estado is EstadoDoArquivo.Valido or EstadoDoArquivo.VersaoFutura)
-            return Usar(principal, OrigemDasConfiguracoes.Principal, principal.Estado, reserva: null);
+            return Usar(principal, OrigemDasConfiguracoes.Principal, principal, reserva: null);
 
         // Não se grava por cima do que não se conseguiu ler.
         if (principal.Estado == EstadoDoArquivo.Inacessivel) _gravacaoBloqueada = true;
 
         ArquivoLido reserva = LerUm(_reserva, TentativasDeLeitura);
         if (reserva.Estado is EstadoDoArquivo.Valido or EstadoDoArquivo.VersaoFutura)
-            return Usar(reserva, OrigemDasConfiguracoes.Reserva, principal.Estado, reserva.Estado);
+            return Usar(reserva, OrigemDasConfiguracoes.Reserva, principal, reserva.Estado);
 
         return new LeituraDoArquivo(ConfiguracoesSalvas.Padrao, OrigemDasConfiguracoes.Padroes, principal.Estado, reserva.Estado,
-            _gravacaoBloqueada, Versao: null, Avisos: 0);
+            _gravacaoBloqueada, Versao: null, Avisos: 0, principal.Tentativas);
     }
 
     /// <summary>
-    /// Grava as configurações (normalizadas pelo esquema) pelo protocolo atômico (4.4 do desenho), em até
+    /// Grava as configurações (normalizadas pelo esquema) pelo protocolo atômico descrito no resumo da classe, em até
     /// <paramref name="tentativas"/> tentativas, com a pausa da política entre elas. Uma falha de E/S ou de
     /// permissão é tentada de novo; qualquer outra exceção é defeito e propaga. Com a gravação bloqueada, nada é
     /// tocado.
@@ -244,10 +258,16 @@ internal sealed class ArquivoDeConfiguracoes
         return new ResultadoDaGravacao(false, dados.Length, principalAntes, CopiaDeDiagnostico: false, tentativas, erro);
     }
 
-    /// <summary>Temporário escrito sem buffer e descarregado no disco antes de virar o principal.</summary>
+    /// <summary>
+    /// Temporário escrito sem buffer e descarregado no disco antes de virar o principal. Um temporário que sobrou de
+    /// uma gravação que caiu é apagado antes, e o novo é criado do zero (<see cref="FileMode.CreateNew"/>): se esse
+    /// nome fosse um link, físico ou simbólico, para outro arquivo, abri-lo por cima truncaria e gravaria o outro
+    /// arquivo, fora da pasta; apagar remove só o link.
+    /// </summary>
     private void EscreverTemporario(byte[] dados)
     {
-        using (var fluxo = new FileStream(_temporario, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 1))
+        File.Delete(_temporario);
+        using (var fluxo = new FileStream(_temporario, FileMode.CreateNew, FileAccess.Write, FileShare.None, bufferSize: 1))
         {
             Concluir(EtapaDaGravacao.TemporarioAberto);
             fluxo.Write(dados);
@@ -271,16 +291,17 @@ internal sealed class ArquivoDeConfiguracoes
 
     private void Concluir(EtapaDaGravacao etapa) => _aoConcluirEtapa?.Invoke(etapa);
 
-    private LeituraDoArquivo Usar(ArquivoLido lido, OrigemDasConfiguracoes origem, EstadoDoArquivo principal, EstadoDoArquivo? reserva)
+    private LeituraDoArquivo Usar(ArquivoLido lido, OrigemDasConfiguracoes origem, ArquivoLido principal, EstadoDoArquivo? reserva)
     {
         // Versão futura: vale o que se conhece, e nada é gravado por cima, para não apagar o que não se conhece.
         if (lido.Estado == EstadoDoArquivo.VersaoFutura) _gravacaoBloqueada = true;
         LeituraDasConfiguracoes conteudo = lido.Conteudo!;
-        return new LeituraDoArquivo(conteudo.Configuracoes, origem, principal, reserva, _gravacaoBloqueada, conteudo.Versao, conteudo.Avisos.Count);
+        return new LeituraDoArquivo(conteudo.Configuracoes, origem, principal.Estado, reserva, _gravacaoBloqueada, conteudo.Versao, conteudo.Avisos.Count,
+            principal.Tentativas);
     }
 
-    /// <summary>Estado de um arquivo e, quando lido, o que o esquema achou dele.</summary>
-    private readonly record struct ArquivoLido(EstadoDoArquivo Estado, LeituraDasConfiguracoes? Conteudo);
+    /// <summary>Estado de um arquivo, quantas vezes ele foi aberto (ou tentado) e, quando lido, o que o esquema achou dele.</summary>
+    private readonly record struct ArquivoLido(EstadoDoArquivo Estado, LeituraDasConfiguracoes? Conteudo, int Tentativas);
 
     /// <summary>
     /// Avalia um arquivo sem alterá-lo nem impedir outro processo de usá-lo: ausente; grande demais (ilegível, sem ler
@@ -294,7 +315,7 @@ internal sealed class ArquivoDeConfiguracoes
             try
             {
                 using var fluxo = new FileStream(caminho, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-                if (fluxo.Length > EsquemaDeConfiguracoes.TamanhoMaximoEmBytes) return new ArquivoLido(EstadoDoArquivo.Ilegivel, null);
+                if (fluxo.Length > EsquemaDeConfiguracoes.TamanhoMaximoEmBytes) return new ArquivoLido(EstadoDoArquivo.Ilegivel, null, tentativa);
 
                 // Um byte além do limite, para o esquema recusar um arquivo que cresceu desde a consulta do tamanho.
                 LeituraDasConfiguracoes lida = EsquemaDeConfiguracoes.Ler(LerNoMaximo(fluxo, EsquemaDeConfiguracoes.TamanhoMaximoEmBytes + 1));
@@ -304,15 +325,15 @@ internal sealed class ArquivoDeConfiguracoes
                     SituacaoDaLeitura.VersaoFutura => EstadoDoArquivo.VersaoFutura,
                     _ => EstadoDoArquivo.Ilegivel,
                 };
-                return new ArquivoLido(estado, lida);
+                return new ArquivoLido(estado, lida, tentativa);
             }
             catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
             {
-                return new ArquivoLido(EstadoDoArquivo.Ausente, null);
+                return new ArquivoLido(EstadoDoArquivo.Ausente, null, tentativa);
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
-                if (tentativa >= tentativas) return new ArquivoLido(EstadoDoArquivo.Inacessivel, null);
+                if (tentativa >= tentativas) return new ArquivoLido(EstadoDoArquivo.Inacessivel, null, tentativa);
                 Thread.Sleep(PausaEntreLeituras);
             }
         }

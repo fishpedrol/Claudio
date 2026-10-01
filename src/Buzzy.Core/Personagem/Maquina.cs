@@ -6,9 +6,10 @@ public sealed record Resultado(EstadoDoNucleo Estado, IReadOnlyList<Efeito> Efei
 /// <summary>
 /// Máquina de estados do personagem (ARCHITECTURE.md 2.6): função pura de (estado, evento) para
 /// (estado novo, efeitos). Não acessa relógio, arquivo nem Windows; o tempo só avança por
-/// <see cref="Tick"/> e pelo disparo do <see cref="AutonomyTimer"/> que ela mesma agendou.
+/// <see cref="Tick"/> e pelos disparos do <see cref="AutonomyTimer"/> e do <see cref="ItemEffectTimer"/> que ela
+/// mesma agendou. O tamagotchi (DEC-028) fica em Maquina.Itens.cs (os itens e o uso) e Maquina.Onda.cs (a onda).
 /// </summary>
-public static class Maquina
+public static partial class Maquina
 {
     public static Resultado Aplicar(EstadoDoNucleo estado, Evento evento, ConfiguracaoDoNucleo config)
     {
@@ -35,7 +36,7 @@ public static class Maquina
     public static bool DecideNoEstado(Estado estado)
         => estado is Estado.Idle or Estado.Resting or Estado.Climbing or Estado.Hanging or Estado.Peeking;
 
-    private sealed class Passo
+    private sealed partial class Passo
     {
         private readonly EstadoDoNucleo _inicio;
         private readonly ConfiguracaoDoNucleo _cfg;
@@ -52,11 +53,16 @@ public static class Maquina
             _s = estado with { Sinal = Sinal.Nenhum };
         }
 
-        private PerfilDeEnergia Perfil => _cfg.Perfil(_s.Preferencias.Energia);
+        /// <summary>O perfil de energia em vigor: com a onda de um item, o da fase dela (DEC-028, <see cref="PerfilEfetivo"/>).</summary>
+        private PerfilDeEnergia Perfil => PerfilEfetivo(_s, _cfg);
 
         internal void Tratar(Evento evento)
         {
             if (_s.Estado == Estado.Exiting) return;
+
+            // Com o tamagotchi desligado (DEC-028), os eventos dele são descartados antes de tudo, até de encerrar um
+            // gesto curto (L15 da crítica): o núcleo fica exatamente como antes.
+            if (!_cfg.Tamagotchi && EhDoTamagotchi(evento)) return;
 
             // Invariante 15: um gesto curto termina ao chegar qualquer evento de prioridade maior
             // que a do relógio (PRESS, CMD_*, painel, sistema).
@@ -84,6 +90,14 @@ public static class Maquina
                 case CmdOpenSettings: AbrirConfiguracoes(); break;
                 case CmdResetPosition: RedefinirPosicao(); break;
                 case CmdExit: Sair("CMD_EXIT"); break;
+                case CmdSetDominantEmotion e: EscolherEmocao(e.Emocao); break;
+                case CmdSummonItem e: InvocarItem(e.Item); break;
+                case CmdClearItems: RecolherItens(); break;
+                case ItemPress e: PegarItem(e.Id, e.Cursor); break;
+                case ItemDragStart e: IniciarArrasteDoItem(e.Id); break;
+                case ItemDragMove e: ArrastarItem(e.Id, e.Cursor); break;
+                case ItemDragEnd e: SoltarItem(e.Id, e.Cursor); break;
+                case ItemRelease e: LargarItem(e.Id); break;
                 case TopologyChanged e: MudarTopologia(e.Topologia); break;
                 case SessionLocked: Esconder(MotivoDoOcultamento.PorSessao, "SESSION_LOCKED"); break;
                 case SessionUnlocked: Reaparecer(MotivoDoOcultamento.PorSessao, "SESSION_UNLOCKED"); break;
@@ -95,6 +109,7 @@ public static class Maquina
                 case Tick: Passar(); break;
                 case MovementSignal e: Sinalizar(e.Sinal); break;
                 case AutonomyTimer e: Decidir(e.Geracao); break;
+                case ItemEffectTimer e: AvancarOnda(e.Geracao); break;
                 case ExpressionChange e: _s = _s with { Expressao = e.Expressao }; break;
                 default: throw new ArgumentException($"Evento desconhecido: {evento}.", nameof(evento));
             }
@@ -130,6 +145,18 @@ public static class Maquina
             }
             _s = _s with { Carregado = true, Topologia = e.Topologia, Preferencias = Sanear(e.Preferencias), Lugar = lugar, Posicao = posicao };
 
+            // A postura gravada com a posição (esquema v3, DEC-029, item 11): a acomodação abaixo o devolve escondido na
+            // mesma borda (DEC-025), ou agarrado e ainda preso onde o usuário o deixou (DEC-024); longe da parede e do cipó,
+            // ela apaga a marca. Sem posição salva, não vale; sem o esconderijo pelo clique duplo na configuração, a borda
+            // também não (ele não teria como sair de lá); fora do enum, nenhuma (SECURITY.md 7).
+            if (e.PosicaoSalva is not null)
+            {
+                LadoDoEsconderijo lado = _cfg.EsconderijoNoCliqueDuplo && Enum.IsDefined(e.Esconderijo) ? e.Esconderijo : LadoDoEsconderijo.Nenhum;
+                _s = _s with { Esconderijo = lado, PresoPeloUsuario = e.PresoPeloUsuario };
+            }
+            // Com a emoção dominante gravada (DEC-027), ele já começa com a cara dela.
+            if (_s.Preferencias.EmocaoDominante is { } dominante) _s = _s with { Expressao = dominante };
+
             if (_s.Estado == Estado.Booting)
                 Acomodar(lugar.Ancora, "BOOTING: configurações e topologia carregadas" + restaurada, posicao);
             else if (_s.Motivo == MotivoDoOcultamento.Nenhum)
@@ -147,10 +174,14 @@ public static class Maquina
             _s = _s with { Topologia = nova };
             if (mesma) return;
 
+            // Os itens fora da mão (DEC-028) são reacomodados em qualquer estado, como o personagem.
+            ReacomodarItens(nova);
+
             // PRESSED, DRAGGING, BOOTING, HIDDEN e EXITING só atualizam o cache: a validação
-            // acontece ao soltar, ao reaparecer ou ao terminar de carregar.
+            // acontece ao soltar, ao reaparecer ou ao terminar de carregar. Em USING, a revalidação acaba
+            // o uso, como a reação (a onda continua).
             GrupoDoEstado grupo = _s.Estado.Grupo();
-            bool revalida = grupo is GrupoDoEstado.Autonomo or GrupoDoEstado.Fisico || _s.Estado == Estado.Reacting;
+            bool revalida = grupo is GrupoDoEstado.Autonomo or GrupoDoEstado.Fisico || _s.Estado is Estado.Reacting or Estado.Using;
             if (!revalida || _s.Posicao is null) return;
 
             (Posicionamento r, PosicaoDoPersonagem p) = Posicionador.Reacomodar(nova, _s.Posicao, _cfg.Tamanho);
@@ -287,6 +318,21 @@ public static class Maquina
         /// <summary>Caras de quem está escondido, espiando o que acontece (DEC-025).</summary>
         private static readonly Expressao[] ExpressoesDoEscondido = [Expressao.Curioso, Expressao.Travesso, Expressao.Feliz, Expressao.Surpreso, Expressao.Pensativo, Expressao.Rindo];
 
+        /// <summary>
+        /// A cara de quem espia escondido, num único sorteio: com a onda de um item, uma das caras da fase (DEC-028); com a
+        /// emoção dominante, ela ou uma companheira (DEC-027); na automática, uma das outras caras de quem espia.
+        /// </summary>
+        private Expressao SortearCaraDoEscondido()
+        {
+            if (FaseEmVigor is { } fase) return SortearCaraDaFase(fase);
+            if (_s.Preferencias.EmocaoDominante is { } dominante) return SortearComADominante(dominante);
+            (int cara, Aleatorio a) = _s.Aleatorio.Entre(0, ExpressoesDoEscondido.Length - 2);
+            Expressao atual = _s.Expressao;
+            Expressao[] outras = [.. ExpressoesDoEscondido.Where(e => e != atual)];
+            _s = _s with { Aleatorio = a };
+            return outras[Math.Min(cara, outras.Length - 1)];
+        }
+
         private void IniciarArraste()
         {
             if (_s.Estado != Estado.Pressed) return;
@@ -312,7 +358,7 @@ public static class Maquina
             // Soltar é escolha manual: descarta o retorno temporário da tela cheia (DEC-013).
             FimDoGestoDoUsuario(escolheuPosicao: true);
             Acomodar(ancora, "DRAG_END", pelaMaoDoUsuario: true);
-            if (_s.Posicao is not null) _depois.Add(new GravarPosicao(_s.Posicao));
+            if (_s.Posicao is { } posicao) GravarComAPostura(posicao);
         }
 
         private void CancelarArraste()
@@ -323,7 +369,7 @@ public static class Maquina
                 // O personagem fica onde estava; não volta ao ponto de origem (ARCHITECTURE.md 2.7).
                 FimDoGestoDoUsuario(escolheuPosicao: true);
                 Acomodar(_s.Lugar.Ancora, "DRAG_CANCEL", pelaMaoDoUsuario: true);
-                if (_s.Posicao is not null) _depois.Add(new GravarPosicao(_s.Posicao));
+                if (_s.Posicao is { } posicao) GravarComAPostura(posicao);
             }
             else if (_s.Estado == Estado.Pressed)
             {
@@ -400,6 +446,9 @@ public static class Maquina
             LiberarGestoDoUsuario();
             FixarArrasteInterrompido();
             FecharPainelSeAberto();
+            // Os itens (DEC-028): o da mão solta a captura, e os que caem vão ao chão (D18).
+            LiberarItemNaMao();
+            AssentarItens();
             _s = _s with { Motivo = motivo, PassosRestantes = 0 };
             IrPara(Estado.Hidden, regra);
             // Com o modo desligado, o retorno só sobra de um PRESSED interrompido: a posição de
@@ -415,8 +464,16 @@ public static class Maquina
         /// </summary>
         private void GravarPosicaoDoUsuario()
         {
-            if ((_s.RetornoDaTelaCheia ?? _s.Posicao) is { } posicao) _depois.Add(new GravarPosicao(posicao));
+            if ((_s.RetornoDaTelaCheia ?? _s.Posicao) is { } posicao) GravarComAPostura(posicao);
         }
+
+        /// <summary>
+        /// O efeito que grava a posição, com a postura do estado como ela está agora (esquema v3, DEC-029, item 11): a borda
+        /// do esconderijo (DEC-025) e a marca "preso pelo usuário" (DEC-024). Escondido pela bandeja ou pela sessão, a borda
+        /// continua no estado e vai junto; a ocultação, não.
+        /// </summary>
+        private void GravarComAPostura(PosicaoDoPersonagem posicao)
+            => _depois.Add(new GravarPosicao(posicao) { Esconderijo = _s.Esconderijo, PresoPeloUsuario = _s.PresoPeloUsuario });
 
         private static int Precedencia(MotivoDoOcultamento motivo) => motivo switch
         {
@@ -504,7 +561,7 @@ public static class Maquina
                 _s = _s with { Lugar = inicial, Posicao = Posicionador.Descrever(inicial) };
             else
                 Acomodar(inicial.Ancora, "CMD_RESET_POSITION", Posicionador.Descrever(inicial));
-            if (_s.Posicao is not null) _depois.Add(new GravarPosicao(_s.Posicao));
+            if (_s.Posicao is { } posicao) GravarComAPostura(posicao);
         }
 
         private void Sair(string regra)
@@ -512,6 +569,8 @@ public static class Maquina
             LiberarGestoDoUsuario();
             FixarArrasteInterrompido();
             FecharPainelSeAberto();
+            LiberarItemNaMao();
+            AssentarItens();
             IrPara(Estado.Exiting, regra);
             GravarPosicaoDoUsuario();
             _depois.Add(new Encerrar());
@@ -520,6 +579,48 @@ public static class Maquina
         private void LiberarGestoDoUsuario()
         {
             if (_s.Estado is Estado.Pressed or Estado.Dragging) _antes.Add(new LiberarCaptura());
+        }
+
+        // ---------------------------------------------------------------- emoção dominante (DEC-027)
+
+        /// <summary>
+        /// CMD_SET_DOMINANT_EMOTION: grava a emoção nas preferências e, com a cara livre, a mostra na hora. Antes da
+        /// carga, fora das 14 caras de humor ou igual à atual, é ignorada. "Automática" (nula) mantém a cara atual
+        /// até a próxima troca. Não muda estado, posição nem agenda: a transição para o mesmo estado só registra a
+        /// escolha.
+        /// </summary>
+        private void EscolherEmocao(Expressao? emocao)
+        {
+            if (!_s.Carregado || (emocao is { } e && !Expressoes.EhDeHumor(e)) || emocao == _s.Preferencias.EmocaoDominante) return;
+            _s = _s with { Preferencias = _s.Preferencias with { EmocaoDominante = emocao } };
+            _depois.Add(new GravarPreferencias(_s.Preferencias));
+            _transicoes.Add(new Transicao(_s.Estado, _s.Estado, $"CMD_SET_DOMINANT_EMOTION: {emocao?.ToString() ?? "Automatica"}"));
+            // Com a onda de um item, a cara dela tem precedência; a dominante entra quando a onda acabar (DEC-028).
+            if (emocao is { } nova && !ComOnda && CaraLivre(_s.Estado)) _s = _s with { Expressao = nova };
+        }
+
+        /// <summary>
+        /// Estados em que a cara pode mudar na hora, pela emoção dominante ou pela fase da onda de um item: em RESTING
+        /// (sonolento), em REACTING (feliz com o clique) e em USING (a cara de quem usa o item, DEC-028), a cara do estado
+        /// continua até ele acabar, e então volta à de base.
+        /// </summary>
+        private static bool CaraLivre(Estado estado) => estado is not (Estado.Resting or Estado.Reacting or Estado.Using);
+
+        /// <summary>
+        /// A cara de base: com a onda de um item, a da fase dela (DEC-028); sem onda, a emoção dominante (DEC-027); na
+        /// automática, a neutra, como antes.
+        /// </summary>
+        private Expressao CaraDeBase()
+            => ComOnda && _s.Onda is { } onda ? _cfg.TabelaDeOndas(onda.Tipo).Cara(onda.Fase) : _s.Preferencias.EmocaoDominante ?? Expressao.Neutro;
+
+        /// <summary>
+        /// Fim da reação ao clique e do pouso: com a onda de um item (DEC-028) ou com a emoção dominante (DEC-027), a cara
+        /// volta à de base. Na automática, sem onda, nada muda: a cara da reação ou do quique fica até a próxima troca,
+        /// como antes.
+        /// </summary>
+        private void VoltarACaraDeBase()
+        {
+            if (ComOnda || _s.Preferencias.EmocaoDominante is not null) _s = _s with { Expressao = CaraDeBase() };
         }
 
         // ---------------------------------------------------------------- tela cheia (DEC-013)
@@ -592,6 +693,8 @@ public static class Maquina
             if (monitorLivre is null)
             {
                 FecharPainelSeAberto();
+                LiberarItemNaMao();
+                AssentarItens();
                 _s = _s with { Motivo = MotivoDoOcultamento.PorTelaCheia, PassosRestantes = 0 };
                 IrPara(Estado.Hidden, $"{regra}: nenhum monitor livre");
                 return;
@@ -625,15 +728,26 @@ public static class Maquina
             return melhor;
         }
 
-        /// <summary>SECURITY.md 7: nível de energia fora de BAIXA/MEDIA/ALTA vira o padrão seguro, Média.</summary>
+        /// <summary>
+        /// SECURITY.md 7: nível de energia fora de BAIXA/MEDIA/ALTA vira o padrão seguro, Média; emoção dominante fora
+        /// das 14 caras de humor vira "Automática" (DEC-027).
+        /// </summary>
         private static Preferencias Sanear(Preferencias preferencias)
-            => Enum.IsDefined(preferencias.Energia) ? preferencias : preferencias with { Energia = Preferencias.Padrao.Energia };
+        {
+            if (!Enum.IsDefined(preferencias.Energia)) preferencias = preferencias with { Energia = Preferencias.Padrao.Energia };
+            if (preferencias.EmocaoDominante is { } emocao && !Expressoes.EhDeHumor(emocao)) preferencias = preferencias with { EmocaoDominante = null };
+            return preferencias;
+        }
 
         private void MudarPreferencias(Preferencias novas)
         {
             Preferencias antes = _s.Preferencias;
             novas = Sanear(novas);
             _s = _s with { Preferencias = novas };
+            // Uma emoção dominante nova aparece na hora, como pelo menu (DEC-027), a não ser com a onda de um item, que tem
+            // precedência (DEC-028); antes da carga, quem decide a cara de partida é a carga.
+            if (_s.Carregado && novas.EmocaoDominante is { } emocao && emocao != antes.EmocaoDominante && !ComOnda && CaraLivre(_s.Estado))
+                _s = _s with { Expressao = emocao };
             if (!antes.ModoTelaCheia || novas.ModoTelaCheia) return;
 
             // Desligar o modo desfaz o efeito temporário dele (Q-09): a posição temporária nunca vira
@@ -666,17 +780,29 @@ public static class Maquina
         private void Passar()
         {
             _s = _s with { Passos = _s.Passos + 1 };
+            // Os itens que caem (DEC-028) seguem a própria física, em qualquer estado do personagem.
+            PassoDosItens();
             switch (_s.Estado)
             {
+                case Estado.Using:
+                    _s = _s with { PassosRestantes = _s.PassosRestantes - 1 };
+                    if (_s.PassosRestantes <= 0) FimDoUso();
+                    break;
                 case Estado.Reacting:
                     _s = _s with { PassosRestantes = _s.PassosRestantes - 1 };
                     if (_s.PassosRestantes <= 0 && _s.Lugar is not null)
+                    {
+                        VoltarACaraDeBase();
                         Acomodar(_s.Lugar.Ancora, "REACTING: fim da reação");
+                    }
                     break;
                 case Estado.Landing:
                     _s = _s with { PassosRestantes = _s.PassosRestantes - 1 };
                     if (_s.PassosRestantes <= 0)
+                    {
+                        VoltarACaraDeBase();
                         IrPara(Estado.Idle, "LANDING: fim do pouso");
+                    }
                     break;
                 case Estado.Idle when _s.Gesto != Gesto.Nenhum:
                     _s = _s with { PassosDoGesto = _s.PassosDoGesto - 1 };
@@ -752,8 +878,8 @@ public static class Maquina
             // Disparo de um agendamento substituído ou cancelado: ignorado.
             if (!_s.DecisaoAgendada || geracao != _s.Geracao) return;
             // Invariante 1 e ARCHITECTURE.md 2.3: nada autônomo com o usuário no controle, com
-            // a autonomia pausada ou com o painel aberto.
-            if (_s.Estado.ControladoPeloUsuario() || _s.AutonomiaPausada || _s.PainelAberto || !_s.Estado.Visivel()) return;
+            // a autonomia pausada, com o painel aberto ou com o usuário segurando um item (DEC-028).
+            if (_s.Estado.ControladoPeloUsuario() || _s.AutonomiaPausada || _s.PainelAberto || !_s.Estado.Visivel() || AtentoAoItem) return;
 
             _s = _s with { DecisaoAgendada = false };
             _reagendar = true;
@@ -763,15 +889,13 @@ public static class Maquina
                     DecidirParado();
                     break;
                 case Estado.Resting:
-                    _s = _s with { Sinal = Sinal.Acordou, Expressao = Expressao.Neutro };
+                    _s = _s with { Sinal = Sinal.Acordou, Expressao = CaraDeBase() };
                     IrPara(Estado.Idle, "RESTING + AUTONOMY_TIMER: acorda");
                     break;
                 case Estado.Peeking:
                     // Escondido (DEC-025): nada o tira de lá; só troca a cara, espiando.
-                    (int cara, Aleatorio aDaCara) = _s.Aleatorio.Entre(0, ExpressoesDoEscondido.Length - 2);
-                    Expressao atual = _s.Expressao;
-                    Expressao[] outras = [.. ExpressoesDoEscondido.Where(e => e != atual)];
-                    _s = _s with { Aleatorio = aDaCara, Expressao = outras[Math.Min(cara, outras.Length - 1)] };
+                    Expressao espiando = SortearCaraDoEscondido();
+                    _s = _s with { Expressao = espiando };
                     _transicoes.Add(new Transicao(Estado.Peeking, Estado.Peeking, "PEEKING + AUTONOMY_TIMER: espia com outra cara"));
                     break;
                 case Estado.Climbing or Estado.Hanging when _cfg.Movimento && _s.PresoPeloUsuario:
@@ -870,18 +994,52 @@ public static class Maquina
                     IrPara(Estado.Resting, "IDLE + AUTONOMY_TIMER: descansar");
                     break;
                 case AcoesAutonomas.Gesto:
-                    (int g, Aleatorio a3) = _s.Aleatorio.Entre((int)Gesto.Espiar, (int)Gesto.Brincar);
+                    // Dois sorteios, com ou sem onda: o gesto (o da fase, com a onda de um item) e a duração.
+                    (Gesto gesto, Aleatorio a3) = SortearGesto();
                     (int passos, Aleatorio a4) = a3.Entre(perfil.PassosDoGestoMinimo, perfil.PassosDoGestoMaximo);
-                    _s = _s with { Aleatorio = a4, Gesto = (Gesto)g, PassosDoGesto = passos };
-                    _transicoes.Add(new Transicao(Estado.Idle, Estado.Idle, $"IDLE + AUTONOMY_TIMER: gesto {(Gesto)g}"));
+                    _s = _s with { Aleatorio = a4, Gesto = gesto, PassosDoGesto = passos };
+                    _transicoes.Add(new Transicao(Estado.Idle, Estado.Idle, $"IDLE + AUTONOMY_TIMER: gesto {gesto}"));
                     break;
                 case AcoesAutonomas.TrocarExpressao:
-                    (int e, Aleatorio a5) = _s.Aleatorio.Entre(0, Enum.GetValues<Expressao>().Length - 2);
-                    // Sorteia entre as outras expressões: pula a atual.
-                    var nova = (Expressao)(e >= (int)_s.Expressao ? e + 1 : e);
-                    _s = _s with { Aleatorio = a5, Expressao = nova };
+                    // O sorteio avança o gerador em _s: a cara vai para uma variável antes do "with".
+                    Expressao nova = SortearTrocaDeCara();
+                    _s = _s with { Expressao = nova };
                     break;
             }
+        }
+
+        /// <summary>
+        /// Troca de cara da agenda, com exatamente um sorteio (DEC-027 e DEC-028). Com a onda de um item, uma das caras
+        /// da fase, que tem precedência (<see cref="SortearCaraDaFase"/>). Com a emoção dominante, ela ou uma das
+        /// companheiras (<see cref="SortearComADominante"/>). Na automática, uma das outras 13 caras de humor,
+        /// uniforme, pela lista fixa <see cref="Expressoes.DeHumor"/> (com a cara atual fora das 14, uma das 14).
+        /// </summary>
+        private Expressao SortearTrocaDeCara()
+        {
+            if (FaseEmVigor is { } fase) return SortearCaraDaFase(fase);
+            if (_s.Preferencias.EmocaoDominante is { } dominante) return SortearComADominante(dominante);
+            IReadOnlyList<Expressao> humor = Expressoes.DeHumor;
+            // As 14 estão na ordem do enum: a posição de uma cara de humor na lista é o valor dela.
+            int atual = Expressoes.EhDeHumor(_s.Expressao) ? (int)_s.Expressao : -1;
+            (int e, Aleatorio a) = _s.Aleatorio.Entre(0, humor.Count - (atual < 0 ? 1 : 2));
+            _s = _s with { Aleatorio = a };
+            // Sorteia entre as outras caras: pula a atual.
+            return humor[atual >= 0 && e >= atual ? e + 1 : e];
+        }
+
+        /// <summary>Pesos do sorteio com a emoção dominante: ela, 6; cada uma das quatro companheiras, 1.</summary>
+        private static readonly int[] PesosDaDominante = [6, 1, 1, 1, 1];
+
+        /// <summary>
+        /// Uma cara com a emoção dominante (DEC-027), num único sorteio: ela, em 60% das vezes, ou uma das quatro
+        /// companheiras (<see cref="Expressoes.Companheiras"/>). Pode repetir a cara atual: de cada 100 trocas, cerca
+        /// de 36 não mudam nada, e é assim que a dominante fica a mais frequente.
+        /// </summary>
+        private Expressao SortearComADominante(Expressao dominante)
+        {
+            (int i, Aleatorio a) = _s.Aleatorio.Ponderado(PesosDaDominante);
+            _s = _s with { Aleatorio = a };
+            return i == 0 ? dominante : Expressoes.Companheiras(dominante)[i - 1];
         }
 
         private bool Permite(AcoesAutonomas acao) => (_cfg.Acoes & acao) == acao;
@@ -920,6 +1078,20 @@ public static class Maquina
 
         /// <summary>Com a autonomia pausada ou o painel aberto, o movimento em curso termina num lugar estável.</summary>
         private bool Calmo => _s.AutonomiaPausada || _s.PainelAberto;
+
+        /// <summary>
+        /// DEC-022 com DEC-024: com a autonomia pausada ou o painel aberto, a agenda não decide, e quem está agarrado à
+        /// parede ou ao cipó sem ter sido posto lá pelo usuário (depois da reação a um clique, de uma revalidação, do fim do
+        /// uso de um item ou do atento) não fica esperando por ela: deixa de estar agarrado, e os passos seguintes o fazem
+        /// descer pela parede ou se soltar do cipó, como a calma faz com quem escala. Preso pelo usuário, continua agarrado
+        /// (DEC-024); com um item na mão do usuário, o atento o mantém onde está (DEC-028) até o item sair da mão.
+        /// </summary>
+        private void SoltarOAgarreComCalma()
+        {
+            if (!_cfg.Movimento || !Calmo || AtentoAoItem || _s.PresoPeloUsuario) return;
+            if (_s.Estado is Estado.Climbing or Estado.Hanging && _s.Movimento.Agarrado)
+                _s = _s with { Movimento = _s.Movimento with { Agarrado = false } };
+        }
 
         /// <summary>+1 para a direita, −1 para a esquerda.</summary>
         private int Sentido => _s.Direcao == Direcao.Direita ? 1 : -1;
@@ -961,11 +1133,14 @@ public static class Maquina
                 return;
             }
             EstadoDoMovimento mv = _s.Movimento;
-            double passo = PorPasso(_cfg.Fisica.VelocidadeAndando, escala);
+            // Com a onda de um item, a velocidade da fase e o cambaleio (DEC-028): o passo oscila numa onda triangular,
+            // às vezes para trás; o recuo devolve distância ao percurso e nunca passa da lateral de trás.
+            double passo = PorPasso(Fisica.VelocidadeAndando, escala) * Cambaleio(out bool cambaleia);
             double x = mv.X + Sentido * passo;
             int limite = Sentido > 0 ? sup.Direita : sup.Esquerda;
             bool naBorda = Sentido > 0 ? x >= limite : x <= limite;
             if (naBorda) x = limite;
+            else if (cambaleia) x = Math.Clamp(x, sup.Esquerda, sup.Direita);
             _s = _s with { Movimento = mv with { Restante = mv.Restante - passo } };
             MoverPara(m, x, sup.Chao);
 
@@ -998,7 +1173,7 @@ public static class Maquina
             // Pausado ou com o painel aberto, desce até o chão em vez de subir (e o foguete apaga).
             int sentido = Calmo ? 1 : mv.SentidoVertical;
             bool foguete = mv.Foguete && sentido < 0;
-            double velocidade = foguete ? _cfg.Fisica.VelocidadeDoFoguete : _cfg.Fisica.VelocidadeEscalando;
+            double velocidade = foguete ? _cfg.Fisica.VelocidadeDoFoguete : Fisica.VelocidadeEscalando;
             double y = mv.Y + sentido * PorPasso(velocidade, escala);
             double x = Sentido > 0 ? sup.Direita : sup.Esquerda;
             _s = _s with { Movimento = mv with { SentidoVertical = sentido, Foguete = foguete } };
@@ -1026,7 +1201,7 @@ public static class Maquina
         private void PassoPresoNaParede(MonitorDoDesktop m, Superficies sup, double escala)
         {
             EstadoDoMovimento mv = _s.Movimento;
-            double passo = PorPasso(_cfg.Fisica.VelocidadeEscalando, escala);
+            double passo = PorPasso(Fisica.VelocidadeEscalando, escala);
             double baixo = Math.Max(sup.Teto, sup.Chao - _cfg.Fisica.AlturaMinimaParaAgarrar * escala);
             double y = mv.Y + mv.SentidoVertical * passo;
             bool noLimite = y <= sup.Teto || y >= baixo;
@@ -1044,7 +1219,7 @@ public static class Maquina
         private void PassoPresoNoCipo(MonitorDoDesktop m, Superficies sup, double escala)
         {
             EstadoDoMovimento mv = _s.Movimento;
-            double passo = PorPasso(_cfg.Fisica.VelocidadePendurado, escala);
+            double passo = PorPasso(Fisica.VelocidadePendurado, escala);
             double x = mv.X + Sentido * passo;
             int limite = Sentido > 0 ? sup.Direita : sup.Esquerda;
             if (Sentido > 0 ? x >= limite : x <= limite)
@@ -1073,7 +1248,7 @@ public static class Maquina
                 return;
             }
             EstadoDoMovimento mv = _s.Movimento;
-            double x = mv.X + Sentido * PorPasso(_cfg.Fisica.VelocidadePendurado, escala);
+            double x = mv.X + Sentido * PorPasso(Fisica.VelocidadePendurado, escala);
             int limite = Sentido > 0 ? sup.Direita : sup.Esquerda;
             bool naBorda = Sentido > 0 ? x >= limite : x <= limite;
             if (naBorda) x = limite;
@@ -1209,6 +1384,20 @@ public static class Maquina
         private static readonly Expressao[] ExpressoesDoPreso = [Expressao.Feliz, Expressao.Curioso, Expressao.Travesso, Expressao.Rindo, Expressao.Pensativo];
 
         /// <summary>
+        /// A cara de quem está preso e olha em volta, num único sorteio: com a onda de um item, uma das caras da fase
+        /// (DEC-028); com a emoção dominante, ela ou uma companheira (DEC-027); na automática, uma das caras de quem está
+        /// preso.
+        /// </summary>
+        private Expressao SortearCaraDoPreso()
+        {
+            if (FaseEmVigor is { } fase) return SortearCaraDaFase(fase);
+            if (_s.Preferencias.EmocaoDominante is { } dominante) return SortearComADominante(dominante);
+            (int cara, Aleatorio a) = _s.Aleatorio.Entre(0, ExpressoesDoPreso.Length - 1);
+            _s = _s with { Aleatorio = a };
+            return ExpressoesDoPreso[cara];
+        }
+
+        /// <summary>
         /// Preso pelo usuário (DEC-024): a agenda nunca o tira de lá. Ou ele fica, trocando de cara,
         /// ou passeia um pouco pela mesma superfície: sobe ou desce pela parede, vai para um lado ou
         /// outro pelo cipó. O passeio para agarrado, e o relógio desliga.
@@ -1218,12 +1407,13 @@ public static class Maquina
             bool naParede = _s.Estado == Estado.Climbing;
             (int escolha, Aleatorio a) = _s.Aleatorio.Ponderado([2, 2, 2]);
             (int dip, Aleatorio a2) = a.Entre(_cfg.Fisica.PasseioPresoMinimo, _cfg.Fisica.PasseioPresoMaximo);
-            (int cara, Aleatorio a3) = a2.Entre(0, ExpressoesDoPreso.Length - 1);
-            _s = _s with { Aleatorio = a3 };
+            _s = _s with { Aleatorio = a2 };
+            // A cara é sorteada sempre, num único sorteio, e só vale quando ele fica e olha em volta.
+            Expressao cara = SortearCaraDoPreso();
             string onde = naParede ? "CLIMBING preso pelo usuário" : "HANGING preso pelo usuário no cipó";
             if (escolha == 0)
             {
-                _s = _s with { Expressao = ExpressoesDoPreso[cara] };
+                _s = _s with { Expressao = cara };
                 _transicoes.Add(new Transicao(_s.Estado, _s.Estado, $"{onde} + AUTONOMY_TIMER: fica e olha em volta"));
                 return;
             }
@@ -1280,7 +1470,11 @@ public static class Maquina
         /// O usuário acabou de soltar o personagem (DRAG_END, DRAG_CANCEL do arraste). Se ele agarrar
         /// uma lateral ou o cipó, fica preso lá até o usuário tirá-lo (DEC-024).
         /// </param>
-        private void Acomodar(PontoPx desejada, string regra, PosicaoDoPersonagem? preferida = null, bool pelaMaoDoUsuario = false)
+        /// <param name="apoio">
+        /// O apoio em que ele usou um item (DEC-028): no fim do uso, na quina, ao alcance da parede e do cipó, ele agarra o
+        /// mesmo de antes. Nulo, o mais próximo, como sempre.
+        /// </param>
+        private void Acomodar(PontoPx desejada, string regra, PosicaoDoPersonagem? preferida = null, bool pelaMaoDoUsuario = false, ApoioDoUso? apoio = null)
         {
             IrPara(Estado.Settling, regra);
             (Posicionamento lugar, PosicaoDoPersonagem posicao, bool comApoio) = Validar(desejada, preferida);
@@ -1298,7 +1492,7 @@ public static class Maquina
 
             // Solto no alto ou junto a uma lateral, agarra ali em vez de cair (DEC-024). Quem já
             // estava preso pelo usuário continua preso: um clique ou uma revalidação não o tiram.
-            if (!comApoio && _cfg.Movimento && OndeAgarrar(lugar) is { } agarre)
+            if (!comApoio && _cfg.Movimento && OndeAgarrar(lugar, apoio) is { } agarre)
             {
                 bool preso = pelaMaoDoUsuario || _s.PresoPeloUsuario;
                 _s = _s with { Lugar = agarre.Lugar, Posicao = Posicionador.Descrever(agarre.Lugar), Direcao = agarre.Direcao, PresoPeloUsuario = preso };
@@ -1322,9 +1516,12 @@ public static class Maquina
         /// <summary>
         /// Onde agarrar um personagem sem apoio (DEC-024): o cipó da borda de cima, se o topo do sprite
         /// está perto dela; a lateral, se a âncora está perto dela; a mais próxima das duas, em
-        /// proporção ao alcance de cada uma. Perto do chão, nenhuma: ele cai.
+        /// proporção ao alcance de cada uma, ou, com as duas ao alcance, a <paramref name="preferido"/>
+        /// (o apoio do uso de um item, DEC-028). Perto do chão, nenhuma: ele cai. A exceção é o fim do
+        /// uso de um item na parede ou no cipó: ele já estava lá, e volta ao mesmo apoio mesmo perto do
+        /// chão (tabela 4.6 e invariante 24), como quem escalava os primeiros passos de uma parede.
         /// </summary>
-        private (Estado Estado, Posicionamento Lugar, Direcao Direcao)? OndeAgarrar(Posicionamento lugar)
+        private (Estado Estado, Posicionamento Lugar, Direcao Direcao)? OndeAgarrar(Posicionamento lugar, ApoioDoUso? preferido = null)
         {
             if (_s.Topologia is not { } topologia) return null;
             MonitorDoDesktop m = lugar.Monitor;
@@ -1332,14 +1529,21 @@ public static class Maquina
             double escala = m.Dpi / 96.0;
             ParametrosDeMovimento f = _cfg.Fisica;
             PontoPx a = lugar.Ancora;
-            if (sup.Chao - a.Y < f.AlturaMinimaParaAgarrar * escala) return null;
+            bool jaEstavaNoApoio = preferido is ApoioDoUso.Parede or ApoioDoUso.Cipo;
+            if (!jaEstavaNoApoio && sup.Chao - a.Y < f.AlturaMinimaParaAgarrar * escala) return null;
 
             double paraOCipo = (a.Y - sup.Teto) / (f.DistanciaParaOCipo * escala);
             double paraAParede = Math.Min(a.X - sup.Esquerda, sup.Direita - a.X) / (f.DistanciaParaAParede * escala);
             bool cipo = paraOCipo <= 1, parede = paraAParede <= 1;
             if (!cipo && !parede) return null;
 
-            if (cipo && (!parede || paraOCipo <= paraAParede))
+            bool peloCipo = preferido switch
+            {
+                ApoioDoUso.Cipo when cipo => true,
+                ApoioDoUso.Parede when parede => false,
+                _ => cipo && (!parede || paraOCipo <= paraAParede),
+            };
+            if (peloCipo)
             {
                 var ancora = new PontoPx(Math.Clamp(a.X, sup.Esquerda, sup.Direita), sup.Teto);
                 return (Estado.Hanging, NoLugar(m, ancora), _s.Direcao);
@@ -1399,6 +1603,8 @@ public static class Maquina
             Estado de = _s.Estado;
             _transicoes.Add(new Transicao(de, novo, regra));
             _s = _s with { Estado = novo, Motivo = novo == Estado.Hidden ? _s.Motivo : MotivoDoOcultamento.Nenhum };
+            // Sair de USING, pelo fim ou por uma interrupção, acaba o uso (DEC-028); a onda continua.
+            if (de == Estado.Using && novo != Estado.Using) _s = _s with { Uso = null };
             if (novo != de && DecideNoEstado(novo)) _reagendar = true;
             // Ao entrar num estado de movimento, a física parte da âncora atual, parada; quem
             // chamou ajusta velocidade e plano depois (DEC-022).
@@ -1413,6 +1619,12 @@ public static class Maquina
             var janela = new List<Efeito>();
             var tempo = new List<Efeito>();
 
+            // Com calma, quem está agarrado sem estar preso desce ou se solta (DEC-022), antes de o relógio ser decidido.
+            SoltarOAgarreComCalma();
+
+            // Um item que cai e deixou de aparecer vai direto ao chão (L5): o relógio nunca corre por ele.
+            AssentarOsInvisiveis();
+
             bool visivelAntes = _inicio.Estado.Visivel();
             bool visivelDepois = _s.Estado.Visivel();
             if (_s.Estado != Estado.Exiting)
@@ -1421,20 +1633,25 @@ public static class Maquina
                     janela.Add(new MoverJanela(_s.Lugar));
                 if (!visivelAntes && visivelDepois) janela.Add(new MostrarJanela());
                 if (visivelAntes && !visivelDepois) janela.Add(new EsconderJanela());
+                // As janelas dos itens (DEC-028), depois da do personagem; saindo, a raiz fecha todas.
+                EfeitosDosItens(janela);
             }
 
-            // Relógio: só com movimento, reação, pouso ou gesto (DEC-011; critério 3 da Fase 2).
-            // Agarrado à parede ou ao cipó (DEC-024), nada se move: o relógio fica desligado.
+            // Relógio: só com movimento, reação, uso de um item, pouso, gesto ou um item à vista caindo (DEC-011;
+            // critério 3 da Fase 2; invariante 29). Agarrado à parede ou ao cipó (DEC-024), nada se move: o relógio fica
+            // desligado.
             bool agarrado = _s.Estado is Estado.Climbing or Estado.Hanging && _s.Movimento.Agarrado;
-            bool relogio = (_s.Estado.EmMovimento() && !agarrado) || _s.Estado == Estado.Reacting || (_s.Estado == Estado.Idle && _s.Gesto != Gesto.Nenhum);
+            bool relogio = (_s.Estado.EmMovimento() && !agarrado) || _s.Estado is Estado.Reacting or Estado.Using
+                || (_s.Estado == Estado.Idle && _s.Gesto != Gesto.Nenhum) || ItemVisivelCaindo;
             if (relogio != _s.RelogioAtivo)
             {
                 tempo.Add(relogio ? new LigarRelogio() : new DesligarRelogio());
                 _s = _s with { RelogioAtivo = relogio };
             }
 
-            // Agenda autônoma: um temporizador único até a próxima decisão.
-            bool querDecisao = DecideNoEstado(_s.Estado) && _s.Gesto == Gesto.Nenhum && !_s.AutonomiaPausada && !_s.PainelAberto;
+            // Agenda autônoma: um temporizador único até a próxima decisão. Com o usuário segurando um item
+            // (DEC-028), a agenda pausa; quando o item sai da mão, volta depois do intervalo de acomodação.
+            bool querDecisao = DecideNoEstado(_s.Estado) && _s.Gesto == Gesto.Nenhum && !_s.AutonomiaPausada && !_s.PainelAberto && !AtentoAoItem;
             if (querDecisao && (_reagendar || !_s.DecisaoAgendada))
             {
                 TimeSpan atraso = SortearAtraso();
@@ -1447,6 +1664,9 @@ public static class Maquina
                 tempo.Add(new CancelarDecisao());
                 _s = _s with { DecisaoAgendada = false };
             }
+
+            // Onda do tamagotchi (DEC-028): o próprio temporizador único, depois do da agenda.
+            EfeitosDaOnda(tempo);
 
             var efeitos = new List<Efeito>(_antes.Count + janela.Count + tempo.Count + _depois.Count);
             efeitos.AddRange(_antes);

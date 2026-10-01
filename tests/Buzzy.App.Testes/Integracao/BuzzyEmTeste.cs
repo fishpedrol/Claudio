@@ -12,6 +12,21 @@ internal sealed record EventoDoLog(string Chave, IReadOnlyDictionary<string, str
 {
     internal string this[string campo] => Campos.TryGetValue(campo, out string? v) ? v : "";
 
+    /// <summary>
+    /// Instante da linha, lido do prefixo <c>[hh:mm:ss.fff]</c>: o tempo desde o início do processo que a gravou. Serve
+    /// para medir durações entre linhas do mesmo Buzzy. Lança <see cref="FormatException"/> sem o prefixo.
+    /// </summary>
+    internal TimeSpan Instante => InstanteDa(Linha);
+
+    internal static TimeSpan InstanteDa(string linha)
+    {
+        int fim = linha.IndexOf(']', StringComparison.Ordinal);
+        if (linha.StartsWith('[') && fim > 1
+            && TimeSpan.TryParseExact(linha.AsSpan(1, fim - 1), @"hh\:mm\:ss\.fff", CultureInfo.InvariantCulture, out TimeSpan instante))
+            return instante;
+        throw new FormatException($"Instante ilegível: {linha}");
+    }
+
     internal static EventoDoLog? Ler(string linha)
     {
         int i = linha.IndexOf("BUZZY|", StringComparison.Ordinal);
@@ -57,10 +72,13 @@ internal sealed record EventoDoLog(string Chave, IReadOnlyDictionary<string, str
 internal sealed record SegundaInstancia(bool SaiuSozinha, int? Codigo, string? Encerramento);
 
 /// <summary>
-/// Um Buzzy.exe iniciado pelo teste com <c>--diagnostico</c>. Garante que não havia outro
-/// Buzzy aberto (e nunca encerra um que não abriu), confere que as janelas registradas no log
-/// são deste processo antes de mandar qualquer mensagem a elas e lê só o trecho do log escrito
-/// depois de iniciar. Se a partida falhar em qualquer ponto, fecha o que abriu.
+/// Um Buzzy.exe iniciado pelo teste com <c>--diagnostico</c> e um perfil de teste
+/// (<c>--perfil-de-teste</c>, padrão <see cref="PerfilDeTeste.Integracao"/>): os dados dele ficam em
+/// <c>%LOCALAPPDATA%\Buzzy\testes\NOME</c>, nunca nas configurações reais do usuário. Garante que
+/// não havia outro Buzzy aberto (e nunca encerra um que não abriu), apaga a pasta do perfil antes
+/// de iniciar, confere que as janelas registradas no log são deste processo antes de mandar
+/// qualquer mensagem a elas e lê só o trecho do log escrito depois de iniciar. Se a partida falhar
+/// em qualquer ponto, fecha o que abriu.
 /// </summary>
 internal sealed class BuzzyEmTeste : IDisposable
 {
@@ -110,27 +128,45 @@ internal sealed class BuzzyEmTeste : IDisposable
             throw new InvalidOperationException("O teste está rodando como administrador: o Buzzy aberto por ele herdaria a elevação, recusaria rodar e mostraria uma caixa de aviso. Rode os testes sem elevação.");
     }
 
-    internal static long TamanhoDoLog() => File.Exists(ArquivoDeLog) ? new FileInfo(ArquivoDeLog).Length : 0;
+    /// <summary>
+    /// A marca do fim atual do log, para ler depois só o que vier dali (<see cref="EventosDesde(long)"/>). É um número
+    /// opaco (<see cref="LeituraDoLog"/>): reconhece a rotação do log pelo arquivo, e não pelo tamanho.
+    /// </summary>
+    internal static long MarcaDoLog() => LeituraDoLog.Marcar(ArquivoDeLog);
 
     /// <summary>
-    /// Inicia um Buzzy.exe com <c>--diagnostico</c>, sem conferências (a segunda instância usa isto).
+    /// Descreve, sem iniciar, um Buzzy.exe com <c>--diagnostico</c> e o perfil de teste dado.
     /// Com <paramref name="pausado"/>, o movimento autônomo começa pausado: o personagem fica no
     /// lugar inicial, como os testes de gesto e de janela esperam.
     /// </summary>
-    internal static Process IniciarProcesso(bool pausado = true, ulong? semente = null)
+    internal static ProcessStartInfo DescreverProcesso(bool pausado = true, ulong? semente = null, string perfil = PerfilDeTeste.Integracao)
     {
         var psi = new ProcessStartInfo(Caminhos.ExeDoBuzzy()) { UseShellExecute = false };
         psi.ArgumentList.Add("--diagnostico");
+        psi.ArgumentList.Add("--perfil-de-teste");
+        psi.ArgumentList.Add(perfil);
         if (pausado) psi.ArgumentList.Add("--pausado");
         if (semente is { } s)
         {
             psi.ArgumentList.Add("--semente");
             psi.ArgumentList.Add(s.ToString(CultureInfo.InvariantCulture));
         }
-        return Process.Start(psi) ?? throw new InvalidOperationException("Buzzy.exe não iniciou.");
+        return psi;
     }
 
-    internal static BuzzyEmTeste Iniciar(bool pausado = true, ulong? semente = null)
+    /// <summary>
+    /// Inicia um Buzzy.exe com <c>--diagnostico</c> e o perfil de teste, sem conferências e sem
+    /// limpar a pasta do perfil (a segunda instância usa isto, com o primeiro Buzzy aberto).
+    /// </summary>
+    internal static Process IniciarProcesso(bool pausado = true, ulong? semente = null, string perfil = PerfilDeTeste.Integracao)
+        => Process.Start(DescreverProcesso(pausado, semente, perfil)) ?? throw new InvalidOperationException("Buzzy.exe não iniciou.");
+
+    /// <summary>
+    /// Inicia o Buzzy do teste. Com <paramref name="limpar"/>, apaga antes a pasta do perfil (só a
+    /// de <paramref name="perfil"/>, em <c>%LOCALAPPDATA%\Buzzy\testes</c>), para ele partir sem
+    /// posição salva; sem, parte do que a execução anterior com o mesmo perfil deixou.
+    /// </summary>
+    internal static BuzzyEmTeste Iniciar(bool pausado = true, ulong? semente = null, string perfil = PerfilDeTeste.Integracao, bool limpar = true)
     {
         ExigirTesteSemElevacao();
         string exe = Caminhos.ExeDoBuzzy();
@@ -139,9 +175,13 @@ internal sealed class BuzzyEmTeste : IDisposable
 
         // O trecho do log é marcado ANTES de iniciar: as primeiras linhas do Buzzy podem ser
         // gravadas antes de o Process.Start voltar.
-        long inicioDoLog = TamanhoDoLog();
+        long inicioDoLog = MarcaDoLog();
+        ExigirNenhumBuzzyAberto();
+
+        // Sem nenhum Buzzy aberto, ninguém usa a pasta do perfil.
+        if (limpar) PerfilDeTeste.Limpar(perfil);
         ExigirNenhumBuzzyAberto(); // repetida imediatamente antes de iniciar
-        var b = new BuzzyEmTeste(IniciarProcesso(pausado, semente), inicioDoLog);
+        var b = new BuzzyEmTeste(IniciarProcesso(pausado, semente, perfil), inicioDoLog);
         try
         {
             b.Inicio = b.Processo.StartTime;
@@ -201,16 +241,25 @@ internal sealed class BuzzyEmTeste : IDisposable
     /// <summary>Eventos do log escritos desde o início deste Buzzy (inclui os de outras instâncias do mesmo período).</summary>
     internal List<EventoDoLog> Eventos() => EventosDesde(_inicioDoLog);
 
-    internal static List<EventoDoLog> EventosDesde(long inicio)
+    /// <summary>
+    /// A cópia que o Buzzy faz do log ao passar de 1 MB (Diagnostico.cs): o arquivo vira <c>diagnostico.1.log</c> e o
+    /// <see cref="ArquivoDeLog"/> recomeça vazio.
+    /// </summary>
+    internal static string ArquivoRotacionado { get; } = Path.Combine(Path.GetDirectoryName(ArquivoDeLog)!, "diagnostico.1.log");
+
+    /// <summary>
+    /// Os eventos escritos desde a <paramref name="marca"/> (uma <see cref="MarcaDoLog"/> lida antes). Se o log foi
+    /// rotacionado depois dela, o trecho da marca em diante está na cópia <see cref="ArquivoRotacionado"/> e vem antes do
+    /// arquivo atual inteiro, mesmo que o arquivo novo já tenha passado do deslocamento da marca (<see cref="LeituraDoLog"/>):
+    /// um teste não perde as linhas escritas entre a marca e a rotação.
+    /// </summary>
+    internal static List<EventoDoLog> EventosDesde(long marca) => EventosDesde(ArquivoDeLog, ArquivoRotacionado, marca);
+
+    /// <summary>Como <see cref="EventosDesde(long)"/>, com os dois arquivos dados (os testes da leitura usam arquivos temporários).</summary>
+    internal static List<EventoDoLog> EventosDesde(string atual, string rotacionado, long marca)
     {
-        if (!File.Exists(ArquivoDeLog)) return [];
-        using var fs = new FileStream(ArquivoDeLog, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-        if (inicio > fs.Length) inicio = 0; // o log foi rotacionado
-        fs.Seek(inicio, SeekOrigin.Begin);
-        using var sr = new StreamReader(fs, new UTF8Encoding(false));
         var eventos = new List<EventoDoLog>();
-        string? linha;
-        while ((linha = sr.ReadLine()) is not null)
+        foreach (string linha in LeituraDoLog.LinhasDesde(atual, rotacionado, marca))
         {
             if (EventoDoLog.Ler(linha) is { } e) eventos.Add(e);
         }
@@ -244,13 +293,45 @@ internal sealed class BuzzyEmTeste : IDisposable
     /// a janela inteira). Não é input: nada passa pela fila de input do Windows nem por outro
     /// aplicativo; o resultado é rotulado como mensagem postada, não como gesto.
     /// </summary>
-    internal void PostarMouse(int mensagem, nint wParam, PontoPx tela)
+    internal void PostarMouse(int mensagem, nint wParam, PontoPx tela) => PostarMouse(Janela, mensagem, wParam, tela);
+
+    /// <summary>
+    /// Posta uma mensagem de mouse a uma janela DESTE Buzzy (a do personagem ou a de um item do tamagotchi), com o PID
+    /// conferido imediatamente antes e o ponto de tela convertido para coordenadas de cliente pela posição ATUAL dela
+    /// (sem borda: o cliente é a janela inteira). Como <see cref="PostarMouse(int, nint, PontoPx)"/>, não é input.
+    /// </summary>
+    internal void PostarMouse(nint janela, int mensagem, nint wParam, PontoPx tela)
     {
-        RetanguloPx r = RetanguloDaJanela();
-        int x = tela.X - r.Esquerda, y = tela.Y - r.Topo;
+        ExigirDesteProcesso(janela, "mensagem de mouse");
+        NativoTeste.GetWindowRect(janela, out NativoTeste.RECT r);
+        int x = tela.X - r.Left, y = tela.Y - r.Top;
         nint lParam = (nint)(((y & 0xFFFF) << 16) | (x & 0xFFFF));
-        if (!NativoTeste.PostMessage(Janela, mensagem, wParam, lParam))
-            throw new InvalidOperationException($"PostMessage 0x{mensagem:X4} à janela do Buzzy falhou.");
+        if (!NativoTeste.PostMessage(janela, mensagem, wParam, lParam))
+            throw new InvalidOperationException($"PostMessage 0x{mensagem:X4} à janela {janela} do Buzzy falhou.");
+    }
+
+    /// <summary>Posta um caractere (WM_CHAR) a uma janela deste Buzzy, como o dono de um menu aberto, com o PID conferido antes.</summary>
+    internal void PostarChar(nint janela, char c)
+    {
+        ExigirDesteProcesso(janela, $"WM_CHAR '{c}'");
+        if (!NativoTeste.PostMessage(janela, NativoTeste.WM_CHAR, c, 0))
+            throw new InvalidOperationException($"PostMessage WM_CHAR '{c}' à janela {janela} do Buzzy falhou.");
+    }
+
+    /// <summary>Lê um HWND registrado no log (de um item, do dono de um menu) e confere que a janela é deste processo.</summary>
+    internal nint JanelaDoLog(string texto, string chave) => JanelaDesteProcesso(texto, chave);
+
+    /// <summary>Se a janela em primeiro plano é deste Buzzy: só o PID dela é lido.</summary>
+    internal bool FrenteEhDesteBuzzy()
+    {
+        nint frente = NativoTeste.GetForegroundWindow();
+        return frente != 0 && NativoTeste.PidDe(frente) == (uint)Processo.Id;
+    }
+
+    private void ExigirDesteProcesso(nint janela, string oQue)
+    {
+        if (janela == 0 || NativoTeste.PidDe(janela) != (uint)Processo.Id)
+            throw new InvalidOperationException($"A janela {janela} não é do Buzzy aberto pelo teste (pid {Processo.Id}); {oQue} não enviada.");
     }
 
     /// <summary>Espera a janela do personagem chegar ao retângulo dado.</summary>

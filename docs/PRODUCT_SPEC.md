@@ -49,6 +49,7 @@ O MVP deve incluir:
 - Expressões separadas da lógica de movimento.
 - Interação por clique e arraste. Um clique provoca uma reação não verbal; dois cliques escondem o mascote atrás da barra de tarefas ou de uma lateral, só com a cabeça e as mãos para fora, e outros dois cliques o tiram de lá (DEC-025). Solto no alto, ele agarra um cipó na borda de cima; solto junto a uma lateral, gruda na parede. Posto lá pelo usuário, só sai quando o usuário o tira (DEC-024). O painel compacto com o controle de energia em três posições abre pelo menu. Não há conversa nem chat.
 - Ações visuais curtas de mascote, como se espreguiçar, se coçar, espiar, brincar e descansar; não bloqueiam o uso dos aplicativos.
+- A emoção dominante escolhida pelo menu e o tamagotchi adulto, com itens invocados pelo menu e usados ao arrastá-los até ele, pedidos pelo usuário em 2026-09-30 (seção [Emoção dominante e tamagotchi adulto](#emoção-dominante-e-tamagotchi-adulto)).
 - Configurações e persistência local.
 - Segurança, previsibilidade e desempenho adequados para uso prolongado.
 
@@ -82,7 +83,7 @@ Ciclo obrigatório de arraste:
 4. Mouse up valida a posição no desktop virtual.
 5. O sistema identifica monitor e superfície e só então retoma comportamento permitido.
 
-O mascote não disputa o cursor com o usuário.
+O mascote não disputa o cursor com o usuário. Arrastar um item do tamagotchi também é ação direta do usuário: enquanto o item está na mão, o personagem para e espera, e pressionar o personagem no meio do uso de um item o segura na hora.
 
 O desenho de input deve distinguir clique de arraste. Teclas só afetam os controles próprios enquanto o painel de energia ou as configurações estão explicitamente em foco; não há captura global de teclado.
 
@@ -91,6 +92,22 @@ O desenho de input deve distinguir clique de arraste. Teclas só afetam os contr
 Movimento usa máquina de estados, eventos e regras determinísticas; não depende de IA. Expressão é uma dimensão visual separada e pode mudar sem alterar a máquina de movimento.
 
 O asset provisório não determina o formato da arquitetura. A troca futura de arte e animações deve preservar o núcleo de estado, input, movimento, desktop e segurança.
+
+## Emoção dominante e tamagotchi adulto
+
+Pedidos do usuário em 2026-09-30, detalhados em DEC-027 e DEC-028. O estado de implementação fica em PROJECT_CONTEXT.md.
+
+**Emoção dominante.** No menu do botão direito, "Emoção dominante" lista as 14 expressões de `expressoes.png`, cada uma com o rosto dela ao lado do nome, e "Automática", o jeito de sempre. A escolhida vira a cara de base e a mais frequente; o comportamento, a física e a prioridade do usuário não mudam. É uma preferência: deve continuar valendo ao reabrir o app, o que depende da persistência da Fase 5.
+
+**Tamagotchi adulto.** Um "tamagotchi virtual adulto", cartunesco e cômico, para o uso privado de um adulto:
+
+- **Itens só pelo menu:** "Itens" lista 13: banana, água, vodka, cerveja, baseado, cigarro, cocaína, MD, lança-perfume, café, energético, cogumelo e bala. Nada aparece sozinho.
+- **Onde aparecem:** o item cai no chão ao lado do personagem, com física de desenho, e fica esperando. Cabem até 6 na tela, e "Recolher itens" tira todos. Os itens não são lembrados ao fechar o app.
+- **Uso:** o item só é usado quando o usuário o arrasta e solta sobre o personagem. Clicar no item ou soltá-lo longe não o usa. Cada uso tem uma animação própria (comer, beber, fumar, cheirar, engolir ou inalar), no lugar em que ele está.
+- **Efeitos de desenho animado:** cada uso muda por um tempo o jeito, as caras e as animações dele ("mais animado", "meio chapado de erva", "bêbado" e assim por diante, nas palavras do usuário), e o efeito passa sozinho.
+- **Sem necessidades com o tempo:** nada de fome, sede ou sono que decaem; só os itens e as interações mudam o humor e o comportamento.
+- **O usuário prevalece:** pressionar ou arrastar o personagem interrompe o uso; o botão direito num item abre o mesmo menu.
+- **Tom:** só os nomes dos itens e efeitos de desenho animado. Nenhuma informação real sobre drogas, como dose, obtenção ou preparo, no app, nos textos ou na documentação.
 
 ## Desktop e múltiplos monitores
 
@@ -106,7 +123,9 @@ Claude pode ser usado como assistente de desenvolvimento nos modelos que o usuá
 
 ## Configurações e dados locais
 
-Persistência local pode guardar configurações, última posição escolhida pelo usuário, monitor preferido, tamanho, nível de energia e preferências de comportamento aprovadas. A posição temporária usada pelo modo de tela cheia fica só em memória e não substitui essa posição persistida. Opacidade não é uma configuração do MVP. Não há memória de IA nem sincronização em nuvem. O esquema e a localização planejados estão em ARCHITECTURE.md e SECURITY.md.
+Persistência local pode guardar configurações, última posição escolhida pelo usuário, monitor preferido, tamanho, nível de energia, a emoção dominante e preferências de comportamento aprovadas. Os itens e os efeitos do tamagotchi não são gravados. A posição temporária usada pelo modo de tela cheia fica só em memória e não substitui essa posição persistida. Opacidade não é uma configuração do MVP. Não há memória de IA nem sincronização em nuvem. O esquema e a localização planejados estão em ARCHITECTURE.md e SECURITY.md.
+
+Ao reabrir, o Buzzy volta onde estava. Se estava escondido, volta escondido no mesmo lado; se o usuário o deixou preso na parede ou no cipó, continua preso lá. O usuário deixou essa escolha com Claude em 2026-09-30 (DEC-029). A preferência de atravessar monitores (Q-05) já tem lugar no arquivo, ligada por padrão, mas só terá efeito quando a travessia entrar, ainda na Fase 5. O estado de implementação fica em PROJECT_CONTEXT.md.
 
 ## Segurança
 

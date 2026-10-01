@@ -10,7 +10,7 @@ namespace Buzzy.Core.Testes.Personagem;
 /// <summary>
 /// Reproduções gravadas comparadas com um resultado de referência (TODO.md, Fase 2). Cada
 /// arquivo de <c>Referencias/</c> traz, no cabeçalho, a semente e a configuração
-/// (<c># semente: 42</c>, <c># queda-fisica: sim</c>, <c># painel: sim</c>,
+/// (<c># semente: 42</c>, <c># queda-fisica: sim</c>, <c># painel: sim</c>, <c># movimento: sim</c>, <c># tamagotchi: sim</c>,
 /// <c># acoes: Andar,Descansar</c>), depois as linhas de evento (<c>&gt;</c>) e a saída esperada.
 ///
 /// As referências são lidas da pasta-fonte (não da cópia do build, que pode estar velha), a lista
@@ -34,6 +34,8 @@ internal static class ReproducaoTestes
         "03-tela-cheia.txt",
         "04-agenda-e-energia.txt",
         "05-movimento-e-fisica.txt",
+        // A 06 é da Fase 5 (crítica de integração do tamagotchi, F15).
+        "07-tamagotchi.txt",
     ];
 
     private const string VariavelDeAtualizacao = "BUZZY_ATUALIZAR_REFERENCIAS";
@@ -165,6 +167,13 @@ internal static class ReproducaoTestes
             new Loaded(umMonitor, new PosicaoDoPersonagem(TopologiasDeExemplo.Display2, 0.25, 1, new PontoPx(-1440, 1032)) { TelaDoMonitor = new RetanguloPx(-1920, 0, 0, 1080) }, Preferencias.Padrao),
             new Loaded(umMonitor, null, new Preferencias(NivelDeEnergia.Baixa, false, AtravessarMonitores: false)),
             new TopologyChanged(umMonitor),
+            new CmdSetDominantEmotion(Expressao.Determinado), new CmdSetDominantEmotion(null), new CmdSetDominantEmotion((Expressao)99),
+            new SettingsChanged(new Preferencias(NivelDeEnergia.Alta, true) { EmocaoDominante = Expressao.Travesso }),
+            new Loaded(umMonitor, null, Preferencias.Padrao with { EmocaoDominante = Expressao.Pensativo }),
+            new Loaded(umMonitor, new PosicaoDoPersonagem(TopologiasDeExemplo.Display1, 0.5, 0.2, new PontoPx(960, 206)), Preferencias.Padrao) { Esconderijo = LadoDoEsconderijo.Esquerda, PresoPeloUsuario = true },
+            new ItemEffectTimer(5), new ItemEffectTimer(0), new ExpressionChange(Expressao.Bebado),
+            new CmdSummonItem(Item.LancaPerfume), new CmdSummonItem((Item)13), new CmdClearItems(), new ItemPress(2, new PontoPx(-3, 8)), new ItemDragStart(2),
+            new ItemDragMove(2, new PontoPx(1700, 990)), new ItemDragEnd(2, new PontoPx(1701, 991)), new ItemRelease(7),
         ];
         EstadoDoNucleo estado = EstadoDoNucleo.Inicial(1);
         foreach (Evento e in eventos)
@@ -204,6 +213,82 @@ internal static class ReproducaoTestes
         Loaded carga = (Loaded)Gravacao.Ler("Loaded topologia=UmMonitor energia=Baixa telaCheia=sim travessia=nao", _ => umMonitor, estado).Single();
         Afirmar.Igual(new Preferencias(NivelDeEnergia.Baixa, true, false), carga.Preferencias, "Loaded com a travessia desligada");
         Afirmar.Lanca<FormatException>(() => Gravacao.Ler("SettingsChanged energia=Media telaCheia=sim travessia=talvez", _ => umMonitor, estado), "travessia=talvez");
+    }
+
+    // A emoção dominante (DEC-027) só aparece escolhida, como "emocao=Feliz", nas preferências e no retrato: na
+    // automática, as linhas são as de antes, e as referências gravadas 01 a 05 não mudam. O comando a escreve
+    // sempre, com "Automatica" para a automática.
+    [Teste]
+    public static void Preferencias_EmocaoSoApareceQuandoEscolhida()
+    {
+        Topologia umMonitor = TopologiasDeExemplo.UmMonitor;
+        EstadoDoNucleo estado = EstadoDoNucleo.Inicial(1);
+        Preferencias feliz = Preferencias.Padrao with { EmocaoDominante = Expressao.Feliz };
+        string Escrever(Evento e) => Gravacao.Escrever(e, _ => "UmMonitor");
+
+        Afirmar.Igual("SettingsChanged energia=Media telaCheia=sim emocao=Feliz", Escrever(new SettingsChanged(feliz)), "SETTINGS_CHANGED");
+        Afirmar.Igual("Loaded topologia=UmMonitor energia=Media telaCheia=sim emocao=Feliz", Escrever(new Loaded(umMonitor, null, feliz)), "Loaded");
+        Afirmar.Igual("GravarPreferencias energia=Media telaCheia=sim emocao=Feliz", Gravacao.DescreverEfeito(new GravarPreferencias(feliz)), "efeito");
+        Afirmar.Igual("CmdSetDominantEmotion emocao=Feliz", Escrever(new CmdSetDominantEmotion(Expressao.Feliz)), "comando");
+        Afirmar.Igual("CmdSetDominantEmotion emocao=Automatica", Escrever(new CmdSetDominantEmotion(null)), "comando com a automática");
+
+        Afirmar.Igual("SettingsChanged energia=Media telaCheia=sim", Escrever(new SettingsChanged(Preferencias.Padrao)), "automática: como antes");
+        Afirmar.Igual("GravarPreferencias energia=Media telaCheia=sim", Gravacao.DescreverEfeito(new GravarPreferencias(Preferencias.Padrao)), "efeito com a automática: como antes");
+
+        // Ida e volta; sem o campo vale a automática; um nome que não é de Expressao não é lido.
+        Afirmar.Igual(new SettingsChanged(feliz), Gravacao.Ler("SettingsChanged energia=Media telaCheia=sim emocao=Feliz", _ => umMonitor, estado).Single(), "com a emoção");
+        Afirmar.Igual(new SettingsChanged(Preferencias.Padrao), Gravacao.Ler("SettingsChanged energia=Media telaCheia=sim", _ => umMonitor, estado).Single(), "sem o campo, automática");
+        Afirmar.Igual(new CmdSetDominantEmotion(null), Gravacao.Ler("CmdSetDominantEmotion emocao=Automatica", _ => umMonitor, estado).Single(), "comando com a automática");
+        Afirmar.Lanca<FormatException>(() => Gravacao.Ler("CmdSetDominantEmotion", _ => umMonitor, estado), "comando sem a emoção");
+        Afirmar.Lanca<FormatException>(() => Gravacao.Ler("CmdSetDominantEmotion emocao=Zangado", _ => umMonitor, estado), "emocao=Zangado");
+
+        // A lista fechada do que a gravação escreve (achado 9 da revisão adversarial): o nome exato de uma expressão, ou o
+        // número de um valor fora do enum, como os testes de saneamento o gravam. Nem listas, nem o número de um valor que
+        // tem nome, nem sinal ou zeros à esquerda, que Enum.TryParse aceitaria ("Feliz,Rindo" viraria Curioso).
+        Afirmar.Igual(new CmdSetDominantEmotion((Expressao)99), Gravacao.Ler("CmdSetDominantEmotion emocao=99", _ => umMonitor, estado).Single(), "fora do enum, pelo número");
+        Afirmar.Igual(new CmdSetDominantEmotion((Expressao)(-1)), Gravacao.Ler("CmdSetDominantEmotion emocao=-1", _ => umMonitor, estado).Single(), "fora do enum, negativo");
+        foreach (string invalida in new[] { "Feliz,Rindo", "1", "+99", "099", "feliz" })
+            Afirmar.Lanca<FormatException>(() => Gravacao.Ler($"CmdSetDominantEmotion emocao={invalida}", _ => umMonitor, estado), $"emocao={invalida}");
+        Afirmar.Lanca<FormatException>(() => Gravacao.Ler("SettingsChanged energia=Media telaCheia=sim emocao=Feliz,Rindo", _ => umMonitor, estado), "nas preferências também");
+
+        // O retrato: "emocao=" no fim da linha, só com a emoção escolhida.
+        Cenario c = Cenario.Parado();
+        Afirmar.Falso(c.Retrato.Descrever().Contains("emocao=", StringComparison.Ordinal), $"automática: {c.Retrato.Descrever()}");
+        c.Aplicar(new CmdSetDominantEmotion(Expressao.Feliz));
+        Afirmar.Verdadeiro(c.Retrato.Descrever().EndsWith(" sinal=Nenhum emocao=Feliz", StringComparison.Ordinal), $"escolhida: {c.Retrato.Descrever()}");
+        c.Aplicar(new CmdSetDominantEmotion(null));
+        Afirmar.Falso(c.Retrato.Descrever().Contains("emocao=", StringComparison.Ordinal), $"de volta à automática: {c.Retrato.Descrever()}");
+    }
+
+    // A postura gravada com a posição (esquema v3; DEC-029, item 11), a borda do esconderijo e a marca de preso, só aparece
+    // quando há, como "esconderijo=Direita" e "preso=sim", no Loaded e no GravarPosicao: sem ela, as linhas são as de
+    // antes, e as referências gravadas 01 a 05 e 07 não mudam.
+    [Teste]
+    public static void Postura_SoApareceQuandoHa()
+    {
+        Topologia umMonitor = TopologiasDeExemplo.UmMonitor;
+        EstadoDoNucleo estado = EstadoDoNucleo.Inicial(1);
+        var posicao = new PosicaoDoPersonagem(TopologiasDeExemplo.Display1, 0.5, 1, new PontoPx(960, 1032)) { TelaDoMonitor = TopologiasDeExemplo.Ret(0, 0, 1920, 1080) };
+        string Escrever(Evento e) => Gravacao.Escrever(e, _ => "UmMonitor");
+
+        var comPostura = new Loaded(umMonitor, posicao, Preferencias.Padrao) { Esconderijo = LadoDoEsconderijo.Direita, PresoPeloUsuario = true };
+        Afirmar.Igual(@"Loaded topologia=UmMonitor energia=Media telaCheia=sim posicao=\\.\DISPLAY1;0.5;1;960;1032;0;0;1920;1080 esconderijo=Direita preso=sim", Escrever(comPostura), "Loaded com a postura");
+        Loaded lido = (Loaded)Gravacao.Ler(Escrever(comPostura), _ => umMonitor, estado).Single();
+        Afirmar.Igual((posicao, LadoDoEsconderijo.Direita, true), (lido.PosicaoSalva, lido.Esconderijo, lido.PresoPeloUsuario), "ida e volta");
+        Afirmar.Igual(@"Loaded topologia=UmMonitor energia=Media telaCheia=sim posicao=\\.\DISPLAY1;0.5;1;960;1032;0;0;1920;1080",
+            Escrever(new Loaded(umMonitor, posicao, Preferencias.Padrao)), "Loaded sem postura: como antes");
+        Loaded semPostura = (Loaded)Gravacao.Ler("Loaded topologia=UmMonitor", _ => umMonitor, estado).Single();
+        Afirmar.Igual((LadoDoEsconderijo.Nenhum, false), (semPostura.Esconderijo, semPostura.PresoPeloUsuario), "sem os campos: nenhuma borda e solto");
+
+        Afirmar.Igual(@"GravarPosicao posicao=\\.\DISPLAY1;0.5;1;960;1032 esconderijo=Baixo", Gravacao.DescreverEfeito(new GravarPosicao(posicao) { Esconderijo = LadoDoEsconderijo.Baixo }), "efeito escondido");
+        Afirmar.Igual(@"GravarPosicao posicao=\\.\DISPLAY1;0.5;1;960;1032 preso=sim", Gravacao.DescreverEfeito(new GravarPosicao(posicao) { PresoPeloUsuario = true }), "efeito preso");
+        Afirmar.Igual(@"GravarPosicao posicao=\\.\DISPLAY1;0.5;1;960;1032", Gravacao.DescreverEfeito(new GravarPosicao(posicao)), "efeito sem postura: como antes");
+
+        // Lista fechada, como a da emoção: o nome exato, ou o número de um valor fora do enum (para os testes de
+        // saneamento); a marca, só sim ou nao.
+        Afirmar.Igual((LadoDoEsconderijo)7, ((Loaded)Gravacao.Ler("Loaded topologia=UmMonitor esconderijo=7", _ => umMonitor, estado).Single()).Esconderijo, "fora do enum, pelo número");
+        foreach (string invalida in new[] { "esconderijo=Cima", "esconderijo=1", "esconderijo=baixo", "esconderijo=Baixo,Direita", "preso=talvez", "preso=true" })
+            Afirmar.Lanca<FormatException>(() => Gravacao.Ler($"Loaded topologia=UmMonitor {invalida}", _ => umMonitor, estado), invalida);
     }
 
     /// <summary>
@@ -308,6 +393,9 @@ internal static class ReproducaoTestes
                     break;
                 case "movimento":
                     cfg = cfg with { Movimento = valor == "sim" };
+                    break;
+                case "tamagotchi":
+                    cfg = cfg with { Tamagotchi = valor == "sim" };
                     break;
                 case "acoes":
                     cfg = cfg with

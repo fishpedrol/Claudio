@@ -359,8 +359,11 @@ internal sealed class Injetor
         ConferirCursor();
     }
 
-    /// <summary>Sem esta espera, um pressionar logo depois de um clique no mesmo ponto viraria clique duplo.</summary>
-    private void EsperarIntervaloDeCliqueDuplo()
+    /// <summary>
+    /// Sem esta espera, um pressionar logo depois de um clique no mesmo ponto viraria clique duplo. Quem clica num alvo que
+    /// se move (o personagem escalando) chama antes, para escolher o ponto só depois da espera.
+    /// </summary>
+    internal void EsperarIntervaloDeCliqueDuplo()
     {
         if (_ultimoSoltar == 0) return;
         double decorrido = Stopwatch.GetElapsedTime(_ultimoSoltar).TotalMilliseconds;

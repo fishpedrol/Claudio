@@ -47,7 +47,7 @@ public sealed record EstadoDoNucleo
     /// <summary>Passos que faltam para o gesto curto terminar.</summary>
     public int PassosDoGesto { get; init; }
 
-    /// <summary>Passos que faltam em <see cref="Estado.Reacting"/> ou <see cref="Estado.Landing"/>.</summary>
+    /// <summary>Passos que faltam em <see cref="Estado.Reacting"/>, <see cref="Estado.Landing"/> ou <see cref="Estado.Using"/>.</summary>
     public int PassosRestantes { get; init; }
 
     public bool AutonomiaPausada { get; init; }
@@ -97,6 +97,43 @@ public sealed record EstadoDoNucleo
     /// </summary>
     public LadoDoEsconderijo Esconderijo { get; init; }
 
+    /// <summary>
+    /// A onda de desenho animado do último item usado (DEC-028), na frente: tipo, fase e nível. Nula sem onda. Só em
+    /// memória, nunca gravada (SECURITY.md 5); com o tamagotchi desligado, não vale.
+    /// </summary>
+    public EstadoDaOnda? Onda { get; init; }
+
+    /// <summary>
+    /// A onda de fundo (DEC-028; desenho do núcleo, 4.5): a que estava na frente quando chegou uma de precedência maior
+    /// ou igual. Fica congelada, sem temporizador nem efeito no comportamento, e volta à frente, com a fase recomeçada,
+    /// quando a da frente acaba. Só cabem duas: uma terceira descarta a de fundo anterior.
+    /// </summary>
+    public EstadoDaOnda? OndaDeFundo { get; init; }
+
+    /// <summary>Geração do último agendamento do temporizador da onda.</summary>
+    public long GeracaoDaOnda { get; init; }
+
+    /// <summary>Se há um <see cref="ItemEffectTimer"/> da geração atual pendente.</summary>
+    public bool OndaAgendada { get; init; }
+
+    /// <summary>O uso em curso, em <see cref="Estado.Using"/>; nulo fora dele.</summary>
+    public Uso? Uso { get; init; }
+
+    /// <summary>
+    /// Os itens na tela (DEC-028): no máximo <see cref="ConfiguracaoDoNucleo.MaximoDeItens"/>, só em memória, nunca
+    /// gravados (SECURITY.md 5). Somem ao sair do aplicativo.
+    /// </summary>
+    public ItensNoMundo Itens { get; init; } = ItensNoMundo.Nenhum;
+
+    /// <summary>O Id do próximo item invocado: cada Id é usado uma vez só.</summary>
+    public int ProximoIdDeItem { get; init; } = 1;
+
+    /// <summary>
+    /// Se o usuário segura um item (DEC-028): o personagem fica atento, parado onde está, sem decisão autônoma, até o
+    /// item sair da mão. Derivado dos itens; não é guardado.
+    /// </summary>
+    public bool Atento => Itens.NaMao is not null;
+
     /// <summary>Relógio lógico: passos fixos já aplicados.</summary>
     public long Passos { get; init; }
 
@@ -120,7 +157,15 @@ public sealed record EstadoDoNucleo
         PainelAberto,
         Preferencias.Energia,
         RelogioAtivo,
-        Sinal);
+        Sinal)
+    {
+        EmocaoDominante = Preferencias.EmocaoDominante,
+        Onda = Onda,
+        OndaDeFundo = OndaDeFundo,
+        Uso = Uso,
+        PassoDoUso = Uso is { } uso ? uso.Passos - PassosRestantes : 0,
+        Itens = Itens,
+    };
 }
 
 /// <summary>
@@ -143,12 +188,40 @@ public sealed record Retrato(
     bool RelogioAtivo,
     Sinal Sinal)
 {
-    /// <summary>Linha canônica, na cultura invariante, usada nas reproduções gravadas.</summary>
+    /// <summary>A emoção dominante escolhida (DEC-027), para a marca no menu; nula, "Automática".</summary>
+    public Expressao? EmocaoDominante { get; init; }
+
+    /// <summary>A onda do item em curso (DEC-028): tipo, fase e nível, para as sobreposições da apresentação; nula sem onda.</summary>
+    public EstadoDaOnda? Onda { get; init; }
+
+    /// <summary>A onda de fundo, congelada atrás da da frente (DEC-028); nula sem ela.</summary>
+    public EstadoDaOnda? OndaDeFundo { get; init; }
+
+    /// <summary>O uso em curso, em USING (DEC-028): o item, o verbo, a duração e o apoio, para a pose de uso; nulo fora dele.</summary>
+    public Uso? Uso { get; init; }
+
+    /// <summary>O passo do uso em curso, de 0 à duração menos 1, para o quadro da animação; 0 fora de USING.</summary>
+    public int PassoDoUso { get; init; }
+
+    /// <summary>Os itens na tela (DEC-028), inclusive o da mão do usuário.</summary>
+    public ItensNoMundo Itens { get; init; } = ItensNoMundo.Nenhum;
+
+    /// <summary>
+    /// Linha canônica, na cultura invariante, usada nas reproduções gravadas. A onda de um item (<c>onda=Tipo/Fase/Nível</c>),
+    /// a de fundo (<c>fundo=</c>), o uso (<c>uso=Item/Verbo/PassodeDuração/Apoio</c>), a emoção dominante (<c>emocao=</c>)
+    /// e os itens (<c>itens=[Id:Item:Situação:(x,y);…]</c>) só aparecem quando há: sem eles, a linha é a de antes
+    /// (referências gravadas 01 a 05).
+    /// </summary>
     public string Descrever()
     {
         string estado = Estado == Estado.Hidden ? $"Hidden({Motivo})" : Estado.ToString();
+        string onda = Onda is { } o ? $" onda={o.Tipo}/{o.Fase}/{o.Nivel}" : "";
+        string fundo = OndaDeFundo is { } f ? $" fundo={f.Tipo}/{f.Fase}/{f.Nivel}" : "";
+        string uso = Uso is { } u ? string.Create(CultureInfo.InvariantCulture, $" uso={u.Item}/{u.Verbo}/{PassoDoUso}de{u.Passos}/{u.Apoio}") : "";
+        string emocao = EmocaoDominante is { } e ? $" emocao={e}" : "";
+        string itens = Itens.Quantidade > 0 ? $" itens=[{Itens}]" : "";
         return string.Create(CultureInfo.InvariantCulture,
-            $"{estado} ancora=({Ancora.X},{Ancora.Y}) monitor={ChaveMonitor} tamanho={Tamanho.Largura}x{Tamanho.Altura} direcao={Direcao} expressao={Expressao} gesto={Gesto} pausada={SimNao(AutonomiaPausada)} painel={SimNao(PainelAberto)} energia={Energia} relogio={SimNao(RelogioAtivo)} sinal={Sinal}");
+            $"{estado} ancora=({Ancora.X},{Ancora.Y}) monitor={ChaveMonitor} tamanho={Tamanho.Largura}x{Tamanho.Altura} direcao={Direcao} expressao={Expressao} gesto={Gesto} pausada={SimNao(AutonomiaPausada)} painel={SimNao(PainelAberto)} energia={Energia} relogio={SimNao(RelogioAtivo)} sinal={Sinal}{onda}{fundo}{uso}{emocao}{itens}");
     }
 
     private static string SimNao(bool valor) => valor ? "sim" : "nao";

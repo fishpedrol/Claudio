@@ -139,6 +139,67 @@ public sealed record CmdExit : Evento
     public override Origem Origem => Origem.ComandoDoUsuario;
 }
 
+/// <summary>
+/// <c>CMD_SET_DOMINANT_EMOTION</c> (DEC-027): a emoção dominante escolhida no menu, uma das 14 caras de humor
+/// (<see cref="Expressoes.DeHumor"/>), ou nula para "Automática". Um valor fora das 14 é ignorado.
+/// </summary>
+public sealed record CmdSetDominantEmotion(Expressao? Emocao) : Evento
+{
+    public override Origem Origem => Origem.ComandoDoUsuario;
+}
+
+/// <summary>
+/// <c>CMD_SUMMON_ITEM</c> (DEC-028): o usuário invocou um item pelo menu. Ele aparece ao lado do personagem, acima do
+/// chão, e cai. Escondido, antes da carga, fora do enum ou com o tamagotchi desligado, é ignorado.
+/// </summary>
+public sealed record CmdSummonItem(Item Item) : Evento
+{
+    public override Origem Origem => Origem.ComandoDoUsuario;
+}
+
+/// <summary><c>CMD_CLEAR_ITEMS</c> (DEC-028): "Recolher itens" do menu; todos os itens somem, inclusive o da mão.</summary>
+public sealed record CmdClearItems : Evento
+{
+    public override Origem Origem => Origem.ComandoDoUsuario;
+}
+
+// Gestos sobre a janela de um item (DEC-028), derivados por um árbitro de gestos próprio da janela: Press, DragStart,
+// DragMove, DragEnd e, para Click, DoubleClick ou DragCancel, ItemRelease. O botão direito no item é o ContextMenu de
+// sempre. Com o tamagotchi desligado, todos são ignorados.
+
+/// <summary><c>ITEM_PRESS</c>: botão esquerdo pressionado sobre um pixel opaco do item, com o cursor em <paramref name="Cursor"/>.</summary>
+public sealed record ItemPress(int Id, PontoPx Cursor) : Evento
+{
+    public override Origem Origem => Origem.AcaoDireta;
+}
+
+/// <summary><c>ITEM_DRAG_START</c>: o cursor saiu do retângulo de arraste com o item seguro.</summary>
+public sealed record ItemDragStart(int Id) : Evento
+{
+    public override Origem Origem => Origem.AcaoDireta;
+}
+
+/// <summary><c>ITEM_DRAG_MOVE</c>: posição mais recente do cursor durante o arraste do item.</summary>
+public sealed record ItemDragMove(int Id, PontoPx Cursor) : Evento
+{
+    public override Origem Origem => Origem.AcaoDireta;
+}
+
+/// <summary><c>ITEM_DRAG_END</c>: soltou o item depois de arrastar; sobre o personagem, num estado que aceita, ele o usa.</summary>
+public sealed record ItemDragEnd(int Id, PontoPx Cursor) : Evento
+{
+    public override Origem Origem => Origem.AcaoDireta;
+}
+
+/// <summary>
+/// <c>ITEM_RELEASE</c>: o gesto sobre o item acabou sem arraste até um lugar (clique, clique duplo ou captura perdida):
+/// o item cai de onde está e nunca é usado.
+/// </summary>
+public sealed record ItemRelease(int Id) : Evento
+{
+    public override Origem Origem => Origem.AcaoDireta;
+}
+
 // Sistema.
 
 /// <summary>
@@ -150,6 +211,19 @@ public sealed record CmdExit : Evento
 public sealed record Loaded(Topologia Topologia, PosicaoDoPersonagem? PosicaoSalva, Preferencias Preferencias) : Evento
 {
     public override Origem Origem => Origem.Sistema;
+
+    /// <summary>
+    /// A borda do esconderijo gravada com a posição (DEC-025; esquema v3, DEC-029, item 11): a acomodação da carga o
+    /// devolve escondido no mesmo lado. Só vale com <see cref="PosicaoSalva"/> e com o esconderijo pelo clique duplo
+    /// ligado na configuração; fora do enum, nenhum.
+    /// </summary>
+    public LadoDoEsconderijo Esconderijo { get; init; }
+
+    /// <summary>
+    /// A marca "preso pelo usuário" gravada com a posição (DEC-024; esquema v3): agarrado na carga, ele continua preso
+    /// onde o usuário o deixou. Só vale com <see cref="PosicaoSalva"/>; longe da parede e do cipó, a acomodação a apaga.
+    /// </summary>
+    public bool PresoPeloUsuario { get; init; }
 }
 
 /// <summary><c>TOPOLOGY_CHANGED</c>: nova leitura dos monitores, já agrupada pelo adaptador.</summary>
@@ -230,6 +304,16 @@ public sealed record AutonomyTimer(long Geracao) : Evento
 }
 
 /// <summary>
+/// <c>ITEM_EFFECT_TIMER</c> (DEC-028): disparo do temporizador único da onda de um item, que a máquina agendou com
+/// <see cref="AgendarOnda"/>. A geração evita que um disparo antigo seja tomado pelo atual. Tem a prioridade do
+/// relógio: não é descartado com o usuário no controle e não encerra um gesto. Com o tamagotchi desligado, é ignorado.
+/// </summary>
+public sealed record ItemEffectTimer(long Geracao) : Evento
+{
+    public override Origem Origem => Origem.Relogio;
+}
+
+/// <summary>
 /// Troca de expressão pedida pela personalidade. Vale em qualquer estado e nunca muda estado de
 /// comportamento nem posição (invariante 6).
 /// </summary>
@@ -286,4 +370,11 @@ public sealed class MonitoresOcupados : IEquatable<MonitoresOcupados>
 public sealed record Preferencias(NivelDeEnergia Energia, bool ModoTelaCheia, bool AtravessarMonitores = true)
 {
     public static readonly Preferencias Padrao = new(NivelDeEnergia.Media, true, true);
+
+    /// <summary>
+    /// A emoção dominante (DEC-027): uma das 14 caras de humor (<see cref="Expressoes.DeHumor"/>), que vira a cara
+    /// de base e a mais sorteada nas trocas de expressão; nula, "Automática", como antes. Só muda as caras: nunca as
+    /// ações, os pesos da agenda nem a física. Fica fora do construtor posicional, e o padrão é a automática.
+    /// </summary>
+    public Expressao? EmocaoDominante { get; init; }
 }

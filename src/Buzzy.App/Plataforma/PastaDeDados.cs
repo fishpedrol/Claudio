@@ -70,6 +70,28 @@ internal static class PastaDeDados
     /// <c>%LOCALAPPDATA%\Buzzy\testes\NOME</c>; nulo se o nome for inválido (<see cref="NomeDePerfilValido"/>) ou se
     /// não houver pasta do Buzzy. Pelo nome validado, o caminho é sempre uma subpasta direta de <c>testes</c>.
     /// </summary>
-    internal static string? DoPerfilDeTeste(string? nome)
-        => NomeDePerfilValido(nome) && DoBuzzy() is { } buzzy ? Path.Combine(buzzy, NomeDaPastaDeTestes, nome) : null;
+    internal static string? DoPerfilDeTeste(string? nome) => DoPerfilDeTeste(nome, DoBuzzy());
+
+    /// <summary>
+    /// Pasta das configurações nesta execução, pelas opções da linha de comando (Fase 5), na pasta do Buzzy do
+    /// Windows (<see cref="DoBuzzy()"/>). Ver <see cref="DasConfiguracoes(string?, bool, string?)"/>.
+    /// </summary>
+    internal static string? DasConfiguracoes(string? perfilDeTeste, bool persistenciaDesligada)
+        => DasConfiguracoes(perfilDeTeste, persistenciaDesligada, DoBuzzy());
+
+    /// <summary>
+    /// Pasta das configurações nesta execução, com a falha fechada numa regra só: com a persistência desligada,
+    /// nenhuma; com um perfil de teste, a pasta dele dentro de <paramref name="pastaDoBuzzy"/>, e nenhuma se o nome
+    /// for inválido; sem perfil, a própria <paramref name="pastaDoBuzzy"/>; sem ela, nenhuma. Com um perfil pedido,
+    /// o resultado nunca é a pasta real: um perfil sem pasta desliga a persistência, em vez de cair nela. Nula, nada
+    /// é lido nem gravado como configuração.
+    /// </summary>
+    internal static string? DasConfiguracoes(string? perfilDeTeste, bool persistenciaDesligada, string? pastaDoBuzzy)
+    {
+        if (persistenciaDesligada) return null;
+        return perfilDeTeste is null ? pastaDoBuzzy : DoPerfilDeTeste(perfilDeTeste, pastaDoBuzzy);
+    }
+
+    private static string? DoPerfilDeTeste(string? nome, string? pastaDoBuzzy)
+        => NomeDePerfilValido(nome) && pastaDoBuzzy is not null ? Path.Combine(pastaDoBuzzy, NomeDaPastaDeTestes, nome) : null;
 }

@@ -3,6 +3,7 @@ using Buzzy.App.Apresentacao;
 using Buzzy.Core;
 using Buzzy.Core.Personagem;
 using Buzzy.Testes;
+using Buzzy.Visual.Pixel;
 
 namespace Buzzy.App.Testes;
 
@@ -13,8 +14,8 @@ namespace Buzzy.App.Testes;
 /// </summary>
 internal sealed class PoseTestes
 {
-    private static Retrato R(Estado estado, Direcao direcao = Direcao.Direita, Expressao expressao = Expressao.Neutro)
-        => new(estado, MotivoDoOcultamento.Nenhum, new PontoPx(0, 0), "m", new TamanhoPx(128, 128), direcao, expressao, Gesto.Nenhum, false, false, NivelDeEnergia.Media, true, Sinal.Nenhum);
+    private static Retrato R(Estado estado, Direcao direcao = Direcao.Direita, Expressao expressao = Expressao.Neutro, Gesto gesto = Gesto.Nenhum, bool relogio = true)
+        => new(estado, MotivoDoOcultamento.Nenhum, new PontoPx(0, 0), "m", new TamanhoPx(128, 128), direcao, expressao, gesto, false, false, NivelDeEnergia.Media, relogio, Sinal.Nenhum);
 
     private static int[] Pixels(BitmapSource bmp)
     {
@@ -149,6 +150,87 @@ internal sealed class PoseTestes
                     BitmapSource bmp = SpriteProvisorio.Renderizar(q, 96);
                     Afirmar.Igual(128, bmp.PixelWidth, $"{estado} {dinamica} {passos}: mesmo tamanho de janela");
                 }
+            }
+        }
+
+        // Tamagotchi (DEC-028; crítica, F5): uma chave ausente na arte derrubaria o app. Todo quadro que a apresentação
+        // escolhe — em USING, cada verbo, cada passo e cada apoio; todas as caras; todos os gestos; com e sem onda —
+        // existe na pixel art e se desenha.
+        HashSet<QuadroDoSprite> quadros = [.. TodosOsQuadrosEscolhidos()];
+        foreach (QuadroDoSprite q in quadros)
+        {
+            Tela t = SpriteProvisorio.Compor(q);
+            Afirmar.Igual((BonecoPixel.Lado, BonecoPixel.Lado), (t.Largura, t.Altura), $"{q}: o quadro de 64 × 64");
+            Afirmar.Verdadeiro(t.Limites() is not null, $"{q}: desenha alguma coisa");
+        }
+
+        // A enumeração passou mesmo por tudo: toda pose de uso e de gesto, toda cara, todo item, toda sobreposição da
+        // onda e as três fases, e o giro do esconderijo.
+        HashSet<string> poses = [.. quadros.Select(q => q.Pose)];
+        foreach (string nome in UsosPixel.Poses.Concat(PosesPixel.DosGestos).Select(p => p.Nome))
+            Afirmar.Verdadeiro(poses.Contains(nome), $"a pose {nome} nunca foi escolhida");
+        HashSet<string?> caras = [.. quadros.Select(q => q.Expressao)];
+        foreach (Expressao e in Enum.GetValues<Expressao>())
+            Afirmar.Verdadeiro(caras.Contains(PoseDoPersonagem.NomeDaExpressao(e)), $"a cara {e} nunca foi pedida");
+        Afirmar.Sequencia(ItensPixel.Todos.Order(StringComparer.Ordinal), quadros.Select(q => q.Item).OfType<string>().Distinct().Order(StringComparer.Ordinal), "todo item na mão");
+        Afirmar.Sequencia(
+            new[] { EfeitoVisual.Nenhum, EfeitoVisual.Fumaca, EfeitoVisual.Bolhas, EfeitoVisual.Brilhos, EfeitoVisual.Estrelinhas, EfeitoVisual.Coracoes, EfeitoVisual.Cores },
+            quadros.Select(q => q.Efeito).Distinct().Order(), "as sobreposições das ondas");
+        Afirmar.Sequencia(new[] { 0, 1, 2 }, quadros.Select(q => q.Fase).Distinct().Order(), "as três fases");
+        Afirmar.Sequencia(Enum.GetValues<Giro>(), quadros.Select(q => q.Giro).Distinct().Order(), "os giros do esconderijo");
+        Console.WriteLine($"         {quadros.Count} quadros distintos conferidos");
+    }
+
+    /// <summary>
+    /// Os quadros que a apresentação escolhe em todos os estados, direções, dinâmicas, caras e gestos, com e sem onda e
+    /// com o relógio ligado e parado; e, em USING, para cada item, cada apoio e cada passo do uso (no chão, todos).
+    /// </summary>
+    private static IEnumerable<QuadroDoSprite> TodosOsQuadrosEscolhidos()
+    {
+        Dinamica[] esconderijos =
+        [
+            new(0, 0, false, Esconderijo: LadoDoEsconderijo.Baixo),
+            new(0, 0, false, Esconderijo: LadoDoEsconderijo.Esquerda),
+            new(0, 0, false, Esconderijo: LadoDoEsconderijo.Direita),
+        ];
+        Dinamica[] dinamicas = [default, new(1200, 0, false), new(-800, 1, false), new(-1000, 0, true), new(0, 0, false, Agarrado: true), .. esconderijos];
+        long[] passos = [0, 3, 7, 12, 25, 40];
+        EstadoDaOnda?[] ondas = [null, .. Enum.GetValues<Onda>().Select(o => new EstadoDaOnda(o, FaseDaOnda.Pico, 1, 1))];
+        foreach (Estado estado in Enum.GetValues<Estado>())
+        {
+            Gesto[] gestos = estado == Estado.Idle ? Enum.GetValues<Gesto>() : [Gesto.Nenhum];
+            foreach (Direcao direcao in Enum.GetValues<Direcao>())
+                foreach (Gesto gesto in gestos)
+                    foreach (Dinamica dinamica in dinamicas)
+                        foreach (long p in passos)
+                            foreach (bool relogio in new[] { false, true })
+                            {
+                                foreach (Expressao expressao in Enum.GetValues<Expressao>())
+                                    yield return PoseDoPersonagem.Escolher(R(estado, direcao, expressao, gesto, relogio), p, dinamica);
+                                foreach (EstadoDaOnda? onda in ondas)
+                                    yield return PoseDoPersonagem.Escolher(R(estado, direcao, Expressao.Bebado, gesto, relogio) with { Onda = onda }, p, dinamica);
+                            }
+        }
+
+        foreach (Item item in Enum.GetValues<Item>())
+        {
+            DadosDoItem dados = TabelaDoTamagotchi.DoItem(item);
+            foreach (ApoioDoUso apoio in Enum.GetValues<ApoioDoUso>())
+            {
+                Dinamica[] dinamicasDoApoio = apoio == ApoioDoUso.Esconderijo ? esconderijos : [default, new(0, 0, false, Agarrado: true)];
+                foreach (Direcao direcao in Enum.GetValues<Direcao>())
+                    foreach (EstadoDaOnda? onda in ondas)
+                        foreach (Dinamica dinamica in dinamicasDoApoio)
+                            for (int passo = 0; passo < dados.PassosDoUso; passo += apoio == ApoioDoUso.Chao ? 1 : 12)
+                            {
+                                Retrato r = R(Estado.Using, direcao, dados.CaraDurante) with
+                                {
+                                    Uso = new Uso(item, dados.Verbo, dados.PassosDoUso, apoio),
+                                    PassoDoUso = passo,
+                                    Onda = onda,
+                                };
+                                yield return PoseDoPersonagem.Escolher(r, passo, dinamica);
+                            }
             }
         }
     }

@@ -57,6 +57,44 @@ internal static class FilaEAleatorioTestes
         Afirmar.Igual(1L, outro.Descartados, "descartado ao sair da fila");
     }
 
+    // DEC-028: o disparo da onda de um item tem a prioridade do relógio: com o usuário segurando o personagem (PRESSED), ele
+    // entra na fila e é aplicado. USING é do grupo do usuário: a agenda (autônoma) é descartada na chegada e, se um item
+    // solto sobre ele passou na frente na mesma leva, ao sair da fila.
+    [Teste]
+    public static void ItemEffectTimerNaoEhDescartadoEmPressed_AutonomyTimerEhDescartadoEmUsing()
+    {
+        Cenario usando = Cenario.Em(Estado.Using);
+        Afirmar.Igual(GrupoDoEstado.Usuario, usando.Atual.Estado.Grupo(), "USING é do grupo do usuário");
+        Afirmar.Verdadeiro(Estado.Using.AceitaPressionar(), "e aceita PRESS");
+        var nucleo = new Nucleo(usando.Config, usando.Atual);
+        Afirmar.Falso(nucleo.Enfileirar(new AutonomyTimer(usando.Atual.Geracao)), "em USING, a agenda é descartada na chegada");
+        Afirmar.Igual((0, 1L), (nucleo.Pendentes, nucleo.Descartados), "nada na fila, um descartado");
+
+        Cenario pressionado = Cenario.Em(Estado.Using).Aplicar(new Press(Cenario.PontoOpaco)).Esta(Estado.Pressed);
+        EstadoDaOnda onda = Afirmar.NaoNulo(pressionado.Atual.Onda, "com a onda da banana");
+        var comOnda = new Nucleo(pressionado.Config, pressionado.Atual);
+        Afirmar.Verdadeiro(comOnda.Enfileirar(new ItemEffectTimer(pressionado.Atual.GeracaoDaOnda)), "em PRESSED, o disparo da onda entra na fila");
+        comOnda.Processar();
+        Afirmar.Igual(Estado.Pressed, comOnda.Retrato.Estado, "continua segurado");
+        Afirmar.Diferente(onda, comOnda.Estado.Onda, "e a onda avançou");
+        Afirmar.Igual(0L, comOnda.Descartados, "sem descarte");
+
+        // Na mesma leva: a agenda chegou com ele livre, mas o item solto sobre ele (ação direta) passou na frente.
+        Cenario segurando = Cenario.Parado(new ConfiguracaoDoNucleo { Tamagotchi = true });
+        segurando.Aplicar(new CmdSummonItem(Item.Agua));
+        while (segurando.Atual.Itens.AlgumCaindo) segurando.Aplicar(new Tick());
+        ItemNoMundo item = segurando.Atual.Itens.Todos.Single();
+        PontoPx meio = Cenario.MeioDoPersonagem(segurando.Atual, segurando.Config);
+        segurando.Aplicar(new ItemPress(item.Id, new PontoPx(item.Lugar.Ancora.X, item.Lugar.Ancora.Y - 10)), new ItemDragStart(item.Id),
+            new ItemDragMove(item.Id, new PontoPx(meio.X, meio.Y - 10)));
+        var leva = new Nucleo(segurando.Config, segurando.Atual);
+        Afirmar.Verdadeiro(leva.Enfileirar(new AutonomyTimer(segurando.Atual.Geracao)), "enfileirado com o personagem livre");
+        leva.Enfileirar(new ItemDragEnd(item.Id, new PontoPx(meio.X, meio.Y - 10)));
+        leva.Processar();
+        Afirmar.Igual(Estado.Using, leva.Retrato.Estado, "o item solto venceu");
+        Afirmar.Igual(1L, leva.Descartados, "a agenda foi descartada ao sair da fila");
+    }
+
     [Teste]
     public static void AleatorioEhDeterministicoEFicaNaFaixa()
     {

@@ -255,4 +255,48 @@ internal static class TopologiasDeExemplo
     /// <summary>A topologia sem o monitor da chave.</summary>
     public static Topologia SemMonitor(Topologia topologia, string chave)
         => new(topologia.Monitores.Where(m => m.Chave != chave));
+
+    // Mudanças da Fase 5 (topologia em execução, DEC-030). Ficam fora de Todas: entrar ali mudaria as contagens das
+    // propriedades e as evidências do TODO.
+
+    /// <summary>
+    /// A topologia com outro monitor como principal e a origem (0,0) movida para ele, como o Windows faz ao trocar o
+    /// principal: todos os monitores são transladados juntos, sem mudar de tamanho.
+    /// </summary>
+    public static Topologia Rebaseada(Topologia topologia, string novoPrincipal)
+    {
+        List<MonitorDoDesktop> lista = [.. topologia.Monitores];
+        GeradorDeTopologias.Rebasear(lista, lista.FindIndex(m => m.Chave == novoPrincipal));
+        return new Topologia(lista);
+    }
+
+    /// <summary>
+    /// A topologia sem o monitor principal <paramref name="removido"/>, como quando ele é desconectado: outro assume e a
+    /// origem vai para ele, transladando os que sobraram.
+    /// </summary>
+    public static Topologia SemOPrincipal(Topologia topologia, string removido, string novoPrincipal)
+    {
+        List<MonitorDoDesktop> lista = [.. topologia.Monitores.Where(m => m.Chave != removido)];
+        GeradorDeTopologias.Rebasear(lista, lista.FindIndex(m => m.Chave == novoPrincipal));
+        return new Topologia(lista);
+    }
+
+    /// <summary>
+    /// A mesma topologia com as chaves trocadas e as mesmas telas, como a chave que passa da reserva <c>gdi:</c> para
+    /// <c>mon:</c> quando a consulta de vídeo volta, ou o caminho do dispositivo que muda com o driver (DEC-030).
+    /// </summary>
+    public static Topologia ComChavesRenomeadas(Topologia topologia, Func<string, string> renomear)
+        => new(topologia.Monitores.Select(m => m with { Chave = renomear(m.Chave) }));
+
+    /// <summary>
+    /// Três monitores 1920x1080 a 96 DPI em linha, com a barra de 48 px embaixo e o principal no meio.
+    /// <code>
+    /// [ 2  ][ 1* ][ 3  ]
+    /// </code>
+    /// </summary>
+    public static Topologia TresEmLinhaComPrincipalNoMeio => new([
+        Secundario(Display2, Ret(-1920, 0, 0, 1080), Ret(-1920, 0, 0, 1032), 96),
+        Principal(Display1, Ret(0, 0, 1920, 1080), Ret(0, 0, 1920, 1032), 96),
+        Secundario(Display3, Ret(1920, 0, 3840, 1080), Ret(1920, 0, 3840, 1032), 96),
+    ]);
 }

@@ -11,10 +11,16 @@ namespace Buzzy.Identidade;
 /// <summary>
 /// Gera as prévias da identidade visual e confere as fontes.
 /// Uso: dotnet run --project tools/Buzzy.Identidade -c Release
-///   (padrão)     pixel art (DEC-018): assets/identidade/pixel/ — folha nativa e prévias ampliadas;
-///                confere que nenhuma pose encosta na borda do quadro de 64 × 64.
+///   (padrão)     pixel art (DEC-018): assets/identidade/pixel/ — folhas nativas (poses e itens do
+///                tamagotchi, DEC-028) e prévias ampliadas, inclusive as animações de uso, as
+///                sobreposições de efeito, os gestos da onda e os ícones do menu; confere que nenhuma
+///                pose (as de estado e as dos gestos), quadro de uso (com cada item) ou efeito encosta
+///                na borda do quadro de 64 × 64, que nenhuma cara deixa preenchimento na borda de cima
+///                ou dos lados (o contorno seria cortado) e que cada item pousa na última linha da grade
+///                de 24 × 24, com 1 pixel livre no topo e nas laterais.
 ///   --vetorial   direção vetorial arquivada (DEC-017, substituída): assets/identidade/arquivo-vetorial/.
-/// Código de saída: 0 sem problemas; 1 com pose na borda/fora do quadro ou parte ausente.
+/// Código de saída: 0 sem problemas; 1 com pose, quadro de uso, efeito ou item na borda/fora do quadro
+/// ou parte ausente.
 /// </summary>
 internal static class Programa
 {
@@ -31,7 +37,9 @@ internal static class Programa
         if (!args.Contains("--vetorial"))
         {
             int naBorda = PreviaPixel.Gerar(raiz, Buzzy.Visual.Pixel.PosesPixel.Todas);
-            Console.WriteLine(naBorda == 0 ? "Pixel art: nenhuma pose encostada na borda do quadro." : $"Pixel art: {naBorda} pose(s) na borda do quadro.");
+            Console.WriteLine(naBorda == 0
+                ? "Pixel art: nenhuma pose, quadro de uso, efeito nem item encostado na borda do quadro."
+                : $"Pixel art: {naBorda} pose(s), quadro(s) de uso, efeito(s) ou item(ns) na borda do quadro.");
             return naBorda == 0 ? 0 : 1;
         }
         string pasta = Path.Combine(raiz, "assets", "identidade", "arquivo-vetorial");

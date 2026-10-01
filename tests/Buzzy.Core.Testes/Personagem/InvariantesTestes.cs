@@ -1,6 +1,6 @@
 using System.Text;
-using Buzzy.Core.Persistencia;
 using Buzzy.Core.Personagem;
+using Buzzy.Core.Testes.Persistencia;
 using Buzzy.Testes;
 
 namespace Buzzy.Core.Testes.Personagem;
@@ -9,13 +9,29 @@ namespace Buzzy.Core.Testes.Personagem;
 /// Testes de propriedade da máquina de estados (critérios 2 e 3 da Fase 2): milhares de
 /// sequências aleatórias de eventos, sobre topologias aleatórias e configurações variadas,
 /// conferindo a cada evento aplicado os invariantes de ARCHITECTURE.md 2.6 (inclusive o 18, da Fase 5:
-/// toda posição gravada é gravável, só sai de evento do usuário ou do sistema e volta do settings.json),
+/// toda posição gravada já é gravável, só sai dos eventos que gravam, leva a postura do estado depois do evento e volta
+/// igual do settings.json),
 /// a regra do relógio, as linhas de FULLSCREEN_TARGETS_CHANGED e as regras do núcleo R1, R6, R8, R9, R11
 /// e R12 (Maquina.cs). Parte das sequências entrega os eventos em lotes de 1 a 4 por
 /// <see cref="Nucleo.Processar"/>, como a raiz faz com rajadas; parte começa com pedidos
 /// anteriores à carga; parte usa perfis de decisão e gestos curtos, para o piso do intervalo de
 /// acomodação e o fim do gesto pelo relógio acontecerem. A semente é fixa; toda falha informa a
 /// sequência, o lote, o evento e as opções da sequência, para virar teste.
+///
+/// Cada sequência roda também com a emoção dominante (DEC-027): comandos do menu entre os lotes e emoções na carga e
+/// em SETTINGS_CHANGED, de um gerador próprio, sem mudar os sorteios do gerador principal nem as contagens da
+/// execução sem emoção. Essa execução passa pelas mesmas conferências (com as contagens à parte), pelas da emoção (R1
+/// da emoção e os ganchos da cara de base) e pelo invariante 27: evento a evento, ela só difere da execução sem emoção
+/// nas caras e na própria emoção.
+///
+/// E cada sequência roda com o tamagotchi ligado (DEC-028), com os eventos dele inseridos por um gerador próprio (semente
+/// × 37 + 11), também sem mudar os sorteios do gerador principal: invocar, segurar, arrastar até ele ou para longe, soltar,
+/// largar, recolher, disparos da onda (o atual ou um velho) e, numa segunda execução, a emoção dominante (inclusive caras
+/// de efeito, que são ignoradas). Os eventos da execução principal entram adaptados ao estado dela (a geração da agenda, o
+/// sinal coerente e o PRESS no corpo). Essa execução passa pelas conferências de sempre, com o relógio pelo invariante 29, a
+/// agenda pausada com o usuário segurando um item e o R11 pelo perfil efetivo da onda, e pelas do tamagotchi: os invariantes
+/// 22 a 29 (desenho do núcleo, 4.11), conferidos a cada evento contra regras escritas aqui à parte do núcleo. A execução
+/// principal repetida com a chave ligada e sem eventos dele dá o mesmo registro (invariantes 7 e 22).
 ///
 /// Cada conferência nova conta quantas vezes a situação dela apareceu (<see cref="CasosExigidos"/>):
 /// uma conferência que o gerador nunca exercita não protege nada. Duas conferências ficam fora da
@@ -54,16 +70,94 @@ internal static class InvariantesTestes
         "CMD_SHOW escondido pela tela cheia, com retorno", "CMD_SHOW escondido por outro motivo no meio de um episódio",
         "TICK ou sinal de movimento com o usuário no controle", "AUTONOMY_TIMER descartado com o usuário no controle",
         "GRAVAR_POSICAO conferida (invariante 18)", "carga com a travessia desligada", "SETTINGS_CHANGED com a travessia desligada",
+        // Cada um dos eventos que gravam a posição grava de fato (invariante 18).
+        .. InvarianteDezoito.EventosQueGravam.Select(t => $"GRAVAR_POSICAO de {t.Name}"),
     ];
 
     /// <summary>Mínimo de atrasos distintos acima do piso: um atraso fixo (no mínimo do perfil, por exemplo) passaria na conferência de faixa.</summary>
     private const int AtrasosDistintosMinimos = 100;
 
-    /// <summary>Uma sequência gerada: configuração, semente do núcleo e os eventos, em lotes.</summary>
+    /// <summary>
+    /// Situações da execução com a emoção dominante (DEC-027) que o gerador precisa produzir pelo menos uma vez. Elas
+    /// são contadas à parte: as contagens da execução principal, sem emoção, continuam as de antes. O fim da reação
+    /// (36 passos) e o fim do pouso (12) quase nunca chegam sem um evento que os interrompa, então ficam de fora da
+    /// lista; a conferência deles vale quando acontecem, e os testes da emoção (EmocaoDominanteTestes) os exercitam.
+    /// </summary>
+    private static readonly string[] CasosExigidosDaEmocao =
+    [
+        "emoção escolhida", "emoção escolhida com a cara ocupada", "emoção automática escolhida", "emoção antes da carga ignorada",
+        "emoção fora das 14 ignorada", "emoção igual à atual ignorada", "carga com emoção", "carga com emoção fora das 14",
+        "SETTINGS_CHANGED com emoção nova", "SETTINGS_CHANGED com emoção fora das 14", "troca de cara com a dominante", "espiou com a dominante",
+        "acordou com a dominante", "acordou na automática",
+        "GRAVAR_POSICAO com a emoção escolhida (invariante 18)", "evento igual ao da execução sem emoção (invariante 27)",
+    ];
+
+    /// <summary>
+    /// Situações da execução com o tamagotchi (DEC-028) que o gerador precisa produzir pelo menos uma vez: as do desenho
+    /// do núcleo (5.2) e as de cada regra da crítica de integração (L4 a L6, C16 a C18). Contadas à parte; as da emoção, na
+    /// execução com emoção.
+    /// </summary>
+    private static readonly string[] CasosExigidosDoTamagotchi =
+    [
+        "item usado", "item solto fora", "USING interrompido por PRESS", "onda avançou", "disparo de onda velho", "onda de fundo voltou",
+        "água baixou a onda", "sétimo item", "uso até o fim", "uso interrompido sem PRESS", "soltar sobre ele recusado", "item largado",
+        "atento: parou ou acordou", "item invocado ignorado", "relógio ligado só por um item caindo", "item assentado por ficar invisível (L5)",
+        "item na mão sobre monitor ocupado (L4)", "recolher com um item na mão (L6)", "pegar outro item com um na mão (L6)", "esconder ou sair com um item na mão",
+        "onda absorvida", "onda acumulada", "onda foi para o fundo", "itens reacomodados pela topologia", "ITEM_PRESS ignorado",
+        "AUTONOMY_TIMER com o usuário segurando um item", "item caindo com o personagem pressionado ou arrastado",
+    ];
+
+    /// <summary>Situações da execução com o tamagotchi e a emoção dominante (as da emoção, com itens e ondas).</summary>
+    private static readonly string[] CasosExigidosDoTamagotchiComEmocao =
+    [
+        "emoção escolhida", "emoção fora das 14 ignorada", "emoção escolhida com a cara ocupada", "emoção escolhida com a onda",
+        "evento igual ao da execução sem emoção (invariante 27)",
+    ];
+
+    /// <summary>
+    /// Uma sequência gerada: configuração, semente do núcleo e os eventos, em lotes. <paramref name="LotesComEmocao"/> são
+    /// os mesmos lotes com a emoção dominante: comandos <see cref="CmdSetDominantEmotion"/> entre eles e uma emoção na
+    /// carga e em SETTINGS_CHANGED, tudo de um gerador próprio, para não mudar os sorteios do gerador principal.
+    /// <paramref name="AplicadosDoTamagotchi"/> é a execução com o tamagotchi ligado (<paramref name="ConfigDoTamagotchi"/>),
+    /// feita pela sombra do gerador, lote a lote: os lotes da principal, adaptados, com os eventos dele entre eles; para cada
+    /// evento aplicado, o lote, o estado logo antes e o resultado. <paramref name="LotesDoTamagotchiComEmocao"/> são os mesmos
+    /// lotes com a emoção dominante, para uma segunda execução, comparada evento a evento com essa (invariantes 7 e 27).
+    /// </summary>
     private sealed record Sequencia(
-        ConfiguracaoDoNucleo Config, ulong SementeDoNucleo, List<List<Evento>> Lotes, bool EmLotes, bool AntesDaCarga, bool PerfilCurto)
+        ConfiguracaoDoNucleo Config, ulong SementeDoNucleo, List<List<Evento>> Lotes, bool EmLotes, bool AntesDaCarga, bool PerfilCurto,
+        List<List<Evento>> LotesComEmocao,
+        ConfiguracaoDoNucleo ConfigDoTamagotchi, List<(int Lote, EstadoDoNucleo Antes, Evento Evento, Resultado Resultado)> AplicadosDoTamagotchi,
+        long DescartadosDoTamagotchi, List<List<Evento>> LotesDoTamagotchiComEmocao, bool UsoCurto, bool ComTamagotchi)
     {
         public string Opcoes => $"lotes {(EmLotes ? "de 1 a 4" : "de 1")}, {(AntesDaCarga ? "com" : "sem")} eventos antes da carga, perfil {(PerfilCurto ? "curto" : "padrão")}";
+
+        public string OpcoesDoTamagotchi => $"{Opcoes}, uso {(UsoCurto ? "curto" : "da tabela")}";
+    }
+
+    /// <summary>
+    /// O que as conferências do tamagotchi acompanham ao longo de uma execução: os Ids já vistos, as janelas dos itens
+    /// (pelos efeitos), o uso em curso e os disparos da onda da frente.
+    /// </summary>
+    private sealed class RastroDoTamagotchi
+    {
+        public HashSet<int> IdsVistos { get; } = [];
+
+        /// <summary>A janela de cada item, como os efeitos a deixaram: visível ou não, e onde.</summary>
+        public Dictionary<int, (bool Visivel, Posicionamento Lugar)> Janelas { get; } = [];
+
+        public int PassosNoUso { get; set; }
+
+        public int PassosEsperados { get; set; }
+
+        public bool PresoNoUso { get; set; }
+
+        public LadoDoEsconderijo EsconderijoNoUso { get; set; }
+
+        public PontoPx AncoraNoUso { get; set; }
+
+        public int DisparosNoEpisodio { get; set; }
+
+        public int LimiteDoEpisodio { get; set; }
     }
 
     /// <summary>O que as conferências acumulam entre eventos: quantas vezes cada situação apareceu e os atrasos sorteados.</summary>
@@ -81,13 +175,18 @@ internal static class InvariantesTestes
     {
         var mestre = new Random(Semente);
         var transicoesVistas = new HashSet<(Estado, Estado)>();
-        long passos = 0, sequenciasEmLotes = 0, sequenciasAntesDaCarga = 0, sequenciasComPerfilCurto = 0;
+        long passos = 0, sequenciasEmLotes = 0, sequenciasAntesDaCarga = 0, sequenciasComPerfilCurto = 0, passosComEmocao = 0;
+        long passosDoTamagotchi = 0, passosDoTamagotchiComEmocao = 0, sequenciasComTamagotchi = 0, sequenciasComUsoCurto = 0, sequenciasComEmocaoETamagotchi = 0;
         var contagens = new Contagens();
+        var contagensDaEmocao = new Contagens();
+        var contagensDoTamagotchi = new Contagens();
+        var contagensDoTamagotchiComEmocao = new Contagens();
+        var transicoesDoTamagotchi = new HashSet<(Estado, Estado)>();
 
         for (int n = 0; n < Sequencias; n++)
         {
             int sementeDaSequencia = mestre.Next();
-            Sequencia seq = GerarSequencia(sementeDaSequencia);
+            Sequencia seq = GerarSequencia(sementeDaSequencia, comTamagotchi: n % 2 == 0);
             if (seq.EmLotes) sequenciasEmLotes++;
             if (seq.AntesDaCarga) sequenciasAntesDaCarga++;
             if (seq.PerfilCurto) sequenciasComPerfilCurto++;
@@ -95,6 +194,7 @@ internal static class InvariantesTestes
             // R-a: o estado antes de cada Aplicar vem do callback, também dentro de um lote.
             var nucleo = new Nucleo(seq.Config, seq.SementeDoNucleo);
             var registro = new List<string>();
+            var aplicados = new List<(Evento Evento, Resultado Resultado)>();
             for (int l = 0; l < seq.Lotes.Count; l++)
             {
                 int lote = l, aplicado = 0, tamanho = seq.Lotes[l].Count;
@@ -108,6 +208,7 @@ internal static class InvariantesTestes
                     if (tamanho > 1) contagens.Contar("evento aplicado num lote de 2 a 4");
                     foreach (Transicao t in resultado.Transicoes) transicoesVistas.Add((t.De, t.Para));
                     registro.Add(Registrar(evento, resultado));
+                    aplicados.Add((evento, resultado));
                     anterior = resultado.Estado;
                     passos++;
                 });
@@ -117,8 +218,9 @@ internal static class InvariantesTestes
             contagens.Contar("AUTONOMY_TIMER descartado com o usuário no controle", nucleo.Descartados);
 
             // Invariante 7 (R-d): mesma semente e mesma sequência dão, evento a evento, o mesmo
-            // retrato, as mesmas transições e os mesmos efeitos.
-            var outro = new Nucleo(seq.Config, seq.SementeDoNucleo);
+            // retrato, as mesmas transições e os mesmos efeitos. A segunda execução tem o tamagotchi ligado, sem nenhum
+            // evento dele: o invariante 22 pede exatamente o mesmo registro (sem itens nem onda, nada muda).
+            var outro = new Nucleo(seq.Config with { Tamagotchi = true }, seq.SementeDoNucleo);
             int k = 0;
             for (int l = 0; l < seq.Lotes.Count; l++)
             {
@@ -129,28 +231,135 @@ internal static class InvariantesTestes
                     string linha = Registrar(evento, resultado);
                     string primeira = k < registro.Count ? registro[k] : "(nada)";
                     if (linha != primeira)
-                        Afirmar.Falhar($"invariante 7: sequência {n} (semente {sementeDaSequencia}; {seq.Opcoes}), lote {lote}, evento aplicado {k}: primeira execução <{primeira}>, segunda <{linha}>");
+                        Afirmar.Falhar($"invariantes 7 e 22: sequência {n} (semente {sementeDaSequencia}; {seq.Opcoes}), lote {lote}, evento aplicado {k}: primeira execução <{primeira}>, segunda, com o tamagotchi ligado <{linha}>");
                     k++;
                 });
             }
-            Afirmar.Igual(registro.Count, k, $"invariante 7: sequência {n}: mesmo número de eventos aplicados");
-            Afirmar.Igual(nucleo.Descartados, outro.Descartados, $"invariante 7: sequência {n}: mesmos descartes");
+            Afirmar.Igual(registro.Count, k, $"invariantes 7 e 22: sequência {n}: mesmo número de eventos aplicados");
+            Afirmar.Igual(nucleo.Descartados, outro.Descartados, $"invariantes 7 e 22: sequência {n}: mesmos descartes");
+
+            // Invariante 27 (DEC-027): a mesma sequência com a emoção dominante passa por todas as conferências (com
+            // as contagens à parte) e pelas da emoção, e, evento a evento, só difere da execução sem emoção nas caras e
+            // na própria emoção: mesmas transições, mesmos efeitos e o mesmo estado, inclusive o gerador
+            // pseudoaleatório (cada sorteio de cara continua sendo um sorteio só).
+            var comEmocao = new Nucleo(seq.Config, seq.SementeDoNucleo);
+            int j = 0;
+            for (int l = 0; l < seq.LotesComEmocao.Count; l++)
+            {
+                int lote = l;
+                foreach (Evento e in seq.LotesComEmocao[l]) comEmocao.Enfileirar(e);
+                EstadoDoNucleo anterior = comEmocao.Estado;
+                comEmocao.Processar((evento, resultado) =>
+                {
+                    string Onde() => $"com a emoção dominante: sequência {n} (semente {sementeDaSequencia}; {seq.Opcoes}), lote com emoção {lote}, evento {evento}";
+                    Conferir(seq.Config, anterior, evento, resultado, Onde, contagensDaEmocao);
+                    ConferirEmocao(seq.Config, anterior, evento, resultado, Onde, contagensDaEmocao);
+                    if (evento is not CmdSetDominantEmotion)
+                    {
+                        (Evento semEmocao, Resultado sem) = j < aplicados.Count ? aplicados[j] : (new Tick(), null!);
+                        Verificar(j < aplicados.Count, () => $"invariante 27: {Onde()}: evento a mais que a execução sem emoção");
+                        Verificar(SemEmocao(evento) == semEmocao, () => $"invariante 27: {Onde()}: na execução sem emoção, o {j}º evento aplicado foi {semEmocao}");
+                        Verificar(resultado.Transicoes.SequenceEqual(sem.Transicoes),
+                            () => $"invariante 27: {Onde()}: transições {Descrever(resultado.Transicoes)}; sem emoção, {Descrever(sem.Transicoes)}");
+                        Verificar(resultado.Efeitos.Select(SemEmocao).SequenceEqual(sem.Efeitos),
+                            () => $"invariante 27: {Onde()}: efeitos [{string.Join(", ", resultado.Efeitos.Select(Gravacao.DescreverEfeito))}]; sem emoção, [{string.Join(", ", sem.Efeitos.Select(Gravacao.DescreverEfeito))}]");
+                        Verificar(SemAsCaras(resultado.Estado) == SemAsCaras(sem.Estado),
+                            () => $"invariante 27: {Onde()}: estado {resultado.Estado.Retrato()} (gerador {resultado.Estado.Aleatorio}); sem emoção, {sem.Estado.Retrato()} (gerador {sem.Estado.Aleatorio})");
+                        contagensDaEmocao.Contar("evento igual ao da execução sem emoção (invariante 27)");
+                        j++;
+                    }
+                    anterior = resultado.Estado;
+                    passosComEmocao++;
+                });
+            }
+            Afirmar.Igual(aplicados.Count, j, $"invariante 27: sequência {n}: os mesmos eventos aplicados, além dos comandos de emoção");
+
+            // O tamagotchi ligado (DEC-028), numa sequência em duas, para o teste caber no tempo da suíte: a execução da
+            // sombra do gerador passa pelas conferências de sempre e pelas dele (invariantes 22 a 29).
+            if (!seq.ComTamagotchi) continue;
+            sequenciasComTamagotchi++;
+            if (seq.UsoCurto) sequenciasComUsoCurto++;
+            var rastro = new RastroDoTamagotchi();
+            List<(int Lote, EstadoDoNucleo Antes, Evento Evento, Resultado Resultado)> aplicadosDoTamagotchi = seq.AplicadosDoTamagotchi;
+            foreach ((int lote, EstadoDoNucleo anterior, Evento evento, Resultado resultado) in aplicadosDoTamagotchi)
+            {
+                string Onde() => $"com o tamagotchi: sequência {n} (semente {sementeDaSequencia}; {seq.OpcoesDoTamagotchi}), lote {lote}, evento {evento}";
+                Conferir(seq.ConfigDoTamagotchi, anterior, evento, resultado, Onde, contagensDoTamagotchi);
+                ConferirTamagotchi(seq.ConfigDoTamagotchi, anterior, evento, resultado, Onde, contagensDoTamagotchi, rastro);
+                foreach (Transicao t in resultado.Transicoes) transicoesDoTamagotchi.Add((t.De, t.Para));
+                passosDoTamagotchi++;
+            }
+            contagensDoTamagotchi.Contar("AUTONOMY_TIMER descartado com o usuário no controle", seq.DescartadosDoTamagotchi);
+
+            // Invariantes 7 e 27 com o tamagotchi: uma segunda execução, com a emoção dominante, só difere da primeira nas
+            // caras e na emoção. Ela roda numa sequência em quatro, para o teste caber no tempo da suíte.
+            if (n % 4 != 0) continue;
+            sequenciasComEmocaoETamagotchi++;
+            var tamagotchiComEmocao = new Nucleo(seq.ConfigDoTamagotchi, seq.SementeDoNucleo);
+            var rastroComEmocao = new RastroDoTamagotchi();
+            int jt = 0;
+            for (int l = 0; l < seq.LotesDoTamagotchiComEmocao.Count; l++)
+            {
+                int lote = l;
+                foreach (Evento e in seq.LotesDoTamagotchiComEmocao[l]) tamagotchiComEmocao.Enfileirar(e);
+                EstadoDoNucleo anterior = tamagotchiComEmocao.Estado;
+                tamagotchiComEmocao.Processar((evento, resultado) =>
+                {
+                    string Onde() => $"com o tamagotchi e a emoção dominante: sequência {n} (semente {sementeDaSequencia}; {seq.OpcoesDoTamagotchi}), lote com emoção {lote}, evento {evento}";
+                    Conferir(seq.ConfigDoTamagotchi, anterior, evento, resultado, Onde, contagensDoTamagotchiComEmocao);
+                    ConferirTamagotchi(seq.ConfigDoTamagotchi, anterior, evento, resultado, Onde, contagensDoTamagotchiComEmocao, rastroComEmocao);
+                    ConferirEmocao(seq.ConfigDoTamagotchi, anterior, evento, resultado, Onde, contagensDoTamagotchiComEmocao);
+                    if (evento is not CmdSetDominantEmotion)
+                    {
+                        Verificar(jt < aplicadosDoTamagotchi.Count, () => $"invariante 27: {Onde()}: evento a mais que a execução sem emoção");
+                        (_, _, Evento semEmocao, Resultado sem) = aplicadosDoTamagotchi[jt];
+                        Verificar(SemEmocao(evento) == semEmocao, () => $"invariante 27: {Onde()}: na execução sem emoção, o {jt}º evento aplicado foi {semEmocao}");
+                        Verificar(resultado.Transicoes.SequenceEqual(sem.Transicoes),
+                            () => $"invariante 27: {Onde()}: transições {Descrever(resultado.Transicoes)}; sem emoção, {Descrever(sem.Transicoes)}");
+                        Verificar(resultado.Efeitos.Select(SemEmocao).SequenceEqual(sem.Efeitos),
+                            () => $"invariante 27: {Onde()}: efeitos [{string.Join(", ", resultado.Efeitos.Select(Gravacao.DescreverEfeito))}]; sem emoção, [{string.Join(", ", sem.Efeitos.Select(Gravacao.DescreverEfeito))}]");
+                        Verificar(SemAsCaras(resultado.Estado) == SemAsCaras(sem.Estado),
+                            () => $"invariante 27: {Onde()}: estado {resultado.Estado.Retrato()} (gerador {resultado.Estado.Aleatorio}); sem emoção, {sem.Estado.Retrato()} (gerador {sem.Estado.Aleatorio})");
+                        contagensDoTamagotchiComEmocao.Contar("evento igual ao da execução sem emoção (invariante 27)");
+                        jt++;
+                    }
+                    anterior = resultado.Estado;
+                    passosDoTamagotchiComEmocao++;
+                });
+            }
+            Afirmar.Igual(aplicadosDoTamagotchi.Count, jt, $"invariante 27 com o tamagotchi: sequência {n}: os mesmos eventos aplicados, além dos comandos de emoção");
         }
 
         Console.WriteLine($"         {Sequencias} sequências ({sequenciasEmLotes} em lotes, {sequenciasAntesDaCarga} com eventos antes da carga, {sequenciasComPerfilCurto} com perfil curto), {passos} eventos aplicados, {transicoesVistas.Count} pares de transição distintos, {contagens.AtrasosAcimaDoPiso.Count} atrasos distintos acima do piso");
         Console.WriteLine("         casos: " + string.Join(", ", contagens.Casos.Select(c => $"{c.Key}={c.Value}")));
+        string[] daEmocao = [.. CasosExigidosDaEmocao, "fim da reação com a dominante", "fim do pouso com a dominante"];
+        Console.WriteLine($"         com a emoção dominante: {passosComEmocao} eventos aplicados; casos: "
+            + string.Join(", ", contagensDaEmocao.Casos.Where(c => daEmocao.Contains(c.Key)).Select(c => $"{c.Key}={c.Value}")));
+        Console.WriteLine($"         com o tamagotchi: {sequenciasComTamagotchi} sequências ({sequenciasComUsoCurto} com o uso curto), {passosDoTamagotchi} eventos aplicados, {transicoesDoTamagotchi.Count} pares de transição distintos; casos: "
+            + string.Join(", ", contagensDoTamagotchi.Casos.Where(c => CasosExigidosDoTamagotchi.Contains(c.Key)).Select(c => $"{c.Key}={c.Value}")));
+        string[] daEmocaoComTamagotchi = [.. CasosExigidosDoTamagotchiComEmocao, "acordou com a dominante", "fim do uso com a dominante", "troca de cara com a onda"];
+        Console.WriteLine($"         com o tamagotchi e a emoção dominante: {sequenciasComEmocaoETamagotchi} sequências, {passosDoTamagotchiComEmocao} eventos aplicados; casos: "
+            + string.Join(", ", contagensDoTamagotchiComEmocao.Casos.Where(c => daEmocaoComTamagotchi.Contains(c.Key)).Select(c => $"{c.Key}={c.Value}")));
         foreach (string caso in CasosExigidos)
             Afirmar.Verdadeiro(contagens.Casos.GetValueOrDefault(caso) > 0, $"o gerador não exercitou \"{caso}\": a conferência correspondente ficou vazia");
+        foreach (string caso in CasosExigidosDaEmocao)
+            Afirmar.Verdadeiro(contagensDaEmocao.Casos.GetValueOrDefault(caso) > 0, $"o gerador não exercitou \"{caso}\" com a emoção dominante: a conferência correspondente ficou vazia");
+        foreach (string caso in CasosExigidosDoTamagotchi)
+            Afirmar.Verdadeiro(contagensDoTamagotchi.Casos.GetValueOrDefault(caso) > 0, $"o gerador não exercitou \"{caso}\" com o tamagotchi: a conferência correspondente ficou vazia");
+        foreach (string caso in CasosExigidosDoTamagotchiComEmocao)
+            Afirmar.Verdadeiro(contagensDoTamagotchiComEmocao.Casos.GetValueOrDefault(caso) > 0, $"o gerador não exercitou \"{caso}\" com o tamagotchi e a emoção dominante: a conferência correspondente ficou vazia");
 
         // R11: o atraso é sorteado na faixa do perfil, não fixado nela.
         Afirmar.Verdadeiro(contagens.AtrasosAcimaDoPiso.Count >= AtrasosDistintosMinimos,
             $"R11: só {contagens.AtrasosAcimaDoPiso.Count} atrasos distintos acima do piso; esperado ao menos {AtrasosDistintosMinimos}");
 
-        // Invariante 11: todo estado tem entrada e saída; BOOTING só saída, EXITING só entrada.
+        // Invariante 11: todo estado tem entrada e saída; BOOTING só saída, EXITING só entrada. USING (DEC-028) só existe
+        // com o tamagotchi: entram as transições das duas execuções.
+        HashSet<(Estado, Estado)> todas = [.. transicoesVistas, .. transicoesDoTamagotchi];
         foreach (Estado e in Enum.GetValues<Estado>())
         {
-            bool entra = transicoesVistas.Any(t => t.Item2 == e && t.Item1 != e);
-            bool sai = transicoesVistas.Any(t => t.Item1 == e && t.Item2 != e);
+            bool entra = todas.Any(t => t.Item2 == e && t.Item1 != e);
+            bool sai = todas.Any(t => t.Item1 == e && t.Item2 != e);
             if (e == Estado.Booting)
             {
                 Afirmar.Falso(entra, "BOOTING não tem entrada");
@@ -209,8 +418,11 @@ internal static class InvariantesTestes
         }
 
         // Invariante 6 generalizado (R-c): toda troca de expressão sem transição, venha do evento que
-        // vier (clique duplo, decisão autônoma, troca pedida), mantém estado e âncora.
-        if (antes.Expressao != depois.Expressao && transicoes.Count == 0)
+        // vier (clique duplo, decisão autônoma, troca pedida, emoção dominante), mantém estado e âncora. A
+        // carga fica de fora: ela define a posição de quem ainda não tinha uma e, com a emoção dominante
+        // gravada, a cara de partida (DEC-027), sem transição quando um pedido de esconder anterior a ela
+        // continua valendo (R6, conferida em ConferirCarga).
+        if (antes.Expressao != depois.Expressao && transicoes.Count == 0 && evento is not Loaded)
         {
             Contar("expressão trocada sem transição");
             Verificar(mesmoEstadoEPosicao, () => $"invariante 6: {onde()}: expressão {antes.Expressao}→{depois.Expressao} com {antes.Estado}→{depois.Estado}, {ancoraAntes}→{ancoraDepois}");
@@ -312,9 +524,14 @@ internal static class InvariantesTestes
         if (depois.Gesto != Gesto.Nenhum)
             Verificar(depois.Estado == Estado.Idle, () => $"invariante 15: {onde()}: gesto fora de IDLE ({depois.Estado})");
 
-        // Critério 3: sem movimento nem animação, nenhum TICK agendado.
-        bool precisa = depois.Estado.EmMovimento() || depois.Estado == Estado.Reacting || (depois.Estado == Estado.Idle && depois.Gesto != Gesto.Nenhum);
-        Verificar(depois.RelogioAtivo == precisa, () => $"critério 3: {onde()}: relógio={depois.RelogioAtivo} em {depois.Estado} com gesto {depois.Gesto}");
+        // Critério 3 e invariante 29: o relógio corre se e somente se o personagem se move (sem estar agarrado), reage,
+        // usa um item (DEC-028), faz um gesto em IDLE ou há um item à vista caindo.
+        bool agarrado = depois.Estado is Estado.Climbing or Estado.Hanging && depois.Movimento.Agarrado;
+        bool itemCaindo = cfg.Tamagotchi && depois.Itens.Todos.Any(i => i.Situacao == SituacaoDoItem.Caindo && VeOItem(depois, i));
+        bool pelaAnimacao = (depois.Estado.EmMovimento() && !agarrado) || depois.Estado is Estado.Reacting or Estado.Using || (depois.Estado == Estado.Idle && depois.Gesto != Gesto.Nenhum);
+        bool precisa = pelaAnimacao || itemCaindo;
+        if (itemCaindo && !pelaAnimacao) Contar("relógio ligado só por um item caindo");
+        Verificar(depois.RelogioAtivo == precisa, () => $"critério 3 e invariante 29: {onde()}: relógio={depois.RelogioAtivo} em {depois.Estado} com gesto {depois.Gesto}, item caindo à vista {itemCaindo}");
         Efeito? ultimoDoRelogio = efeitos.LastOrDefault(e => e is LigarRelogio or DesligarRelogio);
         if (antes.RelogioAtivo != depois.RelogioAtivo)
             Verificar(ultimoDoRelogio is not null && ultimoDoRelogio is LigarRelogio == depois.RelogioAtivo, () => $"critério 3: {onde()}: o relógio mudou sem o efeito certo");
@@ -322,25 +539,30 @@ internal static class InvariantesTestes
             Verificar(ultimoDoRelogio is null, () => $"critério 3: {onde()}: efeito do relógio sem mudança");
 
         // Critério 3 afirmado diretamente (R-b): sem relógio em IDLE sem gesto, RESTING, HIDDEN,
-        // PRESSED, DRAGGING, BOOTING e EXITING.
+        // PRESSED, DRAGGING, BOOTING e EXITING, a não ser por um item à vista caindo (L8 da crítica).
         if ((depois.Estado == Estado.Idle && depois.Gesto == Gesto.Nenhum)
             || depois.Estado is Estado.Resting or Estado.Hidden or Estado.Pressed or Estado.Dragging or Estado.Booting or Estado.Exiting)
-            Verificar(!depois.RelogioAtivo, () => $"critério 3: {onde()}: relógio ligado em {depois.Estado} (gesto {depois.Gesto})");
+        {
+            if (itemCaindo && depois.Estado is Estado.Pressed or Estado.Dragging) Contar("item caindo com o personagem pressionado ou arrastado");
+            Verificar(!depois.RelogioAtivo || itemCaindo, () => $"critério 3: {onde()}: relógio ligado em {depois.Estado} (gesto {depois.Gesto}) sem item caindo");
+        }
 
-        // Agenda: um temporizador só nos estados que decidem, com a autonomia livre; e, nessas
-        // condições, sempre um (a agenda não para sozinha, nem depois de um gesto curto).
-        bool autonomiaLivre = Maquina.DecideNoEstado(depois.Estado) && !depois.AutonomiaPausada && !depois.PainelAberto && depois.Gesto == Gesto.Nenhum;
+        // Agenda: um temporizador só nos estados que decidem, com a autonomia livre e sem o usuário segurando um item
+        // (DEC-028); e, nessas condições, sempre um (a agenda não para sozinha, nem depois de um gesto curto).
+        bool segurandoItem = cfg.Tamagotchi && depois.Atento;
+        bool autonomiaLivre = Maquina.DecideNoEstado(depois.Estado) && !depois.AutonomiaPausada && !depois.PainelAberto && depois.Gesto == Gesto.Nenhum && !segurandoItem;
         Verificar(depois.DecisaoAgendada == autonomiaLivre,
-            () => $"agenda: {onde()}: temporizador pendente={depois.DecisaoAgendada} em {depois.Estado} (pausada {depois.AutonomiaPausada}, painel {depois.PainelAberto}, gesto {depois.Gesto})");
+            () => $"agenda: {onde()}: temporizador pendente={depois.DecisaoAgendada} em {depois.Estado} (pausada {depois.AutonomiaPausada}, painel {depois.PainelAberto}, gesto {depois.Gesto}, segurando um item {segurandoItem})");
 
         // R11 (R-h): todo agendamento respeita o piso do intervalo de acomodação e a faixa do perfil
-        // do nível de energia em vigor (descanso em RESTING, decisão nos demais).
+        // em vigor: o do nível de energia, com a onda de um item aplicada (DEC-028, perfil efetivo); descanso em RESTING,
+        // decisão nos demais.
         AgendarDecisao[] agendas = [.. efeitos.OfType<AgendarDecisao>()];
         Verificar(agendas.Length <= 1, () => $"agenda: {onde()}: {agendas.Length} agendamentos num só evento");
         foreach (AgendarDecisao agenda in agendas)
         {
             TimeSpan piso = cfg.IntervaloDeAcomodacao;
-            PerfilDeEnergia perfil = cfg.Perfil(depois.Preferencias.Energia);
+            PerfilDeEnergia perfil = Maquina.PerfilEfetivo(depois, cfg);
             (TimeSpan minimo, TimeSpan maximo) = depois.Estado == Estado.Resting
                 ? (perfil.DescansoMinimo, perfil.DescansoMaximo)
                 : (perfil.DecisaoMinima, perfil.DecisaoMaxima);
@@ -395,8 +617,10 @@ internal static class InvariantesTestes
             Verificar(transicoes.Count == 0 && depois.Gesto == antes.Gesto && depois.Expressao == antes.Expressao,
                 () => $"invariante 4: {onde()}: decisão autônoma com o painel aberto ({Descrever(transicoes)}, gesto {depois.Gesto}, expressão {depois.Expressao})");
         }
+        // Começar é entrar no estado: a transição de um estado para ele mesmo, como a que registra a escolha da
+        // emoção dominante (DEC-027), não começa comportamento.
         if (antes.PainelAberto && depois.PainelAberto && evento is not MovementSignal)
-            Verificar(!transicoes.Any(t => t.Para is Estado.Walking or Estado.Climbing or Estado.Hanging or Estado.Jumping or Estado.Resting),
+            Verificar(!transicoes.Any(t => t.De != t.Para && t.Para is Estado.Walking or Estado.Climbing or Estado.Hanging or Estado.Jumping or Estado.Resting),
                 () => $"invariante 4: {onde()}: comportamento autônomo começou com o painel aberto ({Descrever(transicoes)})");
         // Invariante 8 em todo passo em que o painel abre ou fecha sem troca de estado.
         if (antes.PainelAberto != depois.PainelAberto && antes.Estado == depois.Estado)
@@ -419,30 +643,575 @@ internal static class InvariantesTestes
     }
 
     /// <summary>
-    /// Invariante 18 (Fase 5): todo GravarPosicao traz uma posição gravável (chave não vazia, frações finitas
-    /// e a tela do monitor da época, que toda posição descrita ou validada pela máquina tem) e só sai de
-    /// evento do usuário ou do sistema, nunca do relógio, do movimento, da agenda autônoma nem da troca de
-    /// expressão: não há gravação periódica (DEC-011). E a posição sobrevive ao settings.json: escrita e lida
-    /// pelo esquema, volta normalizada, sem aviso e ainda com posição.
+    /// Invariante 18 (Fase 5; <see cref="InvarianteDezoito"/>): todo GravarPosicao sai só de soltar, cancelar o
+    /// arraste, redefinir, esconder, bloquear, suspender ou sair, nunca do relógio, do movimento, da agenda, da
+    /// carga, da topologia, da tela cheia nem das preferências (não há gravação periódica, DEC-011); traz uma
+    /// posição já gravável (chave, frações em [0, 1] e a tela do monitor da época) e a postura do estado depois do
+    /// evento (a borda do esconderijo e a marca de preso, esquema v3); e volta igual do settings.json. No máximo um por
+    /// evento.
     /// </summary>
     private static void ConferirGravacaoDaPosicao(Evento evento, Resultado r, Func<string> onde, Contagens contagens)
     {
-        foreach (GravarPosicao g in r.Efeitos.OfType<GravarPosicao>())
+        GravarPosicao[] gravadas = [.. r.Efeitos.OfType<GravarPosicao>()];
+        Verificar(gravadas.Length <= 1, () => $"invariante 18: {onde()}: {gravadas.Length} GravarPosicao num só evento");
+        foreach (GravarPosicao g in gravadas)
         {
             contagens.Contar("GRAVAR_POSICAO conferida (invariante 18)");
-            PosicaoDoPersonagem p = g.Posicao;
-            Verificar(evento.Origem >= Origem.Sistema,
-                () => $"invariante 18: {onde()}: GravarPosicao saiu de {evento.GetType().Name}, de origem {evento.Origem}");
-            Verificar(!string.IsNullOrEmpty(p.ChaveMonitor) && double.IsFinite(p.FracaoX) && double.IsFinite(p.FracaoY) && p.TelaDoMonitor is { Vazio: false },
-                () => $"invariante 18: {onde()}: posição não gravável {Gravacao.DescreverPosicaoCompleta(p)}");
-
-            var salvas = new ConfiguracoesSalvas(p, r.Estado.Preferencias);
-            LeituraDasConfiguracoes lida = EsquemaDeConfiguracoes.Ler(EsquemaDeConfiguracoes.Escrever(salvas));
-            Verificar(lida.Situacao == SituacaoDaLeitura.Valida && lida.Avisos.Count == 0 && lida.Configuracoes.Posicao is not null
-                    && lida.Configuracoes == EsquemaDeConfiguracoes.Normalizar(salvas),
-                () => $"invariante 18: {onde()}: {Gravacao.DescreverPosicaoCompleta(p)} não voltou do settings.json ({lida.Situacao}, {Descrever(lida.Configuracoes.Posicao)}, avisos: {string.Join(" | ", lida.Avisos)})");
+            contagens.Contar($"GRAVAR_POSICAO de {evento.GetType().Name}");
+            string? violacao = InvarianteDezoito.Violacao(evento, g, r.Estado);
+            Verificar(violacao is null, () => $"invariante 18: {onde()}: {violacao}");
         }
     }
+
+    /// <summary>
+    /// R1 e invariante 27 para a emoção dominante (DEC-027). Ela é sempre nula ou uma das 14 caras de humor.
+    /// CMD_SET_DOMINANT_EMOTION antes da carga, fora das 14 ou igual à atual é ignorado: nada muda e nada é gravado.
+    /// Senão, ele só troca a preferência (e, com a cara livre, a cara), grava com um GravarPreferencias e nenhum outro
+    /// efeito e registra uma transição para o mesmo estado. A carga e SETTINGS_CHANGED com uma emoção de humor nova a
+    /// mostram na hora (fora das 14, valem a automática: conferido com as preferências saneadas). Com a dominante, o fim
+    /// da reação, o fim do pouso e o acordar voltam a ela, e as trocas de cara da agenda, no IDLE e escondido, só
+    /// sorteiam a dominante e as companheiras; na automática, ele acorda neutro, como antes. Com o tamagotchi (DEC-028),
+    /// a cara também espera o fim do uso de um item, e a da onda tem precedência: com onda, a cara de base é a da fase, e
+    /// as trocas sorteiam as caras da fase.
+    /// </summary>
+    private static void ConferirEmocao(ConfiguracaoDoNucleo cfg, EstadoDoNucleo antes, Evento evento, Resultado r, Func<string> onde, Contagens contagens)
+    {
+        EstadoDoNucleo depois = r.Estado;
+        Expressao? dominante = depois.Preferencias.EmocaoDominante;
+        bool ondaAntes = cfg.Tamagotchi && antes.Onda is not null;
+        // A cara de base depois do evento: a da fase da onda; sem onda, a dominante; na automática, a neutra.
+        Expressao? DaOnda(EstadoDoNucleo s) => cfg.Tamagotchi && s.Onda is { } o ? cfg.TabelaDeOndas(o.Tipo).Cara(o.Fase) : null;
+        Expressao cdeBase = DaOnda(depois) ?? dominante ?? Expressao.Neutro;
+        Verificar(dominante is not { } fora || DeHumor(fora), () => $"R1: {onde()}: emoção dominante fora das 14 caras de humor: {(int)dominante!.Value}");
+        if (dominante is not null && r.Efeitos.Any(e => e is GravarPosicao)) contagens.Contar("GRAVAR_POSICAO com a emoção escolhida (invariante 18)");
+
+        if (evento is CmdSetDominantEmotion { Emocao: var emocao } && antes.Estado != Estado.Exiting)
+        {
+            string? ignorado = !antes.Carregado ? "emoção antes da carga ignorada"
+                : emocao is { } invalida && !DeHumor(invalida) ? "emoção fora das 14 ignorada"
+                : emocao == antes.Preferencias.EmocaoDominante ? "emoção igual à atual ignorada"
+                : null;
+            if (ignorado is not null)
+            {
+                contagens.Contar(ignorado);
+                Verificar(r.Transicoes.Count == 0 && r.Efeitos.Count == 0 && depois == antes with { Sinal = Sinal.Nenhum },
+                    () => $"R1: {onde()}: {ignorado}, mas houve [{Descrever(r.Transicoes)}], {r.Efeitos.Count} efeito(s), {antes.Retrato()} → {depois.Retrato()}");
+                return;
+            }
+            bool caraLivre = antes.Estado is not (Estado.Resting or Estado.Reacting or Estado.Using);
+            contagens.Contar(emocao is null ? "emoção automática escolhida" : !caraLivre ? "emoção escolhida com a cara ocupada" : ondaAntes ? "emoção escolhida com a onda" : "emoção escolhida");
+            Expressao cara = emocao is { } nova && caraLivre && !ondaAntes ? nova : antes.Expressao;
+            Verificar(depois == antes with { Sinal = Sinal.Nenhum, Expressao = cara, Preferencias = antes.Preferencias with { EmocaoDominante = emocao } },
+                () => $"CMD_SET_DOMINANT_EMOTION: {onde()}: devia mudar só a preferência ({emocao}) e a cara ({cara}): {antes.Retrato()} → {depois.Retrato()}");
+            Verificar(r.Efeitos.Count == 1 && r.Efeitos[0] is GravarPreferencias g && g.Preferencias == depois.Preferencias,
+                () => $"CMD_SET_DOMINANT_EMOTION: {onde()}: efeitos [{string.Join(", ", r.Efeitos.Select(Gravacao.DescreverEfeito))}], esperado só GravarPreferencias");
+            Verificar(r.Transicoes.Count == 1 && r.Transicoes[0].De == antes.Estado && r.Transicoes[0].Para == antes.Estado,
+                () => $"CMD_SET_DOMINANT_EMOTION: {onde()}: transições [{Descrever(r.Transicoes)}], esperada uma de {antes.Estado} para ele mesmo");
+            return;
+        }
+
+        if (evento is Loaded carga && !antes.Carregado && antes.Estado != Estado.Exiting && carga.Preferencias.EmocaoDominante is { } naCarga)
+        {
+            contagens.Contar(DeHumor(naCarga) ? "carga com emoção" : "carga com emoção fora das 14");
+            if (DeHumor(naCarga))
+                Verificar(depois.Expressao == naCarga, () => $"carga: {onde()}: começou com a cara {depois.Expressao}, não com a emoção {naCarga}");
+        }
+        if (evento is SettingsChanged configuracoes && antes.Estado != Estado.Exiting && configuracoes.Preferencias.EmocaoDominante is { } emocaoNova)
+        {
+            if (!DeHumor(emocaoNova))
+            {
+                contagens.Contar("SETTINGS_CHANGED com emoção fora das 14");
+            }
+            else if (antes.Carregado && emocaoNova != antes.Preferencias.EmocaoDominante && antes.Estado is not (Estado.Resting or Estado.Reacting or Estado.Using) && !ondaAntes)
+            {
+                contagens.Contar("SETTINGS_CHANGED com emoção nova");
+                Verificar(depois.Expressao == emocaoNova, () => $"SETTINGS_CHANGED: {onde()}: a cara ficou {depois.Expressao}, não a emoção nova {emocaoNova}");
+            }
+        }
+
+        bool acordou = evento is AutonomyTimer && antes.Estado == Estado.Resting && depois.Sinal == Sinal.Acordou;
+        bool fimDoUso = evento is Tick && r.Transicoes.FirstOrDefault()?.Regra.StartsWith("USING: fim do uso", StringComparison.Ordinal) == true;
+        if (dominante is not { } d)
+        {
+            if (acordou)
+            {
+                contagens.Contar("acordou na automática");
+                Verificar(depois.Expressao == cdeBase, () => $"acordar: {onde()}: na automática, acordou {depois.Expressao}, e não {cdeBase} (neutro, ou a cara da onda)");
+            }
+            if (fimDoUso && DaOnda(depois) is { } daOnda)
+                Verificar(depois.Expressao == daOnda, () => $"fim do uso: {onde()}: com a onda, a cara ficou {depois.Expressao}, e não a da fase, {daOnda}");
+            return;
+        }
+        string? gancho = acordou ? "acordou com a dominante"
+            : evento is Tick && r.Transicoes.FirstOrDefault()?.Regra == "REACTING: fim da reação" ? "fim da reação com a dominante"
+            : evento is Tick && r.Transicoes.FirstOrDefault()?.Regra == "LANDING: fim do pouso" ? "fim do pouso com a dominante"
+            : fimDoUso ? "fim do uso com a dominante"
+            : null;
+        if (gancho is not null)
+        {
+            contagens.Contar(gancho);
+            Verificar(depois.Expressao == cdeBase, () => $"{gancho}: {onde()}: a cara ficou {depois.Expressao}, e não a de base {cdeBase} (a dominante {d}, ou a cara da onda)");
+        }
+        bool trocouNoIdle = evento is AutonomyTimer && antes.Estado == Estado.Idle && depois.Estado == Estado.Idle && r.Transicoes.Count == 0
+            && depois.Gesto == Gesto.Nenhum && depois.Expressao != antes.Expressao;
+        bool espiou = evento is AutonomyTimer && r.Transicoes.Any(t => t.Regra == "PEEKING + AUTONOMY_TIMER: espia com outra cara");
+        if (trocouNoIdle || espiou)
+        {
+            if (Maquina.PerfilDaFase(depois, cfg) is { } fase)
+            {
+                // A onda tem precedência (DEC-028): as trocas sorteiam as caras da fase.
+                contagens.Contar("troca de cara com a onda");
+                Verificar(fase.Caras.Any(c => c.Cara == depois.Expressao), () => $"troca de cara: {onde()}: com a onda, sorteou {depois.Expressao}, que não é uma cara da fase");
+                return;
+            }
+            contagens.Contar(trocouNoIdle ? "troca de cara com a dominante" : "espiou com a dominante");
+            Verificar(depois.Expressao == d || Expressoes.Companheiras(d).Contains(depois.Expressao),
+                () => $"{(trocouNoIdle ? "troca de cara" : "esconderijo")}: {onde()}: sorteou {depois.Expressao}, que não é a dominante {d} nem uma companheira dela");
+        }
+    }
+
+    /// <summary>
+    /// Os invariantes do tamagotchi (DEC-028; desenho do núcleo, 4.11, com a crítica de integração), conferidos a cada
+    /// evento aplicado com a chave ligada, contra regras escritas aqui, à parte do núcleo:
+    /// <list type="bullet">
+    /// <item>23: um item só nasce por CMD_SUMMON_ITEM, com o próximo Id, nunca repetido; só sai usado (ITEM_DRAG_END sobre
+    /// ele, num estado que aceita), recolhido ou substituído (o sétimo); só se entra em USING assim;</item>
+    /// <item>24: em USING, PRESS leva a PRESSED no mesmo evento; o uso dura exatamente os passos do item e sai por SETTLING
+    /// para o mesmo apoio (o chão ou o esconderijo, sem a física), mantendo o preso e o esconderijo; interrompido, só o uso
+    /// acaba, e a onda continua;</item>
+    /// <item>25: com onda (fora de EXITING), exatamente um disparo pendente, de 1 s ou mais; sem onda, nenhum; níveis de 1 a
+    /// 3, a queda no nível 1, no máximo uma onda de fundo, de outro tipo; a combinação (4.5) e o avanço seguem a tabela; e a
+    /// onda da frente acaba em no máximo 2 + nível disparos sem item novo;</item>
+    /// <item>26: a física em vigor só muda as três velocidades, entre 50% e 200%;</item>
+    /// <item>28: no máximo <see cref="ConfiguracaoDoNucleo.MaximoDeItens"/> itens; fora da mão, o sprite inteiro na área útil
+    /// do monitor dele, presente, e os pés no chão quando parado; a janela de cada item (pelos efeitos) aparece se e
+    /// somente se ele é visível (na mão, sempre: L4), no lugar dele; nenhum item invisível caindo (L5);</item>
+    /// <item>a captura de um item que sai da mão sem o gesto dele acabar é solta (L6); segurar um item deixa o personagem
+    /// atento: andando, para; descansando, acorda; sem sair do lugar; e nenhuma decisão autônoma acontece enquanto isso.</item>
+    /// </list>
+    /// O invariante 29 (o relógio) fica em <see cref="Conferir"/>, para todas as execuções; o 22, na execução principal
+    /// repetida com a chave ligada; o 27, na comparação com a execução com a emoção.
+    /// </summary>
+    private static void ConferirTamagotchi(ConfiguracaoDoNucleo cfg, EstadoDoNucleo antes, Evento evento, Resultado r, Func<string> onde, Contagens contagens, RastroDoTamagotchi rastro)
+    {
+        void Contar(string caso) => contagens.Contar(caso);
+        if (antes.Estado == Estado.Exiting) return;
+        EstadoDoNucleo depois = r.Estado;
+        IReadOnlyList<Transicao> transicoes = r.Transicoes;
+
+        // ------------------------------------------------ 28: os itens no mundo e as janelas deles
+        Verificar(depois.Itens.Quantidade <= cfg.MaximoDeItens, () => $"invariante 28: {onde()}: {depois.Itens.Quantidade} itens");
+        foreach (ItemNoMundo item in depois.Itens.Todos)
+        {
+            TamanhoPx tamanho = cfg.TamanhoDoItem.ParaPixels(item.Lugar.Monitor.Dpi);
+            Verificar(item.Lugar.Tamanho == tamanho && item.Lugar.Retangulo == Posicionador.RetanguloDoSprite(item.Lugar.Ancora, tamanho),
+                () => $"invariante 28: {onde()}: o item {item.Id} com o tamanho {item.Lugar.Tamanho} e o retângulo {item.Lugar.Retangulo}");
+            if (item.Situacao == SituacaoDoItem.Caindo)
+                Verificar(VeOItem(depois, item), () => $"L5: {onde()}: o item {item.Id} cai sem aparecer (em {item.Lugar.Monitor.Chave}, com o personagem em {depois.Estado})");
+            if (item.NaMao) continue;
+            MonitorDoDesktop? monitor = depois.Topologia?.PorChave(item.Lugar.Monitor.Chave);
+            Verificar(monitor is not null && monitor == item.Lugar.Monitor, () => $"invariante 28: {onde()}: o item {item.Id} num monitor que não é o da topologia ({item.Lugar.Monitor})");
+            RetanguloPx area = item.Lugar.Monitor.AreaUtil;
+            if (tamanho.Largura <= area.Largura && tamanho.Altura <= area.Altura)
+                Verificar(area.Contem(item.Lugar.Retangulo), () => $"invariante 28: {onde()}: o item {item.Id} ({item.Lugar.Retangulo}) fora da área útil {area}");
+            if (item.Situacao == SituacaoDoItem.NoChao)
+                Verificar(item.Lugar.Ancora.Y == area.Base, () => $"invariante 28: {onde()}: o item {item.Id} parado fora do chão ({item.Lugar.Ancora}, chão {area.Base})");
+        }
+        if (depois.Estado != Estado.Exiting)
+        {
+            foreach (Efeito efeito in r.Efeitos)
+            {
+                switch (efeito)
+                {
+                    case MostrarItem m:
+                        Verificar(!rastro.Janelas.TryGetValue(m.Id, out var antesDeMostrar) || !antesDeMostrar.Visivel, () => $"janelas: {onde()}: mostrou a janela já visível do item {m.Id}");
+                        rastro.Janelas[m.Id] = (true, m.Lugar);
+                        break;
+                    case MoverItem m:
+                        Verificar(rastro.Janelas.TryGetValue(m.Id, out var antesDeMover) && antesDeMover.Visivel, () => $"janelas: {onde()}: moveu a janela escondida do item {m.Id}");
+                        rastro.Janelas[m.Id] = (true, m.Lugar);
+                        break;
+                    case EsconderItem e:
+                        Verificar(rastro.Janelas.TryGetValue(e.Id, out var antesDeEsconder) && antesDeEsconder.Visivel, () => $"janelas: {onde()}: escondeu a janela não visível do item {e.Id}");
+                        rastro.Janelas[e.Id] = (false, antesDeEsconder.Lugar);
+                        break;
+                    case RemoverItem e:
+                        Verificar(antes.Itens.PorId(e.Id) is not null && depois.Itens.PorId(e.Id) is null, () => $"janelas: {onde()}: removeu o item {e.Id}, que não saiu");
+                        rastro.Janelas.Remove(e.Id);
+                        break;
+                }
+            }
+            foreach (ItemNoMundo item in depois.Itens.Todos)
+            {
+                bool visivel = VeOItem(depois, item);
+                bool janela = rastro.Janelas.TryGetValue(item.Id, out var j) && j.Visivel;
+                Verificar(janela == visivel, () => $"invariante 28 e L4: {onde()}: a janela do item {item.Id} {(janela ? "aparece" : "não aparece")}, e ele {(visivel ? "é" : "não é")} visível ({item.Situacao}, em {item.Lugar.Monitor.Chave}, personagem em {depois.Estado})");
+                if (visivel) Verificar(j.Lugar == item.Lugar, () => $"janelas: {onde()}: a janela do item {item.Id} em {j.Lugar?.Ancora}, e ele em {item.Lugar.Ancora}");
+                if (item.NaMao && visivel && depois.Preferencias.ModoTelaCheia && depois.Ocupados.Contem(item.Lugar.Monitor.Chave)) Contar("item na mão sobre monitor ocupado (L4)");
+            }
+            Verificar(rastro.Janelas.Keys.All(id => depois.Itens.PorId(id) is not null), () => $"janelas: {onde()}: sobrou a janela de um item que saiu");
+        }
+        else
+        {
+            // Saindo, a raiz fecha todas as janelas: nenhum efeito de janela de item.
+            Verificar(!r.Efeitos.Any(e => e is MostrarItem or MoverItem or EsconderItem or RemoverItem), () => $"janelas: {onde()}: efeito de janela de item ao sair");
+        }
+
+        // ------------------------------------------------ 23: nascer e sair
+        int[] novos = [.. depois.Itens.Todos.Select(i => i.Id).Where(id => antes.Itens.PorId(id) is null)];
+        int[] sairam = [.. antes.Itens.Todos.Select(i => i.Id).Where(id => depois.Itens.PorId(id) is null)];
+        if (novos.Length > 0)
+        {
+            Verificar(evento is CmdSummonItem && novos.Length == 1 && novos[0] == antes.ProximoIdDeItem && depois.ProximoIdDeItem == antes.ProximoIdDeItem + 1,
+                () => $"invariante 23: {onde()}: os itens [{string.Join(",", novos)}] nasceram (o próximo Id era {antes.ProximoIdDeItem})");
+            Verificar(rastro.IdsVistos.Add(novos[0]), () => $"invariante 23: {onde()}: o Id {novos[0]} se repetiu");
+        }
+        else
+        {
+            Verificar(depois.ProximoIdDeItem == antes.ProximoIdDeItem, () => $"invariante 23: {onde()}: o próximo Id mudou sem item novo");
+        }
+        RemoverItem[] remocoes = [.. r.Efeitos.OfType<RemoverItem>()];
+        if (depois.Estado != Estado.Exiting)
+            Verificar(remocoes.Select(e => e.Id).Order().SequenceEqual(sairam.Order()), () => $"invariante 23: {onde()}: saíram [{string.Join(",", sairam)}], removidos [{string.Join(",", remocoes.Select(e => e.Id))}]");
+        foreach (RemoverItem remocao in remocoes)
+        {
+            MotivoDaRemocao esperado = evento switch
+            {
+                ItemDragEnd => MotivoDaRemocao.Usado,
+                CmdClearItems => MotivoDaRemocao.Recolhido,
+                CmdSummonItem => MotivoDaRemocao.Substituido,
+                _ => (MotivoDaRemocao)(-1),
+            };
+            Verificar(remocao.Motivo == esperado, () => $"invariante 23: {onde()}: o item {remocao.Id} saiu como {remocao.Motivo} com {evento.GetType().Name}");
+        }
+        if (evento is CmdClearItems) Verificar(depois.Itens.Quantidade == 0, () => $"recolher: {onde()}: sobraram {depois.Itens.Quantidade} itens");
+
+        // A invocação.
+        if (evento is CmdSummonItem invocacao)
+        {
+            bool aceita = antes.Carregado && antes.Estado.Visivel() && Enum.IsDefined(invocacao.Item) && antes.Lugar is not null;
+            if (!aceita)
+            {
+                Contar("item invocado ignorado");
+                Verificar(novos.Length == 0 && sairam.Length == 0, () => $"invariante 23: {onde()}: a invocação devia ser ignorada em {antes.Estado} (carregado {antes.Carregado}, item {(int)invocacao.Item})");
+            }
+            else
+            {
+                Verificar(novos.Length == 1, () => $"invariante 23: {onde()}: a invocação não fez o item nascer");
+                ItemNoMundo novo = depois.Itens.PorId(novos[0])!;
+                Verificar(novo.Item == invocacao.Item, () => $"invariante 23: {onde()}: nasceu {novo.Item}");
+                ConferirNascimento(cfg, antes, novo, onde);
+                if (antes.Itens.Quantidade >= cfg.MaximoDeItens)
+                {
+                    Contar("sétimo item");
+                    int maisAntigo = antes.Itens.Todos.First(i => !i.NaMao).Id;
+                    Verificar(sairam.SequenceEqual([maisAntigo]), () => $"D17: {onde()}: saíram [{string.Join(",", sairam)}], esperado o mais antigo fora da mão, {maisAntigo}");
+                }
+                else
+                {
+                    Verificar(sairam.Length == 0, () => $"D17: {onde()}: saiu um item sem precisar");
+                }
+            }
+        }
+
+        // ------------------------------------------------ segurar, arrastar, soltar e largar
+        ItemNoMundo? naMaoAntes = antes.Itens.NaMao;
+        if (evento is ItemPress press)
+        {
+            ItemNoMundo? alvo = antes.Itens.PorId(press.Id);
+            if (alvo is null || !VeOItem(antes, alvo) || antes.Topologia is null)
+            {
+                Contar("ITEM_PRESS ignorado");
+                Verificar(depois.Itens == antes.Itens, () => $"ITEM_PRESS: {onde()}: um item que não existe ou não se vê foi pego");
+            }
+            else
+            {
+                ItemNoMundo pego = depois.Itens.PorId(press.Id)!;
+                Verificar(pego.Situacao == SituacaoDoItem.Segurado && pego.Lugar == alvo.Lugar && pego.Pegada == new PontoPx(press.Cursor.X - alvo.Lugar.Ancora.X, press.Cursor.Y - alvo.Lugar.Ancora.Y),
+                    () => $"ITEM_PRESS: {onde()}: o item ficou {pego.Situacao} em {pego.Lugar.Ancora}, pegada {pego.Pegada}");
+                Estado esperado = antes.Estado is Estado.Walking or Estado.Resting ? Estado.Idle : antes.Estado;
+                if (antes.Estado is Estado.Walking or Estado.Resting) Contar("atento: parou ou acordou");
+                Verificar(depois.Estado == esperado && Equals(depois.Lugar, antes.Lugar),
+                    () => $"atento: {onde()}: de {antes.Estado} foi a {depois.Estado} (esperado {esperado}), âncora {antes.Lugar?.Ancora} → {depois.Lugar?.Ancora}");
+            }
+        }
+        if (evento is AutonomyTimer && antes.Atento)
+        {
+            Contar("AUTONOMY_TIMER com o usuário segurando um item");
+            Verificar(transicoes.Count == 0 && depois == antes with { Sinal = Sinal.Nenhum }, () => $"atento: {onde()}: decisão autônoma com o usuário segurando um item ({Descrever(transicoes)})");
+        }
+        if (evento is ItemDragMove movimento && naMaoAntes is { Situacao: SituacaoDoItem.Arrastado } arrastado && arrastado.Id == movimento.Id)
+        {
+            var ancora = new PontoPx(movimento.Cursor.X - arrastado.Pegada.X, movimento.Cursor.Y - arrastado.Pegada.Y);
+            Verificar(depois.Itens.PorId(arrastado.Id)?.Lugar.Ancora == ancora, () => $"invariante 2 do item: {onde()}: âncora {depois.Itens.PorId(arrastado.Id)?.Lugar.Ancora}, esperado {ancora}");
+        }
+        bool entrouNoUso = transicoes.Any(t => t.Para == Estado.Using && t.De != Estado.Using);
+        if (evento is ItemDragEnd fim && naMaoAntes is { Situacao: SituacaoDoItem.Arrastado } solto && solto.Id == fim.Id && antes.Topologia is { } topologia)
+        {
+            var desejada = new PontoPx(fim.Cursor.X - solto.Pegada.X, fim.Cursor.Y - solto.Pegada.Y);
+            MonitorDoDesktop m = Maquina.MonitorDaAncora(topologia, desejada);
+            TamanhoPx tamanho = cfg.TamanhoDoItem.ParaPixels(m.Dpi);
+            PontoPx presa = Posicionador.PrenderNaAreaUtil(desejada, tamanho, m.AreaUtil);
+            bool sobre = antes.Lugar is { } personagem && SobreEle(Posicionador.RetanguloDoSprite(presa, tamanho), personagem.Retangulo, cfg.MargemDoAlvo);
+            bool aceita = AceitaOItem(antes.Estado);
+            if (sobre && aceita)
+            {
+                Contar("item usado");
+                Verificar(entrouNoUso && depois.Estado == Estado.Using && depois.Uso?.Item == solto.Item && sairam.SequenceEqual([solto.Id]),
+                    () => $"invariante 23: {onde()}: solto sobre ele em {antes.Estado}, devia usar o {solto.Item}; ficou {depois.Estado}, uso {depois.Uso}");
+            }
+            else
+            {
+                Contar(sobre ? "soltar sobre ele recusado" : "item solto fora");
+                ConferirSolto(antes, depois, solto, presa, m, onde);
+            }
+        }
+        if (evento is ItemRelease largar && naMaoAntes is { } largado && largado.Id == largar.Id && antes.Topologia is { } topologiaAoLargar)
+        {
+            Contar("item largado");
+            MonitorDoDesktop m = Maquina.MonitorDaAncora(topologiaAoLargar, largado.Lugar.Ancora);
+            ConferirSolto(antes, depois, largado, Posicionador.PrenderNaAreaUtil(largado.Lugar.Ancora, cfg.TamanhoDoItem.ParaPixels(m.Dpi), m.AreaUtil), m, onde);
+        }
+        if (entrouNoUso)
+            Verificar(evento is ItemDragEnd, () => $"invariante 23: {onde()}: entrou em USING por {evento.GetType().Name}");
+
+        // L6: um item que sai da mão sem o gesto dele acabar (esconder, sair, recolher, pegar outro) solta a captura.
+        if (naMaoAntes is { } eraDaMao && depois.Itens.NaMao?.Id != eraDaMao.Id)
+        {
+            bool peloGesto = evento is ItemDragEnd d && d.Id == eraDaMao.Id || evento is ItemRelease rl && rl.Id == eraDaMao.Id;
+            bool liberou = r.Efeitos.Contains(new LiberarCapturaDoItem(eraDaMao.Id));
+            Verificar(peloGesto != liberou, () => $"L6: {onde()}: o item {eraDaMao.Id} saiu da mão {(peloGesto ? "pelo gesto, e a captura foi solta" : "sem o gesto acabar, e a captura não foi solta")}");
+            if (evento is CmdClearItems) Contar("recolher com um item na mão (L6)");
+            else if (!peloGesto && evento is ItemPress) Contar("pegar outro item com um na mão (L6)");
+            else if (!peloGesto) Contar("esconder ou sair com um item na mão");
+            if (!peloGesto && depois.Itens.PorId(eraDaMao.Id) is { } noChao && evento is not ItemPress)
+                Verificar(noChao.Situacao == SituacaoDoItem.NoChao, () => $"4.8: {onde()}: o item da mão devia ficar no chão, ficou {noChao.Situacao}");
+        }
+        foreach (LiberarCapturaDoItem liberar in r.Efeitos.OfType<LiberarCapturaDoItem>())
+            Verificar(naMaoAntes?.Id == liberar.Id, () => $"L6: {onde()}: soltou a captura do item {liberar.Id}, que não estava na mão");
+        // Escondido ou saindo, nenhum item fica na mão: o gesto sobre ele acabou com a captura solta (4.8).
+        if (depois.Estado is Estado.Hidden or Estado.Exiting)
+            Verificar(depois.Itens.NaMao is null, () => $"4.8: {onde()}: {depois.Estado} com o item {depois.Itens.NaMao?.Id} na mão");
+
+        // L5: um item que caía e deixou de aparecer foi direto ao chão.
+        foreach (ItemNoMundo caia in antes.Itens.Todos.Where(i => i.Situacao == SituacaoDoItem.Caindo))
+        {
+            if (depois.Itens.PorId(caia.Id) is { Situacao: SituacaoDoItem.NoChao } assentado && !VeOItem(depois, assentado) && evento is not Tick)
+                Contar("item assentado por ficar invisível (L5)");
+        }
+        if (evento is TopologyChanged mudanca && antes.Itens.Todos.Any(i => !i.NaMao) && antes.Topologia is { } velha && !velha.MesmaConfiguracao(mudanca.Topologia))
+            Contar("itens reacomodados pela topologia");
+
+        // ------------------------------------------------ 24: o uso
+        Verificar((depois.Uso is not null) == (depois.Estado == Estado.Using), () => $"invariante 24: {onde()}: uso {depois.Uso} em {depois.Estado}");
+        if (antes.Estado == Estado.Using && evento is Press)
+        {
+            Contar("USING interrompido por PRESS");
+            Verificar(depois.Estado == Estado.Pressed && transicoes.Count == 1, () => $"invariante 24: {onde()}: PRESS em USING levou a {depois.Estado} ({Descrever(transicoes)})");
+        }
+        if (entrouNoUso)
+        {
+            DadosDoItem dados = cfg.TabelaDeItens(depois.Uso!.Item);
+            rastro.PassosNoUso = 0;
+            rastro.PassosEsperados = dados.PassosDoUso;
+            rastro.PresoNoUso = depois.PresoPeloUsuario;
+            rastro.EsconderijoNoUso = depois.Esconderijo;
+            rastro.AncoraNoUso = depois.Lugar!.Ancora;
+            Verificar(depois.Uso.Passos == dados.PassosDoUso && depois.PassosRestantes == dados.PassosDoUso && depois.Uso.Verbo == dados.Verbo && depois.Expressao == dados.CaraDurante,
+                () => $"invariante 24: {onde()}: o uso começou como {depois.Uso} ({depois.PassosRestantes} passos, cara {depois.Expressao})");
+            Verificar(depois.Uso.Apoio == (depois.Esconderijo != LadoDoEsconderijo.Nenhum ? ApoioDoUso.Esconderijo : ApoioDoUso.Chao) || cfg.Movimento,
+                () => $"invariante 24: {onde()}: sem a física, o apoio é o chão ou o esconderijo, e não {depois.Uso.Apoio}");
+        }
+        if (antes.Estado == Estado.Using && evento is Tick) rastro.PassosNoUso++;
+        if (antes.Estado == Estado.Using && depois.Estado == Estado.Using)
+            Verificar(depois.Uso == antes.Uso && depois.PassosRestantes == rastro.PassosEsperados - rastro.PassosNoUso,
+                () => $"invariante 24: {onde()}: o uso mudou para {depois.Uso}, {depois.PassosRestantes} passos restantes depois de {rastro.PassosNoUso}");
+        if (antes.Estado == Estado.Using && depois.Estado != Estado.Using)
+        {
+            Verificar(depois.Onda == antes.Onda && depois.OndaDeFundo == antes.OndaDeFundo, () => $"C16: {onde()}: o uso acabou e a onda mudou ({antes.Onda} → {depois.Onda})");
+            bool peloFim = transicoes.Count > 0 && transicoes[0].Regra.StartsWith("USING: fim do uso", StringComparison.Ordinal);
+            if (peloFim)
+            {
+                Contar("uso até o fim");
+                Verificar(evento is Tick && rastro.PassosNoUso == rastro.PassosEsperados && transicoes[0].Para == Estado.Settling,
+                    () => $"invariante 24: {onde()}: o uso acabou depois de {rastro.PassosNoUso} passos, esperado {rastro.PassosEsperados}");
+                if (rastro.EsconderijoNoUso != LadoDoEsconderijo.Nenhum)
+                    Verificar(depois.Estado == Estado.Peeking && depois.Esconderijo == rastro.EsconderijoNoUso, () => $"invariante 24: {onde()}: escondido, voltou a {depois.Estado} ({depois.Esconderijo})");
+                else if (depois.Topologia is { } t && rastro.AncoraNoUso.Y == Maquina.MonitorDaAncora(t, rastro.AncoraNoUso).AreaUtil.Base)
+                    Verificar(depois.Estado == Estado.Idle && depois.Lugar!.Ancora == rastro.AncoraNoUso, () => $"invariante 24: {onde()}: no chão, voltou a {depois.Estado} em {depois.Lugar?.Ancora}");
+                if (depois.Estado is Estado.Climbing or Estado.Hanging)
+                    Verificar(depois.PresoPeloUsuario == rastro.PresoNoUso, () => $"invariante 24: {onde()}: preso antes {rastro.PresoNoUso}, depois {depois.PresoPeloUsuario}");
+            }
+            else
+            {
+                if (evento is not Press) Contar("uso interrompido sem PRESS");
+                Verificar(evento is not Tick, () => $"invariante 24: {onde()}: um TICK interrompeu o uso antes do fim");
+            }
+        }
+
+        // ------------------------------------------------ 25: a onda
+        if (depois.Estado != Estado.Exiting)
+            Verificar(depois.OndaAgendada == (depois.Onda is not null), () => $"invariante 25: {onde()}: onda {depois.Onda}, disparo pendente {depois.OndaAgendada}");
+        else
+            Verificar(!depois.OndaAgendada, () => $"invariante 25: {onde()}: saindo com um disparo da onda pendente");
+        AgendarOnda[] agendas = [.. r.Efeitos.OfType<AgendarOnda>()];
+        Verificar(agendas.Length + r.Efeitos.OfType<CancelarOnda>().Count() <= 1, () => $"invariante 25: {onde()}: mais de um efeito do temporizador da onda");
+        foreach (AgendarOnda agenda in agendas)
+            Verificar(agenda.Atraso >= TimeSpan.FromSeconds(1) && agenda.Geracao == depois.GeracaoDaOnda && depois.OndaAgendada,
+                () => $"invariante 25: {onde()}: agendou {agenda.Atraso} na geração {agenda.Geracao} (estado com {depois.GeracaoDaOnda})");
+        foreach (EstadoDaOnda? onda in new[] { depois.Onda, depois.OndaDeFundo })
+        {
+            if (onda is null) continue;
+            Verificar(onda.Nivel is >= 1 and <= 3 && onda.Pior >= onda.Nivel && onda.Pior <= 3 && (onda.Fase != FaseDaOnda.Queda || onda.Nivel == 1),
+                () => $"invariante 25: {onde()}: onda {onda}");
+        }
+        Verificar(depois.OndaDeFundo is null || (depois.Onda is not null && depois.Onda.Tipo != depois.OndaDeFundo.Tipo),
+            () => $"invariante 25: {onde()}: onda de fundo {depois.OndaDeFundo} com a da frente {depois.Onda}");
+        if (entrouNoUso)
+        {
+            DadosDoItem dados = cfg.TabelaDeItens(depois.Uso!.Item);
+            (EstadoDaOnda? frente, EstadoDaOnda? fundo, string caso) = OndaDepoisDoUso(antes.Onda, antes.OndaDeFundo, dados, cfg);
+            Contar(caso);
+            Verificar(depois.Onda == frente && depois.OndaDeFundo == fundo,
+                () => $"4.5: {onde()}: {dados.Item} com a onda {antes.Onda} (fundo {antes.OndaDeFundo}) deu {depois.Onda} (fundo {depois.OndaDeFundo}); esperado {frente} (fundo {fundo})");
+        }
+        if (evento is ItemEffectTimer disparo)
+        {
+            bool vale = antes.OndaAgendada && disparo.Geracao == antes.GeracaoDaOnda && antes.Onda is not null;
+            if (!vale)
+            {
+                if (antes.Onda is not null && disparo.Geracao != antes.GeracaoDaOnda) Contar("disparo de onda velho");
+                Verificar(transicoes.Count == 0 && r.Efeitos.Count == 0 && depois == antes with { Sinal = Sinal.Nenhum },
+                    () => $"invariante 25: {onde()}: o disparo {disparo.Geracao} (agendado {antes.GeracaoDaOnda}, pendente {antes.OndaAgendada}) mudou alguma coisa");
+            }
+            else
+            {
+                Contar("onda avançou");
+                (EstadoDaOnda? frente, EstadoDaOnda? fundo) = OndaDepoisDoDisparo(antes.Onda!, antes.OndaDeFundo, cfg);
+                Verificar(depois.Onda == frente && depois.OndaDeFundo == fundo, () => $"4.5: {onde()}: o disparo levou {antes.Onda} (fundo {antes.OndaDeFundo}) a {depois.Onda} (fundo {depois.OndaDeFundo}); esperado {frente} (fundo {fundo})");
+                rastro.DisparosNoEpisodio++;
+                Verificar(rastro.DisparosNoEpisodio <= rastro.LimiteDoEpisodio, () => $"invariante 25: {onde()}: {rastro.DisparosNoEpisodio} disparos na mesma onda da frente, mais que {rastro.LimiteDoEpisodio}");
+            }
+        }
+        if (antes.OndaDeFundo is { } deFundo && depois.OndaDeFundo is null && depois.Onda == deFundo) Contar("onda de fundo voltou");
+        if (depois.Onda is { } nova && (entrouNoUso || antes.Onda is null || antes.Onda.Tipo != nova.Tipo))
+        {
+            rastro.DisparosNoEpisodio = 0;
+            rastro.LimiteDoEpisodio = 2 + nova.Nivel;
+        }
+
+        // ------------------------------------------------ 26: a física em vigor
+        ParametrosDeMovimento f = Maquina.FisicaEfetiva(depois, cfg);
+        Verificar(f with { VelocidadeAndando = cfg.Fisica.VelocidadeAndando, VelocidadeEscalando = cfg.Fisica.VelocidadeEscalando, VelocidadePendurado = cfg.Fisica.VelocidadePendurado } == cfg.Fisica,
+            () => $"invariante 26: {onde()}: a onda {depois.Onda} mudou mais que as três velocidades");
+        foreach ((double efetiva, double base_) in new[] { (f.VelocidadeAndando, cfg.Fisica.VelocidadeAndando), (f.VelocidadeEscalando, cfg.Fisica.VelocidadeEscalando), (f.VelocidadePendurado, cfg.Fisica.VelocidadePendurado) })
+            Verificar(efetiva >= base_ * 0.5 - 1e-9 && efetiva <= base_ * 2 + 1e-9, () => $"invariante 26: {onde()}: velocidade {efetiva} com a base {base_}");
+    }
+
+    /// <summary>O item invocado nasce no monitor dele, entre as laterais, numa das colunas candidatas (4.8), acima do chão.</summary>
+    private static void ConferirNascimento(ConfiguracaoDoNucleo cfg, EstadoDoNucleo antes, ItemNoMundo novo, Func<string> onde)
+    {
+        Posicionamento personagem = antes.Lugar!;
+        Topologia topologia = antes.Topologia!;
+        MonitorDoDesktop m = topologia.PorChave(personagem.Monitor.Chave) ?? Maquina.MonitorDaAncora(topologia, personagem.Ancora);
+        TamanhoPx tamanho = cfg.TamanhoDoItem.ParaPixels(m.Dpi);
+        Superficies sup = Superficies.Do(topologia, m, tamanho);
+        double escala = m.Dpi / 96.0;
+        int folga = (int)Math.Round(cfg.Fisica.FolgaDoItem * escala, MidpointRounding.AwayFromZero);
+        int afastamento = cfg.Tamanho.ParaPixels(m.Dpi).Largura / 2 + folga + tamanho.Largura / 2;
+        int olhando = antes.Direcao == Direcao.Direita ? 1 : -1;
+        int[] candidatos = [.. Enumerable.Range(0, 3).SelectMany(k => new[] { olhando, -olhando }.Select(lado => personagem.Ancora.X + lado * (afastamento + k * (tamanho.Largura + folga))))];
+        int x = novo.Lugar.Ancora.X;
+        Verificar(novo.Lugar.Monitor.Chave == m.Chave && x >= sup.Esquerda && x <= sup.Direita && (candidatos.Contains(x) || x == Math.Clamp(candidatos[0], sup.Esquerda, sup.Direita)),
+            () => $"4.8: {onde()}: o item nasceu em {novo.Lugar.Monitor.Chave} x={x}; candidatos [{string.Join(",", candidatos)}] entre {sup.Esquerda} e {sup.Direita}");
+        if (novo.Situacao == SituacaoDoItem.Caindo)
+        {
+            double y = Math.Max(sup.Teto, Math.Min(personagem.Ancora.Y, sup.Chao) - cfg.Fisica.AlturaDaQuedaDoItem * escala);
+            Verificar(novo.Lugar.Ancora.Y == (int)Math.Round(y, MidpointRounding.AwayFromZero), () => $"4.8: {onde()}: o item nasceu em y={novo.Lugar.Ancora.Y}, esperado {y}");
+        }
+    }
+
+    /// <summary>Um item solto fora (ou recusado) ou largado: fora da mão, no lugar preso na área útil; no chão, parado; no ar, caindo (ou no chão, se não se vê).</summary>
+    private static void ConferirSolto(EstadoDoNucleo antes, EstadoDoNucleo depois, ItemNoMundo item, PontoPx presa, MonitorDoDesktop m, Func<string> onde)
+    {
+        ItemNoMundo? solto = depois.Itens.PorId(item.Id);
+        Verificar(solto is not null && !solto.NaMao, () => $"soltar: {onde()}: o item {item.Id} continua na mão ou sumiu");
+        bool noChao = presa.Y == m.AreaUtil.Base;
+        if (noChao || !VeOItem(depois, solto!))
+            Verificar(solto!.Situacao == SituacaoDoItem.NoChao && solto.Lugar.Ancora == new PontoPx(presa.X, m.AreaUtil.Base) && solto.Lugar.Monitor.Chave == m.Chave,
+                () => $"soltar: {onde()}: no chão (ou sem aparecer), o item ficou {solto.Situacao} em {solto.Lugar.Ancora}, esperado {presa.X} no chão de {m.Chave}");
+        else
+            Verificar(solto!.Situacao == SituacaoDoItem.Caindo && solto.Lugar.Ancora == presa && solto.VY == 0,
+                () => $"soltar: {onde()}: o item ficou {solto.Situacao} em {solto.Lugar.Ancora}, esperado caindo de {presa}");
+        Verificar(depois.Estado == antes.Estado, () => $"soltar: {onde()}: soltar ou largar um item fora mudou o estado de {antes.Estado} para {depois.Estado}");
+    }
+
+    /// <summary>
+    /// A combinação (4.5), escrita aqui à parte: a onda da frente e a de fundo depois de usar o item, e o caso. A água baixa a
+    /// da frente (<see cref="Refrescada"/>); sem onda, a do item começa na subida; do mesmo tipo da da frente ou da de fundo,
+    /// soma níveis até 3 (a queda volta ao pico); de precedência maior ou igual, vai para a frente e a da frente vai para o
+    /// fundo; de precedência menor, é absorvida.
+    /// </summary>
+    private static (EstadoDaOnda? Frente, EstadoDaOnda? Fundo, string Caso) OndaDepoisDoUso(EstadoDaOnda? frente, EstadoDaOnda? fundo, DadosDoItem dados, ConfiguracaoDoNucleo cfg)
+    {
+        if (dados.Onda is not { } tipo)
+        {
+            (EstadoDaOnda? f, EstadoDaOnda? b) = Refrescada(frente, fundo, cfg);
+            return (f, b, frente is null ? "água sem onda" : "água baixou a onda");
+        }
+        int n = Math.Clamp(dados.Intensidade, 1, 3);
+        EstadoDaOnda Somada(EstadoDaOnda o)
+        {
+            int nivel = Math.Min(3, o.Nivel + n);
+            return new EstadoDaOnda(o.Tipo, o.Fase == FaseDaOnda.Subida ? FaseDaOnda.Subida : FaseDaOnda.Pico, nivel, Math.Max(o.Pior, nivel));
+        }
+        if (frente is null) return (new EstadoDaOnda(tipo, FaseDaOnda.Subida, n, n), fundo, "onda começou");
+        if (frente.Tipo == tipo) return (Somada(frente), fundo, "onda acumulada");
+        if (fundo is not null && fundo.Tipo == tipo) return (frente, Somada(fundo), "onda acumulada");
+        if (cfg.TabelaDeOndas(tipo).Precedencia >= cfg.TabelaDeOndas(frente.Tipo).Precedencia) return (new EstadoDaOnda(tipo, FaseDaOnda.Subida, n, n), frente, "onda foi para o fundo");
+        return (frente, fundo, "onda absorvida");
+    }
+
+    /// <summary>A água (4.5): na queda, ou na subida do nível 1, a da frente acaba (e a de fundo volta); no pico do nível 1, a queda (sem queda, acaba); senão, um nível abaixo.</summary>
+    private static (EstadoDaOnda? Frente, EstadoDaOnda? Fundo) Refrescada(EstadoDaOnda? frente, EstadoDaOnda? fundo, ConfiguracaoDoNucleo cfg)
+    {
+        if (frente is null) return (null, fundo);
+        bool temQueda = cfg.TabelaDeOndas(frente.Tipo).Queda is not null;
+        if (frente.Fase == FaseDaOnda.Queda || (frente.Fase == FaseDaOnda.Subida && frente.Nivel <= 1) || (frente.Fase == FaseDaOnda.Pico && frente.Nivel <= 1 && !temQueda))
+            return (fundo, null);
+        if (frente.Fase == FaseDaOnda.Pico && frente.Nivel <= 1) return (frente with { Fase = FaseDaOnda.Queda, Nivel = 1 }, fundo);
+        return (frente with { Nivel = frente.Nivel - 1 }, fundo);
+    }
+
+    /// <summary>O disparo da onda (4.5): subida → pico; pico acima do 1 → um nível abaixo; pico no 1 → queda (sem queda, o fim); queda → o fim; no fim, a de fundo volta.</summary>
+    private static (EstadoDaOnda? Frente, EstadoDaOnda? Fundo) OndaDepoisDoDisparo(EstadoDaOnda frente, EstadoDaOnda? fundo, ConfiguracaoDoNucleo cfg)
+        => frente.Fase switch
+        {
+            FaseDaOnda.Subida => (frente with { Fase = FaseDaOnda.Pico }, fundo),
+            FaseDaOnda.Pico when frente.Nivel > 1 => (frente with { Nivel = frente.Nivel - 1 }, fundo),
+            FaseDaOnda.Pico when cfg.TabelaDeOndas(frente.Tipo).Queda is not null => (frente with { Fase = FaseDaOnda.Queda, Nivel = 1 }, fundo),
+            _ => (fundo, null),
+        };
+
+    /// <summary>Se a janela do item aparece (L4 e D18), escrito aqui à parte: na mão, sempre; fora, com o personagem à vista e fora de um monitor ocupado pela tela cheia (com o modo ligado).</summary>
+    private static bool VeOItem(EstadoDoNucleo s, ItemNoMundo item)
+        => item.Situacao is SituacaoDoItem.Segurado or SituacaoDoItem.Arrastado
+            || (s.Estado is not (Estado.Booting or Estado.Hidden or Estado.Exiting) && !(s.Preferencias.ModoTelaCheia && s.Ocupados.Contem(item.Lugar.Monitor.Chave)));
+
+    /// <summary>
+    /// "Sobre ele" (C14), escrito aqui à parte: o retângulo do item tem ao menos um pixel em comum com o do personagem
+    /// encolhido a margem de cada lado (arredondada, metade para cima).
+    /// </summary>
+    private static bool SobreEle(RetanguloPx item, RetanguloPx personagem, int margem)
+    {
+        int dx = (personagem.Largura * margem + 50) / 100, dy = (personagem.Altura * margem + 50) / 100;
+        int esquerda = personagem.Esquerda + dx, direita = personagem.Direita - dx, topo = personagem.Topo + dy, baixo = personagem.Base - dy;
+        return esquerda < direita && topo < baixo && item.Esquerda < direita && esquerda < item.Direita && item.Topo < baixo && topo < item.Base;
+    }
+
+    /// <summary>Os estados que aceitam um item solto sobre ele (tabela 4.6), escritos aqui à parte.</summary>
+    private static bool AceitaOItem(Estado e)
+        => e is Estado.Idle or Estado.Walking or Estado.Climbing or Estado.Hanging or Estado.Resting or Estado.Reacting or Estado.Landing or Estado.Peeking;
 
     /// <summary>
     /// Linhas de FULLSCREEN_TARGETS_CHANGED (ARCHITECTURE.md 2.6, DEC-013 e DEC-020), com o modo e o
@@ -463,12 +1232,16 @@ internal static class InvariantesTestes
         Verificar(depois.Ocupados.Equals(ocupados), () => $"tela cheia: {onde()}: cache {depois.Ocupados}, esperado {ocupados}");
         if (topologia is not null && ocupados.Chaves.Any(ch => topologia.PorChave(ch) is null)) contagens.Contar("tela cheia com chave desconhecida");
 
-        // Nada além do cache (e do fim de um gesto curto, invariante 15) muda.
+        // Nada além do cache (e do fim de um gesto curto, invariante 15) muda. Com o tamagotchi (DEC-028), as janelas dos
+        // itens acompanham os monitores ocupados, e um item que caía e sumiu vai ao chão, desligando o relógio (L5): isso
+        // é conferido em ConferirTamagotchi.
         void SoOCache(string regra, bool marca)
         {
+            bool itemCaindoAntes = antes.Itens.Todos.Any(i => i.Situacao == SituacaoDoItem.Caindo && VeOItem(antes, i));
+            Efeito[] doPersonagem = [.. r.Efeitos.Where(e => e is not (MostrarItem or MoverItem or EsconderItem) && !(e is DesligarRelogio && itemCaindoAntes))];
             bool efeitosDoGesto = antes.Gesto != Gesto.Nenhum
-                ? r.Efeitos.All(e => e is DesligarRelogio or AgendarDecisao)
-                : r.Efeitos.Count == 0;
+                ? doPersonagem.All(e => e is DesligarRelogio or AgendarDecisao)
+                : doPersonagem.Length == 0;
             Verificar(r.Transicoes.Count == 0 && depois.Estado == antes.Estado && depois.Motivo == antes.Motivo
                     && Equals(depois.Lugar, antes.Lugar) && Equals(depois.Posicao, antes.Posicao) && Equals(depois.RetornoDaTelaCheia, retorno)
                     && depois.PainelAberto == antes.PainelAberto && depois.TelaCheiaMudouNoGesto == marca && efeitosDoGesto,
@@ -735,9 +1508,10 @@ internal static class InvariantesTestes
 
     /// <summary>
     /// Uma sequência: às vezes com pedidos anteriores à carga, depois a carga e eventos de todas as
-    /// origens, em lotes de 1 (ou de 1 a 4) eventos.
+    /// origens, em lotes de 1 (ou de 1 a 4) eventos. Com <paramref name="comTamagotchi"/>, também a execução com o
+    /// tamagotchi ligado (sem ele, nenhum sorteio do gerador dele acontece, e o resto da sequência é o mesmo).
     /// </summary>
-    private static Sequencia GerarSequencia(int semente)
+    private static Sequencia GerarSequencia(int semente, bool comTamagotchi)
     {
         var rnd = new Random(semente);
         var gerador = new GeradorDeTopologias(rnd);
@@ -764,14 +1538,59 @@ internal static class InvariantesTestes
         // semente derivada da semente da sequência: variar o campo não consome sorteios do gerador principal,
         // e os outros sorteios (e as contagens dos casos) não mudam.
         var travessia = new Random(unchecked(semente * 31 + 7));
+        // A emoção dominante (DEC-027) também: os comandos e as emoções da execução com emoção saem deste gerador.
+        var emocao = new Random(unchecked(semente * 37 + 11));
+        // O tamagotchi (DEC-028) tem o gerador dele, outra instância com a mesma semente da da emoção: os eventos dele, a
+        // adaptação dos eventos da execução principal e a emoção da execução com o tamagotchi saem só daqui. Três
+        // sequências em quatro usam itens de uso curto (1 a 6 passos), para o fim do uso acontecer muitas vezes; e a
+        // gravidade é quatro vezes a do aplicativo, para os itens chegarem ao chão em menos passos (sem a física, ela só
+        // move os itens; a queda com os parâmetros do aplicativo fica em ItensTestes).
+        var doTamagotchi = new Random(unchecked(semente * 37 + 11));
+        bool usoCurto = doTamagotchi.Next(4) != 0;
+        ConfiguracaoDoNucleo cfgDoTamagotchi = cfg with { Tamagotchi = true, Fisica = cfg.Fisica with { Gravidade = cfg.Fisica.Gravidade * 4 } };
+        if (usoCurto) cfgDoTamagotchi = cfgDoTamagotchi with { TabelaDeItens = ItemDeUsoCurto };
+        var sombraDoTamagotchi = new Nucleo(cfgDoTamagotchi, (ulong)semente);
+        var aplicadosDoTamagotchi = new List<(int Lote, EstadoDoNucleo Antes, Evento Evento, Resultado Resultado)>();
+        var lotesDoTamagotchiComEmocao = new List<List<Evento>>();
+        int lotesDoTamagotchi = 0;
 
         // Um núcleo-sombra acompanha a sequência, lote a lote como a execução conferida, para os
         // eventos fazerem sentido (PRESS no personagem, AUTONOMY_TIMER da geração agendada).
         var sombra = new Nucleo(cfg, (ulong)semente);
         var lotes = new List<List<Evento>>();
+        var lotesComEmocao = new List<List<Evento>>();
         int total = 0;
+        void EntregarAoTamagotchi(List<Evento> lote)
+        {
+            int indice = lotesDoTamagotchi++;
+            lotesDoTamagotchiComEmocao.Add([.. lote.Select(e => ComEmocao(e, doTamagotchi))]);
+            foreach (Evento e in lote) sombraDoTamagotchi.Enfileirar(e);
+            EstadoDoNucleo anterior = sombraDoTamagotchi.Estado;
+            sombraDoTamagotchi.Processar((evento, resultado) =>
+            {
+                aplicadosDoTamagotchi.Add((indice, anterior, evento, resultado));
+                anterior = resultado.Estado;
+            });
+        }
         void Entregar(List<Evento> lote)
         {
+            // Na execução com emoção, às vezes um comando de emoção antes do lote, num lote só dele. Nunca no meio
+            // de um gesto curto: o comando o encerraria (invariante 15), e a sequência deixaria de ser a mesma.
+            if (sombra.Estado.Gesto == Gesto.Nenhum && emocao.Next(12) == 0)
+                lotesComEmocao.Add([new CmdSetDominantEmotion(EsquemaDeConfiguracoesTestes.EmocaoAleatoria(emocao))]);
+            lotesComEmocao.Add([.. lote.Select(e => ComEmocao(e, emocao))]);
+
+            // Na execução com o tamagotchi: antes do lote, às vezes eventos dele, cada grupo num lote; às vezes (só na
+            // execução com emoção) um comando de emoção, fora de um gesto curto; e o lote, adaptado ao estado dela.
+            if (comTamagotchi)
+            {
+                for (int i = 0; i < 4 && SortearDoTamagotchi(doTamagotchi, sombraDoTamagotchi.Estado, cfgDoTamagotchi) is { } doItem; i++)
+                    EntregarAoTamagotchi(doItem);
+                if (sombraDoTamagotchi.Estado.Gesto == Gesto.Nenhum && doTamagotchi.Next(15) == 0)
+                    lotesDoTamagotchiComEmocao.Add([new CmdSetDominantEmotion(EsquemaDeConfiguracoesTestes.EmocaoAleatoria(doTamagotchi))]);
+                EntregarAoTamagotchi([.. lote.Select(e => Adaptar(e, sombra.Estado, sombraDoTamagotchi.Estado, doTamagotchi))]);
+            }
+
             lotes.Add(lote);
             foreach (Evento e in lote) sombra.Enfileirar(e);
             sombra.Processar();
@@ -792,8 +1611,165 @@ internal static class InvariantesTestes
             for (int j = 0; j < tamanho; j++) lote.Add(Sortear(rnd, travessia, gerador, sombra.Estado, ref topologia));
             Entregar(lote);
         }
-        return new Sequencia(cfg, (ulong)semente, lotes, emLotes, antesDaCarga, perfilCurto);
+        return new Sequencia(cfg, (ulong)semente, lotes, emLotes, antesDaCarga, perfilCurto, lotesComEmocao,
+            cfgDoTamagotchi, aplicadosDoTamagotchi, sombraDoTamagotchi.Descartados, lotesDoTamagotchiComEmocao, usoCurto, comTamagotchi);
     }
+
+    /// <summary>Os itens com o uso de 1 a 6 passos: o fim do uso acontece sem rajadas longas de TICK.</summary>
+    private static DadosDoItem ItemDeUsoCurto(Item item) => TabelaDoTamagotchi.DoItem(item) with { PassosDoUso = 1 + (int)item % 6 };
+
+    /// <summary>
+    /// O evento da execução principal na execução com o tamagotchi, adaptado ao estado dela: o AUTONOMY_TIMER é o da geração
+    /// agendada nela (ou o velho, se era velho), o sinal de movimento coerente com o estado dela (se era coerente) e o PRESS
+    /// e o menu de contexto, no corpo dela. O resto é o mesmo evento.
+    /// </summary>
+    private static Evento Adaptar(Evento evento, EstadoDoNucleo principal, EstadoDoNucleo tamagotchi, Random rnd)
+    {
+        PontoPx NoCorpo(PontoPx p) => principal.Lugar is { } a && tamagotchi.Lugar is { } t ? new PontoPx(p.X - a.Ancora.X + t.Ancora.X, p.Y - a.Ancora.Y + t.Ancora.Y) : p;
+        return evento switch
+        {
+            AutonomyTimer t => new AutonomyTimer(t.Geracao == principal.Geracao ? tamagotchi.Geracao : tamagotchi.Geracao - 1),
+            MovementSignal m when Coerentes(principal.Estado).Contains(m.Sinal) && Coerentes(tamagotchi.Estado) is { Length: > 0 } coerentes
+                => new MovementSignal(coerentes[rnd.Next(coerentes.Length)]),
+            Press p => new Press(NoCorpo(p.Cursor)),
+            ContextMenu c => new ContextMenu(NoCorpo(c.Cursor)),
+            _ => evento,
+        };
+    }
+
+    /// <summary>
+    /// Um lote de eventos do tamagotchi, ou nulo para parar: rajadas de TICK com um item caindo ou um uso em curso (às vezes
+    /// até o fim exato do uso), o gesto sobre o item da mão (arrastar até ele ou para longe, soltar, largar), invocar (às
+    /// vezes fora do enum), pegar um item (às vezes um Id que não existe), recolher e disparos da onda (o atual, um velho
+    /// ou sem onda). Escondido ou antes da carga, eventos que devem ser ignorados.
+    /// </summary>
+    private static List<Evento>? SortearDoTamagotchi(Random rnd, EstadoDoNucleo s, ConfiguracaoDoNucleo cfg)
+    {
+        if (rnd.Next(5) < 2 || s.Estado == Estado.Exiting) return null;
+        if (!s.Carregado || !s.Estado.Visivel())
+        {
+            return rnd.Next(8) switch
+            {
+                0 => [new CmdSummonItem(ItemAleatorio(rnd))],
+                1 => [new ItemEffectTimer(rnd.Next(2) == 0 ? s.GeracaoDaOnda : s.GeracaoDaOnda - 1)],
+                2 when s.Itens.Quantidade > 0 => [new ItemPress(s.Itens.Todos[rnd.Next(s.Itens.Quantidade)].Id, new PontoPx(rnd.Next(0, 2000), rnd.Next(0, 1100)))],
+                3 => [new CmdClearItems()],
+                _ => null,
+            };
+        }
+        if (s.Estado == Estado.Using && rnd.Next(2) == 0)
+            return Ticks(rnd.Next(3) == 0 ? Math.Max(1, s.PassosRestantes) : rnd.Next(1, Math.Max(2, s.PassosRestantes + 2)));
+        if (s.Itens.AlgumCaindo && rnd.Next(2) == 0) return Ticks(rnd.Next(1, 40));
+        if (s.Itens.NaMao is { } naMao) return ContinuarOGesto(rnd, s, cfg, naMao);
+        int sorteio = rnd.Next(100);
+        return sorteio switch
+        {
+            < 22 => [new CmdSummonItem(ItemAleatorio(rnd))],
+            < 50 when s.Itens.Quantidade > 0 => PegarUmItem(rnd, s, cfg),
+            < 52 => [new CmdClearItems()],
+            < 72 when s.Onda is not null => [new ItemEffectTimer(rnd.Next(6) == 0 ? s.GeracaoDaOnda - 1 - rnd.Next(3) : s.GeracaoDaOnda)],
+            < 74 => [new ItemEffectTimer(s.GeracaoDaOnda)],
+            _ => null,
+        };
+    }
+
+    private static List<Evento> Ticks(int quantos) => [.. Enumerable.Repeat<Evento>(new Tick(), quantos)];
+
+    /// <summary>Um item do enum; uma vez em quinze, um valor fora dele, que a invocação ignora.</summary>
+    private static Item ItemAleatorio(Random rnd) => rnd.Next(15) == 0 ? (Item)rnd.Next(13, 40) : (Item)rnd.Next(13);
+
+    /// <summary>
+    /// Pega um item (às vezes um Id que não existe): só pega, e o gesto segue nos lotes seguintes, com outros eventos no
+    /// meio; ou clica nele (pega e larga); ou o gesto inteiro, até ele ou para longe.
+    /// </summary>
+    private static List<Evento> PegarUmItem(Random rnd, EstadoDoNucleo s, ConfiguracaoDoNucleo cfg)
+    {
+        ItemNoMundo item = s.Itens.Todos[rnd.Next(s.Itens.Quantidade)];
+        int id = rnd.Next(15) == 0 ? s.ProximoIdDeItem + rnd.Next(3) : item.Id;
+        var press = new ItemPress(id, new PontoPx(item.Lugar.Ancora.X + rnd.Next(-20, 21), item.Lugar.Ancora.Y - rnd.Next(2, 44)));
+        var pegada = new PontoPx(press.Cursor.X - item.Lugar.Ancora.X, press.Cursor.Y - item.Lugar.Ancora.Y);
+        PontoPx cursor = Mais(Alvo(rnd, s, cfg, sobreEle: rnd.Next(5) < 3), pegada);
+        return rnd.Next(3) switch
+        {
+            0 => [press],
+            1 => [press, new ItemRelease(id)],
+            _ => [press, new ItemDragStart(id), new ItemDragMove(id, cursor), new ItemDragEnd(id, cursor)],
+        };
+    }
+
+    /// <summary>O gesto sobre o item da mão continua (ou espera, para outros eventos passarem com o item seguro).</summary>
+    private static List<Evento>? ContinuarOGesto(Random rnd, EstadoDoNucleo s, ConfiguracaoDoNucleo cfg, ItemNoMundo naMao)
+    {
+        if (rnd.Next(3) == 0) return null;
+        if (rnd.Next(30) == 0) return [new CmdClearItems()];
+        // Às vezes um PRESS noutro item com este ainda na mão (dois ponteiros): o da mão é largado, com a captura solta.
+        if (rnd.Next(20) == 0 && s.Itens.Todos.FirstOrDefault(i => i.Id != naMao.Id) is { } outro)
+            return [new ItemPress(outro.Id, new PontoPx(outro.Lugar.Ancora.X, outro.Lugar.Ancora.Y - 10))];
+        if (naMao.Situacao == SituacaoDoItem.Segurado)
+            return rnd.Next(4) == 0 ? [new ItemRelease(naMao.Id)] : [new ItemDragStart(naMao.Id)];
+        PontoPx Cursor(bool sobreEle) => Mais(Alvo(rnd, s, cfg, sobreEle), naMao.Pegada);
+        int sorteio = rnd.Next(10);
+        if (sorteio < 3) return [new ItemDragMove(naMao.Id, Cursor(rnd.Next(2) == 0))];
+        if (sorteio < 7)
+        {
+            PontoPx sobre = Cursor(sobreEle: true);
+            return [new ItemDragMove(naMao.Id, sobre), new ItemDragEnd(naMao.Id, sobre)];
+        }
+        return sorteio < 9 ? [new ItemDragEnd(naMao.Id, Cursor(sobreEle: false))] : [new ItemRelease(naMao.Id)];
+    }
+
+    /// <summary>
+    /// Onde pôr a âncora do item: perto do meio do personagem (o item centrado no sprite dele, com um desvio de até um
+    /// terço do sprite), ou num ponto qualquer de um monitor, às vezes um pouco fora dele.
+    /// </summary>
+    private static PontoPx Alvo(Random rnd, EstadoDoNucleo s, ConfiguracaoDoNucleo cfg, bool sobreEle)
+    {
+        if (sobreEle && s.Lugar is { } l)
+        {
+            int alturaDoItem = cfg.TamanhoDoItem.ParaPixels(l.Monitor.Dpi).Altura;
+            int dx = l.Tamanho.Largura / 3, dy = l.Tamanho.Altura / 3;
+            return new PontoPx(l.Ancora.X + rnd.Next(-dx, dx + 1), l.Retangulo.Topo + l.Tamanho.Altura / 2 + alturaDoItem / 2 + rnd.Next(-dy, dy + 1));
+        }
+        IReadOnlyList<MonitorDoDesktop> monitores = s.Topologia!.Monitores;
+        RetanguloPx tela = monitores[rnd.Next(monitores.Count)].Tela;
+        return new PontoPx(rnd.Next(tela.Esquerda - 100, tela.Direita + 100), rnd.Next(tela.Topo - 100, tela.Base + 100));
+    }
+
+    private static PontoPx Mais(PontoPx a, PontoPx b) => new(a.X + b.X, a.Y + b.Y);
+
+    /// <summary>Os sinais de movimento que o estado trata (como o passo físico da Fase 4 os emite).</summary>
+    private static SinalDeMovimento[] Coerentes(Estado estado) => estado switch
+    {
+        Estado.Walking => [SinalDeMovimento.Parede, SinalDeMovimento.Passagem, SinalDeMovimento.FimDoChao],
+        Estado.Climbing => [SinalDeMovimento.TopoDaParede, SinalDeMovimento.FimDaParede, SinalDeMovimento.BordaSuperior],
+        Estado.Hanging => [SinalDeMovimento.FimDaBorda],
+        Estado.Jumping or Estado.Falling => [SinalDeMovimento.ContatoComOChao],
+        _ => [],
+    };
+
+    /// <summary>O evento da execução com emoção: a carga e SETTINGS_CHANGED ganham uma emoção dominante (às vezes nula ou fora das 14).</summary>
+    private static Evento ComEmocao(Evento evento, Random emocao) => evento switch
+    {
+        Loaded carga => carga with { Preferencias = carga.Preferencias with { EmocaoDominante = EsquemaDeConfiguracoesTestes.EmocaoAleatoria(emocao) } },
+        SettingsChanged configuracoes => configuracoes with { Preferencias = configuracoes.Preferencias with { EmocaoDominante = EsquemaDeConfiguracoesTestes.EmocaoAleatoria(emocao) } },
+        _ => evento,
+    };
+
+    /// <summary>O evento sem a emoção dominante: o da execução principal.</summary>
+    private static Evento SemEmocao(Evento evento) => evento switch
+    {
+        Loaded carga => carga with { Preferencias = carga.Preferencias with { EmocaoDominante = null } },
+        SettingsChanged configuracoes => configuracoes with { Preferencias = configuracoes.Preferencias with { EmocaoDominante = null } },
+        _ => evento,
+    };
+
+    /// <summary>O efeito sem a emoção dominante nas preferências gravadas.</summary>
+    private static Efeito SemEmocao(Efeito efeito)
+        => efeito is GravarPreferencias g ? g with { Preferencias = g.Preferencias with { EmocaoDominante = null } } : efeito;
+
+    /// <summary>O estado sem a cara e sem a emoção dominante: o que a emoção não pode mudar (invariante 27).</summary>
+    private static EstadoDoNucleo SemAsCaras(EstadoDoNucleo s)
+        => s with { Expressao = Expressao.Neutro, Preferencias = s.Preferencias with { EmocaoDominante = null } };
 
     /// <summary>
     /// Pedidos que podem chegar antes da carga (R6): esconder, mostrar, sessão, suspensão,
@@ -881,7 +1857,8 @@ internal static class InvariantesTestes
             < 90 => new AutonomyTimer(rnd.Next(10) == 0 ? s.Geracao - 1 : s.Geracao),
             // R-e: carga repetida no meio da sequência, com outra topologia; deve ser ignorada.
             < 91 => NovaCarga(rnd, travessia, gerador, rnd.Next(2) == 0 ? atual : gerador.NovaTopologia()),
-            _ => new ExpressionChange((Expressao)rnd.Next(Enum.GetValues<Expressao>().Length)),
+            // As 14 caras de humor: um valor novo no fim do enum não muda os sorteios do gerador (F1).
+            _ => new ExpressionChange((Expressao)rnd.Next(14)),
         };
     }
 
@@ -891,14 +1868,7 @@ internal static class InvariantesTestes
     /// </summary>
     private static SinalDeMovimento SinalCoerente(Random rnd, Estado estado)
     {
-        SinalDeMovimento[] coerentes = estado switch
-        {
-            Estado.Walking => [SinalDeMovimento.Parede, SinalDeMovimento.Passagem, SinalDeMovimento.FimDoChao],
-            Estado.Climbing => [SinalDeMovimento.TopoDaParede, SinalDeMovimento.FimDaParede, SinalDeMovimento.BordaSuperior],
-            Estado.Hanging => [SinalDeMovimento.FimDaBorda],
-            Estado.Jumping or Estado.Falling => [SinalDeMovimento.ContatoComOChao],
-            _ => [],
-        };
+        SinalDeMovimento[] coerentes = Coerentes(estado);
         return coerentes.Length > 0 && rnd.Next(3) != 0
             ? coerentes[rnd.Next(coerentes.Length)]
             : (SinalDeMovimento)rnd.Next(Enum.GetValues<SinalDeMovimento>().Length);
@@ -935,8 +1905,16 @@ internal static class InvariantesTestes
         PassosDoGestoMaximo = 5,
     };
 
-    /// <summary>As preferências como a carga deve guardá-las: nível fora do enum vira Média (R1).</summary>
-    private static Preferencias Saneadas(Preferencias p) => Enum.IsDefined(p.Energia) ? p : p with { Energia = NivelDeEnergia.Media };
+    /// <summary>As preferências como a carga deve guardá-las: nível fora do enum vira Média, e emoção fora das 14 caras de humor, a automática (R1).</summary>
+    private static Preferencias Saneadas(Preferencias p)
+    {
+        if (!Enum.IsDefined(p.Energia)) p = p with { Energia = NivelDeEnergia.Media };
+        if (p.EmocaoDominante is { } e && !DeHumor(e)) p = p with { EmocaoDominante = null };
+        return p;
+    }
+
+    /// <summary>As 14 caras de humor são os valores de 0 (Neutro) a 13 (Determinado), escritos aqui à parte do núcleo.</summary>
+    private static bool DeHumor(Expressao e) => (int)e is >= 0 and <= 13;
 
     private static TimeSpan Maior(TimeSpan a, TimeSpan b) => a > b ? a : b;
 

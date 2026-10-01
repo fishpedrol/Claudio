@@ -182,6 +182,9 @@ public sealed class TestesDaListaProibida
         ];
         foreach (string funcao in doAdaptador)
             Afirmar.Nulo(ListaProibida.ProcurarNativa("user32.dll", funcao), funcao);
+        // Configuração de vídeo, só leitura, para a chave estável do monitor (DEC-030; ARCHITECTURE.md 2.13.3).
+        foreach (string funcao in new[] { "GetDisplayConfigBufferSizes", "QueryDisplayConfig", "DisplayConfigGetDeviceInfo" })
+            Afirmar.Nulo(ListaProibida.ProcurarNativa("user32.dll", funcao), funcao);
         Afirmar.Nulo(ListaProibida.ProcurarNativa("shell32.dll", "Shell_NotifyIconW"));
         Afirmar.Nulo(ListaProibida.ProcurarNativa("shcore.dll", "GetDpiForMonitor"));
         Afirmar.Nulo(ListaProibida.ProcurarNativa("kernel32.dll", "GetModuleFileNameW"));

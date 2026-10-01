@@ -55,7 +55,7 @@ internal sealed class GestosTestes
         MonitorDoDesktop principal = topologia.Principal;
         PontoPx ancora = Ancora(antes);
         var pegada = new PontoPx(opaco.X - ancora.X, opaco.Y - ancora.Y);
-        long marca = BuzzyEmTeste.TamanhoDoLog();
+        long marca = BuzzyEmTeste.MarcaDoLog();
 
         b.PostarMouse(NativoTeste.WM_LBUTTONDOWN, NativoTeste.MK_LBUTTON, opaco);
         Nucleo(b, marca, "Press", "", "Pressed", 3000, "PRESS no ponto opaco");
@@ -104,7 +104,7 @@ internal sealed class GestosTestes
     {
         using BuzzyEmTeste b = BuzzyEmTeste.Iniciar();
         (PontoPx opaco, RetanguloPx antes) = Preparar(b);
-        long marca = BuzzyEmTeste.TamanhoDoLog();
+        long marca = BuzzyEmTeste.MarcaDoLog();
 
         // Clique: reação curta, e depois a validação de volta ao repouso.
         b.PostarMouse(NativoTeste.WM_LBUTTONDOWN, NativoTeste.MK_LBUTTON, opaco);
@@ -114,7 +114,7 @@ internal sealed class GestosTestes
         Afirmar.Igual(antes, b.RetanguloDaJanela(), "o clique não move o personagem");
 
         // Clique duplo: o segundo pressionar chega bem antes do tempo de clique duplo.
-        long marcaDupla = BuzzyEmTeste.TamanhoDoLog();
+        long marcaDupla = BuzzyEmTeste.MarcaDoLog();
         foreach (int msg in new[] { NativoTeste.WM_LBUTTONDOWN, NativoTeste.WM_LBUTTONUP, NativoTeste.WM_LBUTTONDOWN, NativoTeste.WM_LBUTTONUP })
             b.PostarMouse(msg, msg == NativoTeste.WM_LBUTTONDOWN ? NativoTeste.MK_LBUTTON : 0, opaco);
         Nucleo(b, marcaDupla, "Click", "Pressed", "Reacting", 3000, "primeiro clique, na hora");
@@ -126,13 +126,13 @@ internal sealed class GestosTestes
 
         // Outro clique duplo tira do esconderijo, numa posição onde a cabeça aparece: o miolo de baixo do quadro.
         var cabeca = new PontoPx((antes.Esquerda + antes.Direita) / 2, antes.Base - 20);
-        long marcaSaida = BuzzyEmTeste.TamanhoDoLog();
+        long marcaSaida = BuzzyEmTeste.MarcaDoLog();
         foreach (int msg in new[] { NativoTeste.WM_LBUTTONDOWN, NativoTeste.WM_LBUTTONUP, NativoTeste.WM_LBUTTONDOWN, NativoTeste.WM_LBUTTONUP })
             b.PostarMouse(msg, msg == NativoTeste.WM_LBUTTONDOWN ? NativoTeste.MK_LBUTTON : 0, cabeca);
         Nucleo(b, marcaSaida, "DoubleClick", "Settling", "Idle", 3000, "saiu do esconderijo, de pé no chão");
 
         // Botão direito: o mesmo menu da Fase 1, pela arbitragem; fechado sem teclado.
-        long marcaMenu = BuzzyEmTeste.TamanhoDoLog();
+        long marcaMenu = BuzzyEmTeste.MarcaDoLog();
         b.PostarMouse(NativoTeste.WM_RBUTTONDOWN, 0, opaco);
         b.PostarMouse(NativoTeste.WM_RBUTTONUP, 0, opaco);
         EsperarDesde(b, marcaMenu, e => e.Chave == "MENU" && e["aberto"] == "personagem", 3000, "menu aberto pelo botão direito");
@@ -154,7 +154,7 @@ internal sealed class GestosTestes
         (PontoPx opaco, RetanguloPx antes) = Preparar(b);
         PontoPx ancora = Ancora(antes);
         var pegada = new PontoPx(opaco.X - ancora.X, opaco.Y - ancora.Y);
-        long marca = BuzzyEmTeste.TamanhoDoLog();
+        long marca = BuzzyEmTeste.MarcaDoLog();
 
         b.PostarMouse(NativoTeste.WM_LBUTTONDOWN, NativoTeste.MK_LBUTTON, opaco);
         var longe = new PontoPx(opaco.X - 120, opaco.Y);
@@ -177,7 +177,7 @@ internal sealed class GestosTestes
         Afirmar.Igual(arrastado, b.RetanguloDaJanela(), "movimento depois da captura perdida não move o personagem");
 
         // E o próximo clique funciona.
-        long marcaClique = BuzzyEmTeste.TamanhoDoLog();
+        long marcaClique = BuzzyEmTeste.MarcaDoLog();
         PontoPx opacoAgora = new(arrastado.Esquerda + (opaco.X - antes.Esquerda), arrastado.Topo + (opaco.Y - antes.Topo));
         b.PostarMouse(NativoTeste.WM_LBUTTONDOWN, NativoTeste.MK_LBUTTON, opacoAgora);
         b.PostarMouse(NativoTeste.WM_LBUTTONUP, 0, opacoAgora);

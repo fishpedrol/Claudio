@@ -84,10 +84,24 @@ public sealed class Tela
         foreach ((int x, int y) in novos) this[x, y] = contorno;
     }
 
-    /// <summary>Aplica um carimbo com o canto superior esquerdo em (x, y).</summary>
-    public void Carimbar(Carimbo carimbo, int x, int y, bool espelhar = false)
+    /// <summary>
+    /// Aplica um carimbo com o canto superior esquerdo em (x, y). Com <paramref name="linhaInterna"/>,
+    /// antes pinta dessa cor os pixels já desenhados que encostam no carimbo (vizinhança de 4) sem
+    /// fazer parte dele, como em <see cref="Pintar"/>: a linha separa o carimbo do que fica atrás.
+    /// </summary>
+    public void Carimbar(Carimbo carimbo, int x, int y, bool espelhar = false, Cor? linhaInterna = null)
     {
         ArgumentNullException.ThrowIfNull(carimbo);
+        if (linhaInterna is { } linha)
+        {
+            bool NoCarimbo(int px, int py) => carimbo[espelhar ? carimbo.Largura - 1 - (px - x) : px - x, py - y] is not null;
+            var bordas = new List<(int X, int Y)>();
+            for (int py = y - 1; py <= y + carimbo.Altura; py++)
+                for (int px = x - 1; px <= x + carimbo.Largura; px++)
+                    if (!NoCarimbo(px, py) && Opaco(px, py) && (NoCarimbo(px - 1, py) || NoCarimbo(px + 1, py) || NoCarimbo(px, py - 1) || NoCarimbo(px, py + 1)))
+                        bordas.Add((px, py));
+            foreach ((int px, int py) in bordas) this[px, py] = linha;
+        }
         for (int cy = 0; cy < carimbo.Altura; cy++)
         {
             for (int cx = 0; cx < carimbo.Largura; cx++)
@@ -96,6 +110,20 @@ public sealed class Tela
                 if (c is { } cor) this[x + cx, y + cy] = cor;
             }
         }
+    }
+
+    /// <summary>
+    /// Uma tela nova com o retângulo de <paramref name="largura"/> × <paramref name="altura"/> a partir
+    /// de (x, y), pixel a pixel; o que cai fora desta tela fica transparente. É o recorte único das
+    /// caras em expressoes.png e dos rostos do menu (DEC-027).
+    /// </summary>
+    public Tela Recortada(int x, int y, int largura, int altura)
+    {
+        var r = new Tela(largura, altura);
+        for (int j = 0; j < altura; j++)
+            for (int i = 0; i < largura; i++)
+                r[i, j] = this[x + i, y + j];
+        return r;
     }
 
     /// <summary>Espelho horizontal da tela inteira.</summary>

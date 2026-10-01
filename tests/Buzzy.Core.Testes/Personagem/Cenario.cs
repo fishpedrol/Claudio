@@ -88,6 +88,8 @@ internal sealed class Cenario
     {
         ConfiguracaoDoNucleo cfg = config ?? new ConfiguracaoDoNucleo();
         if (alvo == Estado.Booting) return new Cenario(cfg);
+        // USING só existe com o tamagotchi (DEC-028): o cenário o liga.
+        if (alvo == Estado.Using) cfg = cfg with { Tamagotchi = true };
 
         Cenario c = Parado(cfg, topologia);
         switch (alvo)
@@ -133,12 +135,48 @@ internal sealed class Cenario
                 c.AplicarCom(cfg with { Acoes = AcoesAutonomas.Andar }, new AutonomyTimer(c.Atual.Geracao))
                     .Aplicar(new MovementSignal(SinalDeMovimento.FimDoChao), new MovementSignal(SinalDeMovimento.ContatoComOChao));
                 break;
+            case Estado.Using:
+                // Invoca uma banana, deixa cair até o chão, pega, arrasta e solta no meio do personagem.
+                c.Aplicar(new CmdSummonItem(Item.Banana));
+                while (c.Atual.Itens.AlgumCaindo) c.Aplicar(new Tick());
+                c.SoltarSobreEle(c.Atual.Itens.Todos[^1].Id);
+                break;
             default:
                 throw new ArgumentException($"{alvo} não é um estado estável para montar cenário.", nameof(alvo));
         }
         Afirmar.Igual(alvo, c.Atual.Estado, $"o cenário chegou a {alvo}");
         return c;
     }
+
+    // ---------------------------------------------------------------- itens (DEC-028)
+
+    /// <summary>
+    /// Onde a âncora de um item fica bem no meio do personagem: o centro do item no centro do sprite dele. Solto ali, o
+    /// item está sobre ele (<see cref="Maquina.SobreOPersonagem"/>).
+    /// </summary>
+    public static PontoPx MeioDoPersonagem(EstadoDoNucleo s, ConfiguracaoDoNucleo config)
+    {
+        Posicionamento l = Afirmar.NaoNulo(s.Lugar, "o personagem tem lugar");
+        int alturaDoItem = config.TamanhoDoItem.ParaPixels(l.Monitor.Dpi).Altura;
+        return new PontoPx(l.Ancora.X, l.Retangulo.Topo + l.Tamanho.Altura / 2 + alturaDoItem / 2);
+    }
+
+    /// <summary>
+    /// O gesto inteiro sobre um item, pela janela dele: pega 10 px acima da âncora, arrasta e solta com a âncora do item
+    /// em <paramref name="ancoraDoItem"/> (o cursor é ela mais a pegada).
+    /// </summary>
+    public Cenario ArrastarItem(int id, PontoPx ancoraDoItem)
+    {
+        ItemNoMundo item = Afirmar.NaoNulo(Atual.Itens.PorId(id), $"o item {id} existe");
+        var pegada = new PontoPx(0, -10);
+        var cursor = new PontoPx(ancoraDoItem.X + pegada.X, ancoraDoItem.Y + pegada.Y);
+        return Aplicar(
+            new ItemPress(id, new PontoPx(item.Lugar.Ancora.X + pegada.X, item.Lugar.Ancora.Y + pegada.Y)),
+            new ItemDragStart(id), new ItemDragMove(id, cursor), new ItemDragEnd(id, cursor));
+    }
+
+    /// <summary>Arrasta o item até o meio do personagem e solta.</summary>
+    public Cenario SoltarSobreEle(int id) => ArrastarItem(id, MeioDoPersonagem(Atual, Config));
 
     // ---------------------------------------------------------------- afirmações
 

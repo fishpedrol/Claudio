@@ -10,35 +10,83 @@ using static Buzzy.Core.Testes.TopologiasDeExemplo;
 namespace Buzzy.Core.Testes.Persistencia;
 
 /// <summary>
-/// Esquema v1 do settings.json (Fase 5, desenho de persistência, seções 4.1 a 4.3): o formato escrito,
-/// byte a byte, a leitura tolerante campo a campo e os casos ilegíveis. A amostra de referência
-/// (<c>Amostras/settings-v1.json</c>) é lida da pasta-fonte, como as reproduções gravadas.
+/// Esquema v3 do settings.json (Fase 5; ARCHITECTURE.md 2.12; SECURITY.md 7; DEC-027 e DEC-029, item 11): o formato
+/// escrito, byte a byte, a leitura tolerante campo a campo e os casos ilegíveis. A v2 acrescentou a emoção dominante
+/// (<c>preferencias.emocaoDominante</c>); a v3, a postura gravada com a posição: a borda do esconderijo
+/// (<c>posicao.esconderijo</c>, DEC-025) e a marca "preso pelo usuário" (<c>posicao.presoPeloUsuario</c>, DEC-024).
+/// Arquivos v1 e v2, sem esses campos, continuam lidos sem aviso. As amostras de referência
+/// (<c>Amostras/settings-v3.json</c>, <c>settings-v2.json</c> e <c>settings-v1.json</c>) são lidas da pasta-fonte,
+/// como as reproduções gravadas.
 /// </summary>
 internal static class EsquemaDeConfiguracoesTestes
 {
     private static readonly TamanhoDip Sprite = new(128, 128);
 
-    // ---------------------------------------------------------------- a amostra v1
+    private const string AmostraV1 = "settings-v1.json", AmostraV2 = "settings-v2.json", AmostraV3 = "settings-v3.json";
+
+    // ---------------------------------------------------------------- as amostras v3, v2 e v1
 
     // A posição S2 (secundário à esquerda, 25% da área útil, no chão) com as preferências padrão
-    // escreve exatamente a amostra: um formato alterado por acidente falha aqui. Como nas
-    // referências, só o fim de linha é normalizado (o Git pode trocar LF por CRLF na amostra).
+    // escreve exatamente a amostra v3, com a emoção "automatica", sem esconderijo e sem estar preso: um formato
+    // alterado por acidente falha aqui. Como nas referências, só o fim de linha é normalizado (o Git pode trocar LF
+    // por CRLF na amostra).
     [Teste]
-    public static void Escrever_ExemploS2_IgualAAmostraV1()
+    public static void Escrever_ExemploS2_IgualAAmostraV3()
     {
         byte[] escrito = EsquemaDeConfiguracoes.Escrever(new ConfiguracoesSalvas(PosicaoS2(), Preferencias.Padrao));
 
-        Afirmar.Igual(Amostra(), Encoding.UTF8.GetString(escrito), "texto escrito");
+        Afirmar.Igual(Amostra(AmostraV3), Encoding.UTF8.GetString(escrito), "texto escrito");
         Afirmar.Falso(escrito.AsSpan().StartsWith((ReadOnlySpan<byte>)[0xEF, 0xBB, 0xBF]), "sem BOM");
         Afirmar.Falso(escrito.Contains((byte)'\r'), "fim de linha \\n, sem \\r");
         Afirmar.Igual((byte)'\n', escrito[^1], "termina com \\n");
+        Afirmar.Igual(3, EsquemaDeConfiguracoes.VersaoAtual, "versão atual");
+
+        // A emoção escolhida sai com o nome da cara em minúsculas, no mesmo lugar.
+        string comEmocao = Encoding.UTF8.GetString(EsquemaDeConfiguracoes.Escrever(new ConfiguracoesSalvas(PosicaoS2(), Preferencias.Padrao with { EmocaoDominante = Expressao.Feliz })));
+        Afirmar.Igual(Amostra(AmostraV3).Replace("\"emocaoDominante\": \"automatica\"", "\"emocaoDominante\": \"feliz\"", StringComparison.Ordinal), comEmocao, "com a emoção Feliz");
+
+        // A postura sai sempre, na posição, depois da âncora: a borda em minúsculas e a marca como booleano.
+        foreach ((LadoDoEsconderijo lado, string nome) in new[] { (LadoDoEsconderijo.Baixo, "baixo"), (LadoDoEsconderijo.Esquerda, "esquerda"), (LadoDoEsconderijo.Direita, "direita") })
+        {
+            string comPostura = Encoding.UTF8.GetString(EsquemaDeConfiguracoes.Escrever(new ConfiguracoesSalvas(PosicaoS2(), Preferencias.Padrao) { Esconderijo = lado, PresoPeloUsuario = true }));
+            Afirmar.Igual(Amostra(AmostraV3).Replace("\"esconderijo\": \"nenhum\"", $"\"esconderijo\": \"{nome}\"", StringComparison.Ordinal)
+                .Replace("\"presoPeloUsuario\": false", "\"presoPeloUsuario\": true", StringComparison.Ordinal), comPostura, $"escondido na borda {nome} e preso");
+        }
     }
 
-    // A amostra, lida do disco como está (com CRLF, se o Git a converteu), volta com os valores exatos.
+    // A amostra v3, lida do disco como está, volta com os valores exatos: a emoção automática, sem esconderijo, solto.
+    [Teste]
+    public static void Ler_AmostraV3_DevolveOsValores()
+    {
+        LeituraDasConfiguracoes lida = EsquemaDeConfiguracoes.Ler(File.ReadAllBytes(CaminhoDaAmostra(AmostraV3)));
+
+        Afirmar.Igual(SituacaoDaLeitura.Valida, lida.Situacao, "situação");
+        Afirmar.Igual(3, lida.Versao, "versão");
+        Afirmar.Sequencia([], lida.Avisos, "avisos");
+        Afirmar.Igual(new ConfiguracoesSalvas(PosicaoS2(), Preferencias.Padrao), lida.Configuracoes, "configurações");
+        Afirmar.Igual((LadoDoEsconderijo.Nenhum, false), (lida.Configuracoes.Esconderijo, lida.Configuracoes.PresoPeloUsuario), "sem esconderijo e solto");
+    }
+
+    // A amostra v2 (o arquivo da emoção dominante, sem a postura), lida do disco como está, volta com os valores exatos,
+    // sem aviso: sem esconderijo e solto, porque ela não tem os campos.
+    [Teste]
+    public static void Ler_AmostraV2_DevolveOsValores()
+    {
+        LeituraDasConfiguracoes lida = EsquemaDeConfiguracoes.Ler(File.ReadAllBytes(CaminhoDaAmostra(AmostraV2)));
+
+        Afirmar.Igual(SituacaoDaLeitura.Valida, lida.Situacao, "situação");
+        Afirmar.Igual(2, lida.Versao, "versão");
+        Afirmar.Sequencia([], lida.Avisos, "avisos");
+        Afirmar.Igual(new ConfiguracoesSalvas(PosicaoS2(), Preferencias.Padrao), lida.Configuracoes, "configurações");
+        Afirmar.Igual((LadoDoEsconderijo.Nenhum, false), (lida.Configuracoes.Esconderijo, lida.Configuracoes.PresoPeloUsuario), "sem os campos: sem esconderijo e solto");
+    }
+
+    // A amostra v1 (o arquivo que a Fase 5 já gravava), lida do disco como está (com CRLF, se o Git a converteu),
+    // volta com os valores exatos: válida, sem aviso, e com a emoção automática, porque ela não tem o campo.
     [Teste]
     public static void Ler_AmostraV1_DevolveOsValores()
     {
-        LeituraDasConfiguracoes lida = EsquemaDeConfiguracoes.Ler(File.ReadAllBytes(CaminhoDaAmostra()));
+        LeituraDasConfiguracoes lida = EsquemaDeConfiguracoes.Ler(File.ReadAllBytes(CaminhoDaAmostra(AmostraV1)));
 
         Afirmar.Igual(SituacaoDaLeitura.Valida, lida.Situacao, "situação");
         Afirmar.Igual(1, lida.Versao, "versão");
@@ -51,6 +99,8 @@ internal static class EsquemaDeConfiguracoesTestes
         Afirmar.Igual(1.0, p.FracaoY, "fração y");
         Afirmar.Igual(new PontoPx(-1440, 1032), p.AncoraAbsoluta, "âncora");
         Afirmar.Igual(new Preferencias(NivelDeEnergia.Media, true, true), lida.Configuracoes.Preferencias, "preferências");
+        Afirmar.Nulo(lida.Configuracoes.Preferencias.EmocaoDominante, "sem o campo, a emoção é a automática");
+        Afirmar.Igual((LadoDoEsconderijo.Nenhum, false), (lida.Configuracoes.Esconderijo, lida.Configuracoes.PresoPeloUsuario), "sem os campos: sem esconderijo e solto");
     }
 
     // Os bytes não dependem da cultura atual: pt-BR (vírgula decimal), uma cultura com o sinal de menos
@@ -59,19 +109,29 @@ internal static class EsquemaDeConfiguracoesTestes
     [Teste]
     public static void Escrever_IndependeDaCultura()
     {
-        var c = new ConfiguracoesSalvas(PosicaoS2() with { FracaoY = 0.123456789012345 }, new Preferencias(NivelDeEnergia.Alta, true, false));
+        var c = new ConfiguracoesSalvas(PosicaoS2() with { FracaoY = 0.123456789012345 }, new Preferencias(NivelDeEnergia.Alta, true, false) { EmocaoDominante = Expressao.Pensativo })
+        {
+            Esconderijo = LadoDoEsconderijo.Direita,
+            PresoPeloUsuario = true,
+        };
         byte[] invariante = Cultura.Com(CultureInfo.InvariantCulture, () => EsquemaDeConfiguracoes.Escrever(c));
         string texto = Encoding.UTF8.GetString(invariante);
         Afirmar.Contem("\"x\": -1440,", texto, "âncora negativa com hífen");
         Afirmar.Contem("\"fracaoX\": 0.25,", texto, "fração com ponto");
         Afirmar.Contem("\"fracaoY\": 0.123456789012345,", texto, "fração no formato mais curto que a reproduz");
+        Afirmar.Contem("\"emocaoDominante\": \"pensativo\"", texto, "emoção em minúsculas ASCII");
+        Afirmar.Contem("\"esconderijo\": \"direita\",", texto, "borda do esconderijo em minúsculas ASCII");
 
         foreach (CultureInfo cultura in new[] { new CultureInfo("pt-BR"), Cultura.ComMenosTipografico(), new CultureInfo("tr-TR") })
         {
             Afirmar.Sequencia(invariante, Cultura.Com(cultura, () => EsquemaDeConfiguracoes.Escrever(c)), $"escrita em {cultura.Name}");
             Afirmar.Igual(c, Cultura.Com(cultura, () => EsquemaDeConfiguracoes.Ler(invariante).Configuracoes), $"leitura em {cultura.Name}");
-            // Em tr-TR, "I" minúsculo é "ı": os nomes da energia continuam reconhecidos sem diferenciar maiúsculas.
+            // Em tr-TR, "I" minúsculo é "ı": os nomes da energia, da emoção e da borda continuam reconhecidos sem diferenciar maiúsculas.
             Afirmar.Igual(NivelDeEnergia.Baixa, Cultura.Com(cultura, () => Ler(ComEnergia("BAIXA")).Configuracoes.Preferencias.Energia), $"BAIXA em {cultura.Name}");
+            Afirmar.Igual<Expressao?>(Expressao.Pensativo, Cultura.Com(cultura, () => Ler(ComEmocao("\"PENSATIVO\"")).Configuracoes.Preferencias.EmocaoDominante), $"PENSATIVO em {cultura.Name}");
+            Afirmar.Igual("determinado", Cultura.Com(cultura, () => EsquemaDeConfiguracoes.NomeDaEmocao(Expressao.Determinado)), $"nome escrito em {cultura.Name}");
+            Afirmar.Igual(LadoDoEsconderijo.Direita, Cultura.Com(cultura, () => Ler(ComPostura("\"DIREITA\"", "true")).Configuracoes.Esconderijo), $"DIREITA em {cultura.Name}");
+            Afirmar.Igual("esquerda", Cultura.Com(cultura, () => EsquemaDeConfiguracoes.NomeDoEsconderijo(LadoDoEsconderijo.Esquerda)), $"borda escrita em {cultura.Name}");
         }
     }
 
@@ -105,6 +165,15 @@ internal static class EsquemaDeConfiguracoesTestes
             ("energia 7", new(boa, new Preferencias((NivelDeEnergia)7, false, false)), new(boa, new Preferencias(NivelDeEnergia.Media, false, false))),
             ("energia -1", new(null, new Preferencias((NivelDeEnergia)(-1), true, false)), new(null, new Preferencias(NivelDeEnergia.Media, true, false))),
             ("preferências nulas", new(boa, null!), new(boa, Preferencias.Padrao)),
+            ("emoção 14, a primeira depois das caras de humor", new(boa, Preferencias.Padrao with { EmocaoDominante = (Expressao)14 }), new(boa, Preferencias.Padrao)),
+            ("emoção -1", new(null, Preferencias.Padrao with { EmocaoDominante = (Expressao)(-1) }), new(null, Preferencias.Padrao)),
+            ("emoção 99 e energia 9", new(boa, new Preferencias((NivelDeEnergia)9, false, true) { EmocaoDominante = (Expressao)99 }), new(boa, new Preferencias(NivelDeEnergia.Media, false, true))),
+            ("emoção Determinado", new(boa, Preferencias.Padrao with { EmocaoDominante = Expressao.Determinado }), new(boa, Preferencias.Padrao with { EmocaoDominante = Expressao.Determinado })),
+            ("escondido e preso", Com(boa) with { Esconderijo = LadoDoEsconderijo.Esquerda, PresoPeloUsuario = true }, Com(boa) with { Esconderijo = LadoDoEsconderijo.Esquerda, PresoPeloUsuario = true }),
+            ("borda 7", Com(boa) with { Esconderijo = (LadoDoEsconderijo)7, PresoPeloUsuario = true }, Com(boa) with { PresoPeloUsuario = true }),
+            ("borda -1", Com(boa) with { Esconderijo = (LadoDoEsconderijo)(-1) }, Com(boa)),
+            ("postura sem posição", Com(null) with { Esconderijo = LadoDoEsconderijo.Baixo, PresoPeloUsuario = true }, Com(null)),
+            ("postura com a chave inválida", Com(boa with { ChaveMonitor = "" }) with { Esconderijo = LadoDoEsconderijo.Direita, PresoPeloUsuario = true }, Com(null)),
         ];
         foreach ((string caso, ConfiguracoesSalvas configuracoes, ConfiguracoesSalvas normalizadas) in casos)
         {
@@ -127,7 +196,7 @@ internal static class EsquemaDeConfiguracoesTestes
     {
         const int Semente = 20260930;
         var mestre = new Random(Semente);
-        int comPosicao = 0, posicaoDescartada = 0, comTela = 0;
+        int comPosicao = 0, posicaoDescartada = 0, comTela = 0, comEmocao = 0, emocaoDescartada = 0, comPostura = 0, posturaDescartada = 0;
         for (int caso = 0; caso < 5000; caso++)
         {
             int sementeDoCaso = mestre.Next();
@@ -140,14 +209,25 @@ internal static class EsquemaDeConfiguracoesTestes
             Verificar(bytes[^1] == '\n' && !bytes.Contains((byte)'\r') && System.Text.Unicode.Utf8.IsValid(bytes) && bytes[0] == '{', () => $"{Onde()}: formato do arquivo");
 
             LeituraDasConfiguracoes lida = EsquemaDeConfiguracoes.Ler(bytes);
-            Verificar(lida.Situacao == SituacaoDaLeitura.Valida && lida.Versao == 1 && lida.MotivoIlegivel is null && lida.Avisos.Count == 0,
+            Verificar(lida.Situacao == SituacaoDaLeitura.Valida && lida.Versao == EsquemaDeConfiguracoes.VersaoAtual && lida.MotivoIlegivel is null && lida.Avisos.Count == 0,
                 () => $"{Onde()}: lida como {lida.Situacao} ({lida.MotivoIlegivel}), avisos: {string.Join(" | ", lida.Avisos)}");
             Verificar(lida.Configuracoes == n, () => $"{Onde()}: lida {Descrever(lida.Configuracoes)}, normalizada {Descrever(n)}");
             Verificar(EsquemaDeConfiguracoes.Escrever(n).AsSpan().SequenceEqual(bytes), () => $"{Onde()}: Escrever(Normalizar(c)) difere de Escrever(c)");
             Verificar(EsquemaDeConfiguracoes.Normalizar(n) == n, () => $"{Onde()}: normalizar de novo mudou");
 
-            // Só valores graváveis.
+            // Só valores graváveis; a emoção de humor sobrevive, e só ela.
             Verificar(Enum.IsDefined(n.Preferencias.Energia), () => $"{Onde()}: energia {n.Preferencias.Energia}");
+            Expressao? emocao = c.Preferencias?.EmocaoDominante;
+            Verificar(n.Preferencias.EmocaoDominante == (emocao is { } e && Expressoes.EhDeHumor(e) ? emocao : null), () => $"{Onde()}: emoção {emocao} normalizada para {n.Preferencias.EmocaoDominante}");
+            if (n.Preferencias.EmocaoDominante is not null) comEmocao++;
+            else if (emocao is not null) emocaoDescartada++;
+
+            // A postura só sobrevive com a posição, e a borda só dentro do enum.
+            LadoDoEsconderijo bordaEsperada = n.Posicao is not null && Enum.IsDefined(c.Esconderijo) ? c.Esconderijo : LadoDoEsconderijo.Nenhum;
+            Verificar(n.Esconderijo == bordaEsperada && n.PresoPeloUsuario == (n.Posicao is not null && c.PresoPeloUsuario),
+                () => $"{Onde()}: postura {c.Esconderijo}/{c.PresoPeloUsuario} normalizada para {n.Esconderijo}/{n.PresoPeloUsuario}");
+            if (n.Esconderijo != LadoDoEsconderijo.Nenhum || n.PresoPeloUsuario) comPostura++;
+            else if (c.Esconderijo != LadoDoEsconderijo.Nenhum || c.PresoPeloUsuario) posturaDescartada++;
             if (c.Posicao is not null) comPosicao++;
             if (n.Posicao is not { } p)
             {
@@ -161,8 +241,12 @@ internal static class EsquemaDeConfiguracoesTestes
             Verificar(NaFaixa(p.AncoraAbsoluta.X) && NaFaixa(p.AncoraAbsoluta.Y), () => $"{Onde()}: âncora");
             Verificar(p.TelaDoMonitor is not { } t || (!t.Vazio && NaFaixa(t.Esquerda) && NaFaixa(t.Topo) && NaFaixa(t.Direita) && NaFaixa(t.Base)), () => $"{Onde()}: tela");
         }
-        Console.WriteLine($"         {comPosicao} com posição ({posicaoDescartada} descartadas pela chave), {comTela} com a tela do monitor gravada");
+        Console.WriteLine($"         {comPosicao} com posição ({posicaoDescartada} descartadas pela chave), {comTela} com a tela do monitor gravada, "
+            + $"{comEmocao} com emoção dominante ({emocaoDescartada} fora das 14, que viram automática), "
+            + $"{comPostura} com esconderijo ou preso ({posturaDescartada} descartadas sem a posição ou fora do enum)");
         Afirmar.Verdadeiro(posicaoDescartada > 100 && comPosicao - posicaoDescartada > 1000 && comTela > 500, "o gerador exercita posições válidas, descartadas e com tela");
+        Afirmar.Verdadeiro(comEmocao > 1000 && emocaoDescartada > 100, "o gerador exercita emoções de humor e fora das 14");
+        Afirmar.Verdadeiro(comPostura > 1000 && posturaDescartada > 100, "o gerador exercita a postura gravada e a descartada");
     }
 
     // S1 a S7 pelo arquivo: em cada monitor das sete topologias, a posição descrita como a execução a grava
@@ -279,7 +363,7 @@ internal static class EsquemaDeConfiguracoesTestes
     public static void Ler_BomComentarioEVirgulaFinal_Aceitos()
     {
         ConfiguracoesSalvas amostra = new(PosicaoS2(), Preferencias.Padrao);
-        byte[] amostraComBom = [0xEF, 0xBB, 0xBF, .. File.ReadAllBytes(CaminhoDaAmostra())];
+        byte[] amostraComBom = [0xEF, 0xBB, 0xBF, .. File.ReadAllBytes(CaminhoDaAmostra(AmostraV3))];
         LeituraDasConfiguracoes comBom = EsquemaDeConfiguracoes.Ler(amostraComBom);
         Afirmar.Igual(SituacaoDaLeitura.Valida, comBom.Situacao, "BOM");
         Afirmar.Igual(amostra, comBom.Configuracoes, "BOM: os mesmos valores");
@@ -518,30 +602,230 @@ internal static class EsquemaDeConfiguracoesTestes
     }
 
     // Versão futura (a Fase 8 amplia o esquema e incrementa a versão): os campos conhecidos são lidos pelas
-    // regras da v1, os novos são ignorados, e a situação avisa a raiz para não gravar por cima.
+    // regras da v3, os novos são ignorados, e a situação avisa a raiz para não gravar por cima. A v3 é a atual, e a v2
+    // e a v1, as anteriores: as três são válidas.
     [Teste]
     public static void Ler_VersaoFutura_LeOQueConhece()
     {
         LeituraDasConfiguracoes lida = Ler("""
-            {"schemaVersion": 2, "posicao": {"chaveMonitor": "a", "fracaoX": 0.25, "fracaoY": 1, "monitorPreferido": "b"},
-             "preferencias": {"energia": "baixa", "volume": 7}, "janelaDeConfiguracoes": {"largura": 400}}
+            {"schemaVersion": 4, "posicao": {"chaveMonitor": "a", "fracaoX": 0.25, "fracaoY": 1, "monitorPreferido": "b", "esconderijo": "esquerda", "presoPeloUsuario": true},
+             "preferencias": {"energia": "baixa", "volume": 7, "emocaoDominante": "travesso"}, "janelaDeConfiguracoes": {"largura": 400}}
             """);
         Afirmar.Igual(SituacaoDaLeitura.VersaoFutura, lida.Situacao, "situação");
-        Afirmar.Igual(2, lida.Versao, "versão");
+        Afirmar.Igual(4, lida.Versao, "versão");
         Afirmar.Nulo(lida.MotivoIlegivel, "motivo");
-        Afirmar.Igual(new ConfiguracoesSalvas(new PosicaoDoPersonagem("a", 0.25, 1, default), new Preferencias(NivelDeEnergia.Baixa, true, true)),
-            lida.Configuracoes, "valores da v1");
+        Afirmar.Igual(new ConfiguracoesSalvas(new PosicaoDoPersonagem("a", 0.25, 1, default), new Preferencias(NivelDeEnergia.Baixa, true, true) { EmocaoDominante = Expressao.Travesso })
+            {
+                Esconderijo = LadoDoEsconderijo.Esquerda,
+                PresoPeloUsuario = true,
+            },
+            lida.Configuracoes, "valores da v3");
 
         Afirmar.Igual(SituacaoDaLeitura.VersaoFutura, Ler("""{"schemaVersion": 2147483647}""").Situacao, "a maior versão possível");
-        Afirmar.Igual(SituacaoDaLeitura.Valida, Ler("""{"schemaVersion": 1}""").Situacao, "a versão atual");
-        Afirmar.Igual(1, EsquemaDeConfiguracoes.VersaoAtual, "versão atual");
+        Afirmar.Igual(SituacaoDaLeitura.Valida, Ler("""{"schemaVersion": 3}""").Situacao, "a versão atual");
+        Afirmar.Igual(SituacaoDaLeitura.Valida, Ler("""{"schemaVersion": 2}""").Situacao, "a versão anterior, sem a postura");
+        Afirmar.Igual(SituacaoDaLeitura.Valida, Ler("""{"schemaVersion": 1}""").Situacao, "a primeira, sem a emoção");
+        Afirmar.Igual(3, EsquemaDeConfiguracoes.VersaoAtual, "versão atual");
     }
+
+    // Arquivos v1 e v2 (sem a postura) são lidos sem migração e sem aviso: sem esconderijo e solto. Com os campos nulos,
+    // também: a borda nula vale nenhuma sem aviso (como a emoção nula); a marca nula, como os outros booleanos, vale o
+    // padrão com aviso.
+    [Teste]
+    public static void Ler_V1EV2_SemPostura_SemEsconderijoESoltoSemAviso()
+    {
+        const string Posicao = "\"chaveMonitor\": \"a\", \"fracaoX\": 0.5, \"fracaoY\": 1";
+        foreach (int versao in new[] { 1, 2 })
+        {
+            LeituraDasConfiguracoes antiga = Ler($$$"""{"schemaVersion": {{{versao}}}, "posicao": { {{{Posicao}}} }}""");
+            Afirmar.Igual(SituacaoDaLeitura.Valida, antiga.Situacao, $"v{versao}: válida");
+            Afirmar.Sequencia([], antiga.Avisos, $"v{versao}: sem aviso");
+            Afirmar.Igual(new ConfiguracoesSalvas(new PosicaoDoPersonagem("a", 0.5, 1, default), Preferencias.Padrao), antiga.Configuracoes, $"v{versao}: sem esconderijo e solto");
+        }
+
+        LeituraDasConfiguracoes nulos = Ler($$$"""{"schemaVersion": 3, "posicao": { {{{Posicao}}}, "esconderijo": null, "presoPeloUsuario": null }}""");
+        Afirmar.Igual((LadoDoEsconderijo.Nenhum, false), (nulos.Configuracoes.Esconderijo, nulos.Configuracoes.PresoPeloUsuario), "nulos: os padrões");
+        Afirmar.Sequencia(["posicao.presoPeloUsuario: não é true nem false; vale o padrão"], nulos.Avisos, "só a marca nula avisa");
+    }
+
+    // A borda só pelos quatro nomes ("nenhum", "baixo", "esquerda" e "direita"), sem diferenciar maiúsculas e nunca pelo
+    // Enum.Parse; a marca só como booleano. Outro valor vale o padrão (nenhuma borda, solto), com um aviso que não repete o
+    // valor do arquivo, e a posição continua: a postura é opcional.
+    [Teste]
+    public static void Ler_Postura_SoOsNomesDaBordaEUmBooleano()
+    {
+        (string Texto, LadoDoEsconderijo Lado)[] aceitos =
+        [
+            ("nenhum", LadoDoEsconderijo.Nenhum), ("baixo", LadoDoEsconderijo.Baixo), ("ESQUERDA", LadoDoEsconderijo.Esquerda), ("Direita", LadoDoEsconderijo.Direita),
+        ];
+        foreach ((string texto, LadoDoEsconderijo lado) in aceitos)
+        {
+            Afirmar.Verdadeiro(EsquemaDeConfiguracoes.TentarLerEsconderijo(texto, out LadoDoEsconderijo lido), $"\"{texto}\" aceito");
+            Afirmar.Igual(lado, lido, $"\"{texto}\"");
+            LeituraDasConfiguracoes lida = Ler(ComPostura($"\"{texto}\"", "true"));
+            Afirmar.Igual((lado, true), (lida.Configuracoes.Esconderijo, lida.Configuracoes.PresoPeloUsuario), $"\"{texto}\" no arquivo");
+            Afirmar.Sequencia([], lida.Avisos, $"\"{texto}\": sem aviso");
+        }
+        Afirmar.Sequencia(["nenhum", "baixo", "esquerda", "direita", "nenhum", "nenhum"],
+            new[] { LadoDoEsconderijo.Nenhum, LadoDoEsconderijo.Baixo, LadoDoEsconderijo.Esquerda, LadoDoEsconderijo.Direita, (LadoDoEsconderijo)7, (LadoDoEsconderijo)(-1) }
+                .Select(EsquemaDeConfiguracoes.NomeDoEsconderijo), "nomes escritos; fora do enum, nenhum");
+
+        string[] recusados = ["1", "0", "Baixo,Direita", " baixo", "baixo ", "em cima", "cima", "", "Direita\u0000", "dİreita"];
+        foreach (string texto in recusados)
+        {
+            string caso = $"\"{JsonEncodedText.Encode(texto)}\"";
+            Afirmar.Falso(EsquemaDeConfiguracoes.TentarLerEsconderijo(texto, out LadoDoEsconderijo lido), $"{caso} recusado");
+            Afirmar.Igual(LadoDoEsconderijo.Nenhum, lido, $"{caso}: nenhum");
+            LeituraDasConfiguracoes lida = Ler(ComPostura(caso, "false"));
+            Afirmar.NaoNulo(lida.Configuracoes.Posicao, $"{caso}: a posição continua");
+            Afirmar.Igual(LadoDoEsconderijo.Nenhum, lida.Configuracoes.Esconderijo, $"{caso} no arquivo: nenhum");
+            Afirmar.Sequencia(["posicao.esconderijo: não é nenhum, baixo, esquerda nem direita; vale nenhum"], lida.Avisos, $"{caso}: aviso");
+            if (texto.Length > 0) Afirmar.Falso(lida.Avisos[0].Contains(texto, StringComparison.Ordinal) && !"posicao.esconderijo: não é nenhum, baixo, esquerda nem direita; vale nenhum".Contains(texto, StringComparison.Ordinal),
+                $"{caso}: o aviso não repete o valor do arquivo");
+        }
+        foreach (string json in new[] { "2", "true", "[\"baixo\"]", "{\"lado\": \"baixo\"}" })
+        {
+            LeituraDasConfiguracoes lida = Ler(ComPostura(json, "true"));
+            Afirmar.Igual((LadoDoEsconderijo.Nenhum, true), (lida.Configuracoes.Esconderijo, lida.Configuracoes.PresoPeloUsuario), $"esconderijo {json}: nenhum, a marca lida");
+            Afirmar.Igual(1, lida.Avisos.Count, $"esconderijo {json}: aviso");
+        }
+        foreach (string json in new[] { "\"sim\"", "1", "0", "\"true\"", "[true]" })
+        {
+            LeituraDasConfiguracoes lida = Ler(ComPostura("\"baixo\"", json));
+            Afirmar.Igual((LadoDoEsconderijo.Baixo, false), (lida.Configuracoes.Esconderijo, lida.Configuracoes.PresoPeloUsuario), $"presoPeloUsuario {json}: solto, a borda lida");
+            Afirmar.Sequencia(["posicao.presoPeloUsuario: não é true nem false; vale o padrão"], lida.Avisos, $"presoPeloUsuario {json}: aviso");
+        }
+    }
+
+    // A postura vive dentro da posição: sem uma posição válida (chave ou fração inválida), ela também não vale.
+    [Teste]
+    public static void Ler_PosturaSemPosicaoValida_Descartada()
+    {
+        LeituraDasConfiguracoes semChave = Ler("""{"schemaVersion": 3, "posicao": {"fracaoX": 0.5, "fracaoY": 1, "esconderijo": "baixo", "presoPeloUsuario": true}}""");
+        Afirmar.Nulo(semChave.Configuracoes.Posicao, "sem chave, sem posição");
+        Afirmar.Igual((LadoDoEsconderijo.Nenhum, false), (semChave.Configuracoes.Esconderijo, semChave.Configuracoes.PresoPeloUsuario), "sem posição, sem postura");
+        Afirmar.Igual(ConfiguracoesSalvas.Padrao, semChave.Configuracoes, "as configurações padrão");
+    }
+
+    // A captura da leitura é estreita (DEC-029, adiado para o passo P7): só a falha de transcodificação de um texto lido
+    // do arquivo, um escape de surrogate solto, torna o arquivo ilegível ("json"), sem lançar. Um defeito da leitura, de
+    // outro tipo, não fica escondido como arquivo ilegível (que a gravação seguinte trocaria pela cópia de diagnóstico,
+    // perdendo a posição): ele escapa, e a partida desliga a persistência. Num valor de texto, o escape solto sempre torna
+    // o arquivo ilegível; num nome de campo, depende de como o System.Text.Json o compara com os nomes do esquema (às
+    // vezes só não é igual a nenhum, e o campo é desconhecido): o que vale é nunca lançar.
+    [Teste]
+    public static void Ler_SurrogateSolto_IlegivelOuCampoDesconhecido_SemLancar()
+    {
+        string[] valores =
+        [
+            """{"schemaVersion": 3, "preferencias": {"energia": "\uD800"}}""",
+            """{"schemaVersion": 3, "preferencias": {"emocaoDominante": "fe\uDBFFliz"}}""",
+            """{"schemaVersion": 3, "posicao": {"chaveMonitor": "a", "fracaoX": 0.5, "fracaoY": 1, "esconderijo": "\uD83D"}}""",
+            """{"schemaVersion": 3, "posicao": {"chaveMonitor": "a\uDC00", "fracaoX": 0.5, "fracaoY": 1}}""",
+        ];
+        foreach (string json in valores)
+            AfirmarIlegivel(Ler(json), "json", json);
+
+        int desconhecidos = 0, ilegiveis = 0;
+        foreach (string json in new[] { """{"schemaVersion": 3, "\uD800": 1}""", """{"schemaVersion": 3, "posicao": {"\uDC00x": 1, "chaveMonitor": "a", "fracaoX": 0.5, "fracaoY": 1}}""" })
+        {
+            LeituraDasConfiguracoes lida = Ler(json);
+            if (lida.Situacao == SituacaoDaLeitura.Valida)
+            {
+                Afirmar.Igual(1, lida.Avisos.Count, $"{json}: válido, com um campo desconhecido");
+                desconhecidos++;
+            }
+            else
+            {
+                AfirmarIlegivel(lida, "json", json);
+                ilegiveis++;
+            }
+        }
+        Console.WriteLine($"         nomes com escape solto: {desconhecidos} campo(s) desconhecido(s), {ilegiveis} ilegível(is)");
+    }
+
+    // Um arquivo v1 (sem o campo da emoção) é lido sem migração e sem aviso: a emoção é a automática, e o resto vale
+    // como sempre. Com o campo nulo, também automática, sem aviso.
+    [Teste]
+    public static void Ler_V1_SemEmocao_ValeAutomaticaSemAviso()
+    {
+        LeituraDasConfiguracoes v1 = Ler("""{"schemaVersion": 1, "preferencias": {"energia": "alta", "modoTelaCheia": false, "atravessarMonitores": false}}""");
+        Afirmar.Igual(SituacaoDaLeitura.Valida, v1.Situacao, "v1: válida");
+        Afirmar.Igual(1, v1.Versao, "v1: versão");
+        Afirmar.Sequencia([], v1.Avisos, "v1: sem aviso");
+        Afirmar.Igual(new ConfiguracoesSalvas(null, new Preferencias(NivelDeEnergia.Alta, false, false)), v1.Configuracoes, "v1: automática, o resto lido");
+
+        LeituraDasConfiguracoes nula = Ler("""{"schemaVersion": 2, "preferencias": {"energia": "alta", "emocaoDominante": null}}""");
+        Afirmar.Nulo(nula.Configuracoes.Preferencias.EmocaoDominante, "nula: automática");
+        Afirmar.Sequencia([], nula.Avisos, "nula: sem aviso");
+    }
+
+    // A emoção só pelos 14 nomes das caras de humor ou "automatica", sem diferenciar maiúsculas, e nunca pelo
+    // Enum.Parse (SECURITY.md 7, como a energia). Qualquer outro valor (as caras de efeito que vêm depois, um número,
+    // um booleano, texto vazio, um nome com acento ou espaço, uma lista) vale "automática", com um aviso que não
+    // repete o valor do arquivo. Os nomes escritos são os do enum em minúsculas.
+    [Teste]
+    public static void Ler_Emocao_SoOs14NomesOuAutomatica()
+    {
+        string[] nomes = ["neutro", "feliz", "rindo", "curioso", "surpreso", "assustado", "sonolento", "bocejando", "dormindo", "travesso", "entediado", "pensativo", "empolgado", "determinado"];
+        Afirmar.Sequencia(nomes, Expressoes.DeHumor.Select(e => EsquemaDeConfiguracoes.NomeDaEmocao(e)), "nomes escritos, na ordem das caras de humor");
+        Afirmar.Igual("automatica", EsquemaDeConfiguracoes.NomeDaEmocao(null), "a automática");
+        foreach (int fora in new[] { 14, 99, -1 })
+            Afirmar.Igual("automatica", EsquemaDeConfiguracoes.NomeDaEmocao((Expressao)fora), $"fora das 14 ({fora}): automatica");
+
+        for (int i = 0; i < nomes.Length; i++)
+        {
+            foreach (string texto in new[] { nomes[i], nomes[i].ToUpperInvariant(), char.ToUpperInvariant(nomes[i][0]) + nomes[i][1..] })
+            {
+                Afirmar.Verdadeiro(EsquemaDeConfiguracoes.TentarLerEmocao(texto, out Expressao? lida), $"\"{texto}\" aceito");
+                Afirmar.Igual<Expressao?>(Expressoes.DeHumor[i], lida, $"\"{texto}\"");
+                LeituraDasConfiguracoes noArquivo = Ler(ComEmocao($"\"{texto}\""));
+                Afirmar.Igual<Expressao?>(Expressoes.DeHumor[i], noArquivo.Configuracoes.Preferencias.EmocaoDominante, $"\"{texto}\" no arquivo");
+                Afirmar.Sequencia([], noArquivo.Avisos, $"\"{texto}\": sem aviso");
+            }
+        }
+        foreach (string texto in new[] { "automatica", "AUTOMATICA", "Automatica" })
+        {
+            Afirmar.Verdadeiro(EsquemaDeConfiguracoes.TentarLerEmocao(texto, out Expressao? lida), $"\"{texto}\" aceito");
+            Afirmar.Nulo(lida, $"\"{texto}\": automática");
+            Afirmar.Sequencia([], Ler(ComEmocao($"\"{texto}\"")).Avisos, $"\"{texto}\": sem aviso");
+        }
+
+        string[] recusados = ["bebado", "eletrico", "zangado", "", " feliz", "feliz ", "fe liz", "feliz,rindo", "Feliz, Rindo", "1", "0", "13", "automática", "Automática", "neutral", "feliz\u0000", "FELİZ"];
+        foreach (string texto in recusados)
+        {
+            string caso = $"\"{JsonEncodedText.Encode(texto)}\"";
+            Afirmar.Falso(EsquemaDeConfiguracoes.TentarLerEmocao(texto, out Expressao? lida), $"{caso} recusado");
+            Afirmar.Nulo(lida, $"{caso}: automática");
+            AfirmarEmocaoRecusada(Ler(ComEmocao(caso)), caso, texto);
+        }
+        foreach (string json in new[] { "3", "0", "true", "false", "[\"feliz\"]", "{\"nome\": \"feliz\"}", "1.5" })
+            AfirmarEmocaoRecusada(Ler(ComEmocao(json)), json, json);
+    }
+
+    private static void AfirmarEmocaoRecusada(LeituraDasConfiguracoes lida, string caso, string doArquivo)
+    {
+        Afirmar.Igual(SituacaoDaLeitura.Valida, lida.Situacao, $"{caso}: o arquivo continua válido");
+        Afirmar.Nulo(lida.Configuracoes.Preferencias.EmocaoDominante, $"{caso} no arquivo: automática");
+        Afirmar.Igual(NivelDeEnergia.Alta, lida.Configuracoes.Preferencias.Energia, $"{caso}: o resto das preferências continua valendo");
+        Afirmar.Sequencia(["preferencias.emocaoDominante: não é uma das expressões; vale automatica"], lida.Avisos, $"{caso}: aviso");
+        if (doArquivo.Length > 0 && !"preferencias.emocaoDominante: não é uma das expressões; vale automatica".Contains(doArquivo, StringComparison.Ordinal))
+            Afirmar.Falso(lida.Avisos[0].Contains(doArquivo, StringComparison.Ordinal), $"{caso}: o aviso não repete o valor do arquivo");
+    }
+
+    /// <summary>Documento com a energia alta e a emoção dada como JSON (um texto já entre aspas, um número, uma lista).</summary>
+    private static string ComEmocao(string json) => $$$"""{"schemaVersion": 2, "preferencias": {"energia": "alta", "emocaoDominante": {{{json}}}}}""";
+
+    /// <summary>Documento v3 com uma posição válida e a postura dada como JSON: a borda do esconderijo e a marca de preso.</summary>
+    private static string ComPostura(string esconderijo, string preso)
+        => $$$"""{"schemaVersion": 3, "posicao": {"chaveMonitor": "a", "fracaoX": 0.5, "fracaoY": 1, "esconderijo": {{{esconderijo}}}, "presoPeloUsuario": {{{preso}}}}}""";
 
     // ---------------------------------------------------------------- política de gravação
 
     // Gravação na hora só depois de um evento após o qual o processo pode não ter outra chance (suspensão,
-    // fim de sessão, sair) e no bloqueio de sessão (C7); todos os outros, com atraso. A lista de exemplos
-    // cobre cada tipo concreto de evento do núcleo: um evento novo sem decisão aqui falha.
+    // fim de sessão, sair) e no bloqueio de sessão, porque bloqueado e depois suspenso a suspensão não grava de
+    // novo; todos os outros, com atraso. A lista de exemplos cobre cada tipo concreto de evento do núcleo: um
+    // evento novo sem decisão aqui falha.
     [Teste]
     public static void Politica_Imediata_SoSuspensaoFimDeSessaoSairEBloqueio()
     {
@@ -550,9 +834,13 @@ internal static class EsquemaDeConfiguracoesTestes
             new Press(default), new Click(), new DoubleClick(), new DragStart(), new DragMove(default), new DragEnd(default), new DragCancel(),
             new ContextMenu(default), new EnergyPanelOpen(), new EnergySelected(NivelDeEnergia.Alta), new EnergyPanelClose(),
             new CmdHide(), new CmdShow(), new CmdPauseAutonomy(), new CmdResumeAutonomy(), new CmdOpenSettings(), new CmdResetPosition(), new CmdExit(),
-            new Loaded(UmMonitor, null, Preferencias.Padrao), new TopologyChanged(UmMonitor), new SessionLocked(), new SessionUnlocked(),
+            new CmdSetDominantEmotion(Expressao.Feliz), new Loaded(UmMonitor, null, Preferencias.Padrao), new TopologyChanged(UmMonitor), new SessionLocked(), new SessionUnlocked(),
             new Suspending(), new Resumed(), new SessionEnding(), new FullscreenTargetsChanged(MonitoresOcupados.Nenhum),
             new SettingsChanged(Preferencias.Padrao), new Tick(), new MovementSignal(default), new AutonomyTimer(1), new ExpressionChange(default),
+            new ItemEffectTimer(1),
+            // Os itens do tamagotchi (DEC-028) não gravam nada: nem posição nem preferências (L1 da crítica).
+            new CmdSummonItem(Item.Banana), new CmdClearItems(), new ItemPress(1, default), new ItemDragStart(1), new ItemDragMove(1, default),
+            new ItemDragEnd(1, default), new ItemRelease(1),
         ];
         string[] todos = [.. typeof(Evento).Assembly.GetTypes().Where(t => !t.IsAbstract && t.IsSubclassOf(typeof(Evento))).Select(t => t.Name).Order(StringComparer.Ordinal)];
         Afirmar.Sequencia(todos, exemplos.Select(e => e.GetType().Name).Order(StringComparer.Ordinal), "um exemplo de cada tipo de evento");
@@ -561,11 +849,12 @@ internal static class EsquemaDeConfiguracoesTestes
         Afirmar.Sequencia(["CmdExit", "SessionEnding", "SessionLocked", "Suspending"], imediatos, "imediatos");
     }
 
-    // Tempos da agenda de gravação (desenho de persistência, D11): o atraso de 2 s fica abaixo do intervalo
-    // de acomodação do aplicativo (3 s), para a gravação cair com o personagem parado; depois de uma falha,
-    // novas tentativas únicas em 2, 10 e 60 s; no caminho imediato, 3 tentativas com 50 ms entre elas.
+    // Tempos da agenda de gravação (ARCHITECTURE.md 2.12: "com atraso depois de soltar e sempre ao sair"): o
+    // atraso de 2 s fica abaixo do intervalo de acomodação do aplicativo (3 s), para a gravação cair com o
+    // personagem parado; depois de uma falha, novas tentativas únicas em 2, 10 e 60 s; no caminho imediato, 3
+    // tentativas com 50 ms entre elas.
     [Teste]
-    public static void Politica_TemposDoDesenho()
+    public static void Politica_TemposDaAgendaDeGravacao()
     {
         Afirmar.Igual(TimeSpan.FromSeconds(2), PoliticaDeGravacao.Atraso, "atraso");
         Afirmar.Verdadeiro(PoliticaDeGravacao.Atraso < ConfiguracaoDoNucleo.DoAplicativo(Sprite).IntervaloDeAcomodacao, "atraso menor que o intervalo de acomodação do aplicativo");
@@ -574,9 +863,9 @@ internal static class EsquemaDeConfiguracoesTestes
         Afirmar.Igual(TimeSpan.FromMilliseconds(50), PoliticaDeGravacao.PausaEntreTentativasImediatas, "pausa entre elas");
     }
 
-    // S12 (C7): bloquear a sessão ou suspender com o personagem à vista grava a posição, e a raiz grava na
-    // hora. Bloqueado e depois suspenso, a suspensão não grava de novo (o personagem já está escondido pela
-    // sessão): por isso o bloqueio também é imediato. Escondido pelo usuário, suspender não grava; esconder
+    // S12 (TODO.md, Fase 5): bloquear a sessão ou suspender com o personagem à vista grava a posição, e a raiz
+    // grava na hora. Bloqueado e depois suspenso, a suspensão não grava de novo (o personagem já está escondido
+    // pela sessão): por isso o bloqueio também é imediato. Escondido pelo usuário, suspender não grava; esconder
     // pela bandeja grava com atraso.
     [Teste]
     public static void S12_BloquearESuspender_EmitemGravarPosicaoImediata()
@@ -609,7 +898,9 @@ internal static class EsquemaDeConfiguracoesTestes
     /// Configurações aleatórias, muitas inválidas: posição ausente, chave vazia, nula, longa, com controle,
     /// surrogate solto, aspas, barras e caracteres fora do ASCII; frações NaN, infinitas, -0, subnormais,
     /// enormes ou com bits quaisquer; coordenadas em qualquer ponto de int; tela vazia, invertida ou fora da
-    /// faixa; energia fora do enum; às vezes preferências nulas.
+    /// faixa; energia fora do enum; emoção dominante nula, de humor ou fora das 14; às vezes preferências nulas;
+    /// borda do esconderijo de -1 a 5 (nenhum, as três do enum e fora dele) e a marca de preso, com ou sem posição.
+    /// A emoção e depois a postura são os últimos sorteios, para não mudar os outros.
     /// </summary>
     private static ConfiguracoesSalvas ConfiguracoesAleatorias(Random rnd)
     {
@@ -618,9 +909,18 @@ internal static class EsquemaDeConfiguracoesTestes
             {
                 TelaDoMonitor = rnd.Next(4) == 0 ? null : TelaAleatoria(rnd),
             };
-        Preferencias preferencias = rnd.Next(50) == 0 ? null! : new Preferencias((NivelDeEnergia)rnd.Next(-2, 6), rnd.Next(2) == 0, rnd.Next(2) == 0);
-        return new ConfiguracoesSalvas(posicao, preferencias);
+        Preferencias? preferencias = rnd.Next(50) == 0 ? null : new Preferencias((NivelDeEnergia)rnd.Next(-2, 6), rnd.Next(2) == 0, rnd.Next(2) == 0);
+        if (preferencias is not null) preferencias = preferencias with { EmocaoDominante = EmocaoAleatoria(rnd) };
+        return new ConfiguracoesSalvas(posicao, preferencias!) { Esconderijo = (LadoDoEsconderijo)rnd.Next(-1, 6), PresoPeloUsuario = rnd.Next(2) == 0 };
     }
+
+    /// <summary>Emoção dominante: nula, uma das 14 caras de humor ou um valor fora delas (as caras de efeito que vêm depois, negativos).</summary>
+    internal static Expressao? EmocaoAleatoria(Random rnd) => rnd.Next(6) switch
+    {
+        0 => null,
+        1 => (Expressao)(rnd.Next(2) == 0 ? rnd.Next(14, 30) : rnd.Next(-5, 0)),
+        _ => Expressoes.DeHumor[rnd.Next(Expressoes.DeHumor.Count)],
+    };
 
     private static string ChaveAleatoria(Random rnd) => rnd.Next(12) switch
     {
@@ -710,7 +1010,7 @@ internal static class EsquemaDeConfiguracoesTestes
     {
         string posicao = c.Posicao is not { } p ? "sem posição"
             : string.Create(CultureInfo.InvariantCulture, $"chave \"{(p.ChaveMonitor is null ? "(nula)" : EscaparParaMensagem(p.ChaveMonitor))}\" ({p.ChaveMonitor?.Length}) frações ({p.FracaoX:R}; {p.FracaoY:R}) âncora {p.AncoraAbsoluta} tela {p.TelaDoMonitor?.ToString() ?? "desconhecida"}");
-        return $"{posicao}; preferências {c.Preferencias?.ToString() ?? "(nulas)"}";
+        return $"{posicao}; esconderijo {c.Esconderijo}, preso {c.PresoPeloUsuario}; preferências {c.Preferencias?.ToString() ?? "(nulas)"}";
     }
 
     private static string EscaparParaMensagem(string texto)
@@ -745,13 +1045,13 @@ internal static class EsquemaDeConfiguracoesTestes
     private static PosicaoDoPersonagem PosicaoS2()
         => Posicionador.Descrever(Posicionador.NoMonitor(Afirmar.NaoNulo(SecundarioAEsquerda.PorChave(Display2)), 0.25, 1, Sprite));
 
-    /// <summary>Caminho da amostra v1 na pasta-fonte.</summary>
-    private static string CaminhoDaAmostra() => Path.Combine(ReproducaoTestes.PastaDasFontes(), "Persistencia", "Amostras", "settings-v1.json");
+    /// <summary>Caminho de uma amostra na pasta-fonte.</summary>
+    private static string CaminhoDaAmostra(string nome) => Path.Combine(ReproducaoTestes.PastaDasFontes(), "Persistencia", "Amostras", nome);
 
-    /// <summary>A amostra v1 como texto, em UTF-8 estrito sem BOM e com o fim de linha normalizado para \n.</summary>
-    private static string Amostra()
+    /// <summary>A amostra como texto, em UTF-8 estrito sem BOM e com o fim de linha normalizado para \n.</summary>
+    private static string Amostra(string nome)
     {
-        byte[] bytes = File.ReadAllBytes(CaminhoDaAmostra());
+        byte[] bytes = File.ReadAllBytes(CaminhoDaAmostra(nome));
         Afirmar.Falso(bytes.AsSpan().StartsWith((ReadOnlySpan<byte>)[0xEF, 0xBB, 0xBF]), "a amostra não tem BOM");
         string texto = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true).GetString(bytes);
         return texto.Replace("\r\n", "\n", StringComparison.Ordinal);

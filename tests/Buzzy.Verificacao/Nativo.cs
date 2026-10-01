@@ -215,6 +215,36 @@ internal static class Nativo
     [DllImport("shell32.dll")]
     internal static extern int Shell_NotifyIconGetRect(ref NOTIFYICONIDENTIFIER identifier, out RECT iconLocation);
 
+    // ---- tamagotchi (DEC-028): ordem Z das janelas do Buzzy e objetos GDI e USER dele ----------
+
+    internal const uint GW_HWNDNEXT = 2;
+    internal const uint GR_GDIOBJECTS = 0;
+    internal const uint GR_USEROBJECTS = 1;
+
+    /// <summary>A janela seguinte na ordem Z: só para conferir a ordem das janelas do Buzzy aberto pela verificação.</summary>
+    [DllImport("user32.dll")]
+    internal static extern nint GetWindow(nint hWnd, uint uCmd);
+
+    /// <summary>Quantos objetos GDI ou USER um processo tem abertos: só para o Buzzy que a verificação abriu.</summary>
+    [DllImport("user32.dll")]
+    internal static extern uint GetGuiResources(nint hProcess, uint uiFlags);
+
+    /// <summary>
+    /// Quantas janelas há descendo a ordem Z de <paramref name="de"/> até <paramref name="ate"/> (1 = logo abaixo); -1 se
+    /// <paramref name="ate"/> não está abaixo de <paramref name="de"/>.
+    /// </summary>
+    internal static int PosicoesAbaixo(nint de, nint ate)
+    {
+        nint h = de;
+        for (int i = 1; i <= 1000; i++)
+        {
+            h = GetWindow(h, GW_HWNDNEXT);
+            if (h == 0) return -1;
+            if (h == ate) return i;
+        }
+        return -1;
+    }
+
     internal const uint SPI_GETMOUSECLICKLOCK = 0x101E;
     internal const uint SPI_GETMOUSECLICKLOCKTIME = 0x2008;
 
