@@ -25,7 +25,7 @@ internal static class TabelaDoTamagotchiTestes
 
     // Tabela 4.1 com os verbos e as durações do coordenador: o uso dura os passos do verbo (a sequência de quadros da
     // arte soma o mesmo), a cara durante o uso é de humor, só a água não começa onda (soma 0; os outros, 1 ou 2), e cada item
-    // é de alívio ou de substância como na transcrição.
+    // é de alívio ou de substância, e droga sintética ou não, como na transcrição.
     [Teste]
     public static void TodoItemTemOVerboOsPassosEACaraDaTabela()
     {
@@ -43,6 +43,7 @@ internal static class TabelaDoTamagotchiTestes
             Afirmar.Igual(d.Onda is null, d.Intensidade == 0, $"{onde}: sem onda, intensidade 0; com onda, 1 ou 2");
             Afirmar.Verdadeiro(d.Intensidade is >= 0 and <= 2, $"{onde}: intensidade de 0 a 2");
             Afirmar.Igual(esperado.Alivio, d.Alivio, $"{onde}: de alívio (ou de substância)");
+            Afirmar.Igual(esperado.Sintetica, d.Sintetica, $"{onde}: droga sintética (ou não)");
         }
         Afirmar.Sequencia([Item.Agua], TabelaDoTamagotchi.Itens.Where(i => TabelaDoTamagotchi.DoItem(i).Onda is null), "só a água não começa onda");
 
@@ -95,17 +96,18 @@ internal static class TabelaDoTamagotchiTestes
     }
 
     // O alívio (pedido do usuário de 2026-10-01, decisão do coordenador para a DEC-028), com as listas da decisão: a comida
-    // e a bebida sem álcool (banana, bala, água, café e energético) são de alívio, e os outros oito itens, de substância,
-    // ficam como estão; as ondas do bêbado, do chapado, do elétrico, do eufórico, do tonto, do viajando e do relaxado são de
-    // substância, e as do satisfeito, do alegre e do ligado, leves. A paranoia (outro pedido do mesmo dia) também é de
-    // substância: a comida e a bebida sem álcool a acalmam um passo, como as outras. A classificação do núcleo e a da
-    // transcrição são exatamente essas, e são coerentes: a onda própria de um item de alívio é leve (a água não tem onda), e
-    // a de um item de substância, de substância.
+    // e a bebida sem álcool (banana, água, café e energético) são de alívio, e os outros nove itens, de substância, ficam
+    // como estão. A bala saiu do alívio no mesmo dia: é droga sintética (palavras do usuário, "como bala, md, coca e lança").
+    // As ondas do bêbado, do chapado, do elétrico, do eufórico, do tonto, do viajando e do relaxado são de substância, e as do
+    // satisfeito, do alegre e do ligado, leves. A paranoia (outro pedido do mesmo dia) também é de substância: a comida e a
+    // bebida sem álcool a acalmam um passo, como as outras. A classificação do núcleo e a da transcrição são exatamente
+    // essas, e são coerentes: a onda própria de um item de alívio é leve (a água não tem onda), e a de um item de substância,
+    // de substância.
     [Teste]
     public static void Alivio_AClassificacaoEhExatamenteADaDecisao()
     {
-        Item[] deAlivio = [Item.Banana, Item.Bala, Item.Agua, Item.Cafe, Item.Energetico];
-        Item[] deSubstancia = [Item.Vodka, Item.Cerveja, Item.Cigarro, Item.Baseado, Item.Cocaina, Item.Md, Item.LancaPerfume, Item.Cogumelo];
+        Item[] deAlivio = [Item.Banana, Item.Agua, Item.Cafe, Item.Energetico];
+        Item[] deSubstancia = [Item.Vodka, Item.Cerveja, Item.Cigarro, Item.Baseado, Item.Cocaina, Item.Md, Item.LancaPerfume, Item.Cogumelo, Item.Bala];
         Onda[] ondasDeSubstancia = [Onda.Bebado, Onda.Chapado, Onda.Eletrico, Onda.Euforico, Onda.Tonto, Onda.Viajando, Onda.Relaxado, Onda.Paranoico];
         Onda[] ondasLeves = [Onda.Satisfeito, Onda.Alegre, Onda.Ligado];
         Afirmar.Sequencia(Enum.GetValues<Item>(), deAlivio.Concat(deSubstancia).Order(), "a decisão classifica os 13 itens, cada um uma vez");
@@ -124,6 +126,51 @@ internal static class TabelaDoTamagotchiTestes
             else
                 Afirmar.Igual((Item.Agua, true), (item, d.Alivio), "só a água não tem onda, e ela é de alívio");
         }
+    }
+
+    // As drogas sintéticas (pedido do usuário de 2026-10-01, 18:50: "só quero que ele fique paranoico se misturar substâncias
+    // com alguma droga sintética, como bala, md, coca e lança; usando álcool e maconha não"; decisão do coordenador), com as
+    // listas literais da decisão: a bala, o MD, a cocaína e o lança-perfume são sintéticas; a vodka, a cerveja, o baseado, o
+    // cigarro e o cogumelo são as outras substâncias; a banana, a água, o café e o energético são de alívio. É regra de jogo,
+    // de desenho animado, e dado da tabela, por item. A do núcleo e a da transcrição são essas; nenhuma sintética é de
+    // alívio, e a onda de cada uma é de substância (a comida e a bebida sem álcool a acalmam).
+    [Teste]
+    public static void Sinteticas_AClassificacaoEhExatamenteADaDecisao()
+    {
+        Item[] sinteticas = [Item.Bala, Item.Md, Item.Cocaina, Item.LancaPerfume];
+        Item[] outrasSubstancias = [Item.Vodka, Item.Cerveja, Item.Baseado, Item.Cigarro, Item.Cogumelo];
+        Item[] deAlivio = [Item.Banana, Item.Agua, Item.Cafe, Item.Energetico];
+        Afirmar.Sequencia(Enum.GetValues<Item>(), sinteticas.Concat(outrasSubstancias).Concat(deAlivio).Order(), "a decisão classifica os 13 itens, cada um uma vez");
+
+        Afirmar.Sequencia(sinteticas.Order(), TabelaDoTamagotchi.Itens.Where(i => TabelaDoTamagotchi.DoItem(i).Sintetica).Order(), "as sintéticas do núcleo");
+        Afirmar.Sequencia(outrasSubstancias.Order(), TabelaDoTamagotchi.Itens.Where(i => TabelaDoTamagotchi.DoItem(i) is { Alivio: false, Sintetica: false }).Order(), "as outras substâncias do núcleo");
+        Afirmar.Sequencia(deAlivio.Order(), TabelaDoTamagotchi.Itens.Where(i => TabelaDoTamagotchi.DoItem(i).Alivio).Order(), "os itens de alívio do núcleo");
+        Afirmar.Sequencia(sinteticas.Order(), TabelasDoDesenho.ItensEsperados().Where(i => i.Sintetica).Select(i => i.Item).Order(), "as sintéticas da transcrição");
+        Afirmar.Sequencia(outrasSubstancias.Order(), TabelasDoDesenho.ItensEsperados().Where(i => !i.Alivio && !i.Sintetica).Select(i => i.Item).Order(), "as outras substâncias da transcrição");
+
+        foreach (Item item in sinteticas)
+        {
+            DadosDoItem d = TabelaDoTamagotchi.DoItem(item);
+            Afirmar.Falso(d.Alivio, $"{item}: droga sintética nunca é de alívio");
+            Onda onda = Afirmar.NaoNulo(d.Onda, $"{item}: começa uma onda");
+            Afirmar.Verdadeiro(TabelaDoTamagotchi.DaOnda(onda).DeSubstancia, $"{item}: a onda dela ({onda}) é de substância");
+        }
+    }
+
+    // A bala é droga sintética (palavras do usuário de 2026-10-01): deixou de ser doce de alívio e começa o eufórico, com
+    // intensidade 1 (o MD continua com 2), engolida, com a cara feliz durante o uso (a arte da bala não muda). A onda alegre,
+    // que era dela, fica sem item, mas continua no enum, no mesmo lugar, e na tabela (sem mexer em ordinais).
+    [Teste]
+    public static void Bala_EhDrogaSinteticaComOEuforicoNoNivel1()
+    {
+        DadosDoItem bala = TabelaDoTamagotchi.DoItem(Item.Bala);
+        Afirmar.Igual((VerboDeUso.Engolir, 90, Expressao.Feliz), (bala.Verbo, bala.PassosDoUso, bala.CaraDurante), "a bala é engolida, como antes, com a cara feliz");
+        Afirmar.Igual(((Onda?)Onda.Euforico, 1, false, true), (bala.Onda, bala.Intensidade, bala.Alivio, bala.Sintetica), "a bala: o eufórico no nível 1, droga sintética, fora do alívio");
+        DadosDoItem md = TabelaDoTamagotchi.DoItem(Item.Md);
+        Afirmar.Igual(((Onda?)Onda.Euforico, 2, false, true), (md.Onda, md.Intensidade, md.Alivio, md.Sintetica), "o MD continua com o eufórico no nível 2");
+        Afirmar.Falso(TabelaDoTamagotchi.Itens.Any(i => TabelaDoTamagotchi.DoItem(i).Onda == Onda.Alegre), "nenhum item começa o alegre");
+        Afirmar.Igual(1, (int)Onda.Alegre, "o alegre continua no enum, no mesmo lugar");
+        Afirmar.Igual(Onda.Alegre, TabelaDoTamagotchi.DaOnda(Onda.Alegre).Onda, "e na tabela");
     }
 
     // A cara de cada fase (a queda sem cara própria fica com a do pico) e as durações: a subida e cada nível do pico são
@@ -276,7 +323,8 @@ internal static class TabelaDoTamagotchiTestes
     // A chave do tamagotchi fica desligada por padrão e ligada no aplicativo desde a entrega do app e da arte (D15, passo
     // T9); os pedidos já entregues continuam (o esconderijo no clique duplo, DEC-025). O item tem 48×48 DIP (24×24 px de
     // arte), no máximo 6 ficam na tela, e o alvo do soltar é o sprite encolhido 20% de cada lado; as tabelas são as do
-    // núcleo, trocáveis nos testes. A queda do item usa a gravidade do personagem, com os parâmetros próprios do desenho.
+    // núcleo, trocáveis nos testes, e a chance da paranoia é 1 em 8. A queda do item usa a gravidade do personagem, com os
+    // parâmetros próprios do desenho.
     [Teste]
     public static void Configuracao_ChaveLigadaNoAplicativoEParametrosDoItem()
     {
@@ -290,6 +338,11 @@ internal static class TabelaDoTamagotchiTestes
         Afirmar.Igual(20, padrao.MargemDoAlvo, "margem do alvo, em % de cada lado");
         foreach (Item item in TabelaDoTamagotchi.Itens) Afirmar.Igual(TabelaDoTamagotchi.DoItem(item), padrao.TabelaDeItens(item), $"tabela de itens: {item}");
         foreach (Onda onda in Enum.GetValues<Onda>()) Afirmar.Igual(TabelaDoTamagotchi.DaOnda(onda), padrao.TabelaDeOndas(onda), $"tabela de ondas: {onda}");
+        // A chance da paranoia (pedido do usuário de 2026-10-01, 19:00: "quero que a chance dele ficar paranoico seja de 1 em
+        // 8"), a mesma no aplicativo; os testes podem trocá-la.
+        Afirmar.Igual((1, 8), (padrao.ChanceDaParanoia.Vezes, padrao.ChanceDaParanoia.Em), "a chance da paranoia: 1 em 8");
+        Afirmar.Igual(padrao.ChanceDaParanoia, app.ChanceDaParanoia, "a mesma no aplicativo");
+        Afirmar.Igual("1 em 8", padrao.ChanceDaParanoia.ToString(), "escrita como na decisão");
 
         ParametrosDeMovimento f = padrao.Fisica;
         Afirmar.Igual(140.0, f.AlturaDaQuedaDoItem, "o item nasce 140 DIP acima e cai");

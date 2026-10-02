@@ -311,4 +311,35 @@ internal sealed class PoseDeUsoTestes
         // Sem sobreposição, o quadro é o de sempre.
         Iguais(BonecoPixel.Desenhar(parado, "feliz"), SpriteProvisorio.Compor(new QuadroDoSprite("parado", false, "feliz")), "parado feliz, sem onda");
     }
+
+    // O baseado por conta própria (pedido do usuário de 2026-10-01, 19:10; DEC-028): o núcleo, de verdade, o faz fumar
+    // sozinho, sem item no mundo. A apresentação mostra, passo a passo, o mesmo quadro do baseado solto pelo usuário: a
+    // animação do fumar, com o baseado na mão (a chave da arte, sem janela de item nem Id), a cara da própria pose e, por
+    // cima, a fumaça do chapado, a onda que o baseado começa.
+    [Teste]
+    public void BaseadoPorContaPropria_OQuadroDoBaseadoSoltoPeloUsuario()
+    {
+        var cfg = new ConfiguracaoDoNucleo { Tamagotchi = true, Acoes = AcoesAutonomas.FumarBaseado };
+        var topologia = new Topologia([new MonitorDoDesktop("m1", new RetanguloPx(0, 0, 1920, 1080), new RetanguloPx(0, 0, 1920, 1040), 96, true)]);
+        EstadoDoNucleo s = Maquina.Aplicar(EstadoDoNucleo.Inicial(7), new Loaded(topologia, null, Preferencias.Padrao), cfg).Estado;
+        s = Maquina.Aplicar(s, new AutonomyTimer(s.Geracao), cfg).Estado;
+        Afirmar.Igual(Estado.Using, s.Estado, "fumou por conta própria");
+        Afirmar.Igual(ItensNoMundo.Nenhum, s.Itens, "sem item no mundo");
+        DadosDoItem dados = TabelaDoTamagotchi.DoItem(Item.Baseado);
+        var vistos = new List<string>();
+        for (int passo = 0; passo < dados.PassosDoUso; passo++)
+        {
+            Retrato r = s.Retrato();
+            Afirmar.Igual(passo, r.PassoDoUso, $"passo {passo}");
+            QuadroDoSprite q = PoseDoPersonagem.Escolher(r, passo);
+            QuadroDoSprite solto = PoseDoPersonagem.Escolher(EmUso(Item.Baseado, ApoioDoUso.Chao, passo, onda: r.Onda), passo);
+            Afirmar.Igual(solto, q, $"passo {passo}: o quadro do baseado solto pelo usuário");
+            Afirmar.Igual((UsosPixel.Quadro(Verbo.Fumar, passo).Nome, ChaveDaArte(Item.Baseado), (string?)null, EfeitoVisual.Fumaca),
+                (q.Pose, q.Item, q.Expressao, q.Efeito), $"passo {passo}: fumando, com o baseado na mão, a cara da pose e a fumaça do chapado");
+            if (vistos.Count == 0 || vistos[^1] != q.Pose) vistos.Add(q.Pose);
+            s = Maquina.Aplicar(s, new Tick(), cfg).Estado;
+        }
+        Afirmar.Sequencia(UsosPixel.Sequencia(Verbo.Fumar).Select(q => q.Pose.Nome), vistos, "a sequência inteira do fumar, na ordem");
+        Afirmar.Igual(Estado.Idle, s.Estado, "no fim, de volta a IDLE");
+    }
 }

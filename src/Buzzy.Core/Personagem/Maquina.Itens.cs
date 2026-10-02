@@ -5,7 +5,9 @@ namespace Buzzy.Core.Personagem;
 /// <see cref="ConfiguracaoDoNucleo.Tamagotchi"/>: com ela desligada, os eventos dos itens são descartados antes de tudo e
 /// nenhum efeito novo sai do núcleo. O item é uma entidade do núcleo: nasce pelo menu ao lado do personagem, cai com a
 /// gravidade dele e quica uma vez, é segurado e arrastado pelo usuário e, solto sobre o personagem num estado que aceita,
-/// é usado (<see cref="Estado.Using"/>). O app só desenha as janelas dos itens a partir dos efeitos.
+/// é usado (<see cref="Estado.Using"/>). O app só desenha as janelas dos itens a partir dos efeitos. O outro uso é o do
+/// baseado por conta própria (pedido do usuário de 2026-10-01, 19:10; <see cref="AcoesAutonomas.FumarBaseado"/>): a agenda,
+/// em IDLE no chão, às vezes o faz fumar um baseado sozinho, sem item no mundo, pelo mesmo caminho do uso.
 /// </summary>
 public static partial class Maquina
 {
@@ -202,11 +204,9 @@ public static partial class Maquina
         // ---------------------------------------------------------------- uso (USING)
 
         /// <summary>
-        /// Ele usa o item solto sobre ele (4.6): o item sai (<see cref="MotivoDaRemocao.Usado"/>), o uso começa no apoio em
-        /// que ele está, com a cara de quem usa, e a onda vale desde já (C16): interromper o uso não a desfaz. Descansando,
-        /// acorda antes; andando, reagindo ou pousando, o que fazia é cortado. A regra da transição diz também o que ele fez
-        /// na onda da frente, com o alívio (<see cref="DescreverOAlivio"/>), e na paranoia (<see cref="SomarACarga"/>). As
-        /// ondas mudam antes de ele entrar em USING, mas a cara de quem usa vale por cima de qualquer cara de fase.
+        /// Ele usa o item solto sobre ele (4.6): o item sai (<see cref="MotivoDaRemocao.Usado"/>) e o uso começa no apoio em
+        /// que ele está (<see cref="ComecarOUso"/>). Descansando, acorda antes; andando, reagindo ou pousando, o que fazia é
+        /// cortado.
         /// </summary>
         private void UsarItem(ItemNoMundo item)
         {
@@ -215,15 +215,52 @@ public static partial class Maquina
             _s = _s with { Itens = _s.Itens.Sem(item.Id) };
             _removidos[item.Id] = MotivoDaRemocao.Usado;
             if (_s.Estado == Estado.Resting) _s = _s with { Sinal = Sinal.Acordou };
+            ComecarOUso(item.Item, dados, apoio, $"ITEM_DRAG_END sobre o personagem: {dados.Verbo} {item.Item}");
+        }
+
+        /// <summary>
+        /// Se ele pode fumar um baseado por conta própria agora (<see cref="AcoesAutonomas.FumarBaseado"/>; pedido do usuário
+        /// de 2026-10-01, 19:10): só com a chave do tamagotchi ligada, em IDLE, no chão (a âncora na borda de baixo da área
+        /// útil do monitor dele), sem estar escondido, com a autonomia livre, sem item na mão do usuário e sem a onda Chapado
+        /// ou a paranoia na frente, para ele não emendar. A agenda só decide visível, com a autonomia livre e sem item na mão;
+        /// a regra repete as três condições para valer sozinha.
+        /// </summary>
+        private bool PodeFumarPorContaPropria
+            => _cfg.Tamagotchi && _s.Estado == Estado.Idle && _s.Esconderijo == LadoDoEsconderijo.Nenhum
+                && !_s.AutonomiaPausada && !_s.PainelAberto && !AtentoAoItem
+                && _s.Lugar is { } lugar && lugar.Ancora.Y == lugar.Monitor.AreaUtil.Base
+                && !(ComOnda && _s.Onda!.Tipo is Onda.Chapado or Onda.Paranoico);
+
+        /// <summary>
+        /// A agenda escolheu o baseado por conta própria (<see cref="PodeFumarPorContaPropria"/>): ele "tira do chapéu" um
+        /// baseado, sem item no mundo (nada nasce, nada sai e nenhum Id é gasto), e o usa no chão, com o uso do baseado da
+        /// tabela (<see cref="ConfiguracaoDoNucleo.TabelaDeItens"/>), pelo mesmo caminho do baseado que o usuário solta nele
+        /// (<see cref="ComecarOUso"/>): a combinação, o alívio, a carga e o sorteio da paranoia.
+        /// </summary>
+        private void FumarPorContaPropria()
+        {
+            DadosDoItem dados = _cfg.TabelaDeItens(Item.Baseado);
+            ComecarOUso(Item.Baseado, dados, ApoioDoUso.Chao, $"IDLE + AUTONOMY_TIMER: {dados.Verbo} {Item.Baseado} por conta própria");
+        }
+
+        /// <summary>
+        /// O uso começa (4.6), no ponto do soltar do item arrastado, venha o item do usuário ou da agenda (o baseado por conta
+        /// própria): com a cara de quem usa, e a onda vale desde já (C16): interromper o uso não a desfaz. A regra da transição
+        /// diz também o que ele fez na onda da frente, com o alívio (<see cref="DescreverOAlivio"/>), e na paranoia
+        /// (<see cref="Paranoia"/>). As ondas mudam antes de ele entrar em USING, mas a cara de quem usa vale por cima de
+        /// qualquer cara de fase.
+        /// </summary>
+        private void ComecarOUso(Item item, DadosDoItem dados, ApoioDoUso apoio, string regra)
+        {
             string alivio = DescreverOAlivio(dados);
             (string paranoia, bool comecou) = AplicarNaOnda(dados);
             _s = _s with
             {
-                Uso = new Uso(item.Item, dados.Verbo, dados.PassosDoUso, apoio) { ComecouAParanoia = comecou },
+                Uso = new Uso(item, dados.Verbo, dados.PassosDoUso, apoio) { ComecouAParanoia = comecou },
                 PassosRestantes = dados.PassosDoUso,
                 Expressao = dados.CaraDurante,
             };
-            IrPara(Estado.Using, $"ITEM_DRAG_END sobre o personagem: {dados.Verbo} {item.Item}{alivio}{paranoia}");
+            IrPara(Estado.Using, $"{regra}{alivio}{paranoia}");
         }
 
         /// <summary>

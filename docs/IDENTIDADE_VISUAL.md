@@ -14,7 +14,10 @@
 > animada é da Fase 6. A arte da emoção dominante e do tamagotchi adulto (DEC-027 e DEC-028:
 > itens, caras novas, poses de uso, sobreposições e ícones do menu) está no gerador e nas prévias,
 > conferida por testes automatizados; o app a mostra desde os passos T2, T7 e T8 de TODO.md, no menu,
-> no personagem e nas janelas dos itens. A revisão visual e de tom pelo usuário está pendente.
+> no personagem e nas janelas dos itens. A arte da paranoia (adicional de 2026-10-01 da DEC-028: a
+> cara `paranoico`, os gestos `olharproteto` e `agachar` e a sobreposição de suor) também está no
+> gerador e nas prévias, conferida por testes, e o app a mostra; a bala continua desenhada como um
+> doce embrulhado. A revisão visual e de tom pelo usuário está pendente.
 
 ## 1. Conceito
 
@@ -140,7 +143,7 @@ que recusa letra repetida.
    contando o contorno, para dar para agarrar; nenhum usa as cores do pelo; e, nas poses de uso, nenhum fica
    no meio do corpo, abaixo do peito, onde pareceria roupa.
 8. **Sobreposições de efeito (seção 7b):** ficam a 2 pixels das bordas do quadro, para o contorno
-   caber, e nunca cobrem os traços do rosto.
+   caber, e nunca cobrem os traços do rosto nem a gota de suor da cara paranoica.
 
 ## 6. Expressões
 
@@ -167,9 +170,9 @@ As 14 caras acima são as de humor. Ficam em `previa/expressoes.png`, nesta orde
 `Expressao` do núcleo e a das opções da emoção dominante (DEC-027). Cada célula dessa prévia é o
 ícone da opção no menu (seção 7b).
 
-**Caras de efeito (DEC-028).** Só a onda de um item as mostra; a chave é o nome do valor no fim do
-enum `Expressao`, em minúsculas (`eletrico`, não `acelerado`). Aparecem em `previa/rostos-efeito.png`,
-de frente e de perfil.
+**Caras de efeito (DEC-028).** Só a onda as mostra; a chave é o nome do valor no fim do
+enum `Expressao`, em minúsculas (`eletrico`, não `acelerado`). A `paranoico` (2026-10-01) é a da onda
+da paranoia, que nenhum item começa. Aparecem em `previa/rostos-efeito.png`, de frente e de perfil.
 
 | Expressão | Olhos | Sobrancelhas | Boca | Tufo e bochechas |
 |---|---|---|---|---|
@@ -180,12 +183,20 @@ de frente e de perfil.
 | `apaixonado` | corações | neutras | sorriso | normal; com rubor |
 | `tonto` | espirais (de perfil, revirados) | preocupadas | ondulada | eriçado |
 | `viajando` | arco-íris | erguidas | aberta | eriçado |
+| `paranoico` | arregalados, todo brancos e sem íris, com a pupila de 2 × 2 colada no alto, olhando para cima (de frente e de perfil) | aflitas: preocupadas e erguidas, com uma linha livre acima do olho | tensa: pequena, fechada, com os dentes cerrados | eriçado; gota de suor na têmpora |
 
 - **Chapéu torto** (`Topete.Torto`): o chapéu do bêbado gira 12° no sentido anti-horário, em torno do
   centro da aba, que desce meio pixel e vai um pixel para a frente; o tufo fica o normal.
 - **Rubor grande:** no bêbado e no enjoado, uma mancha de 3 × 2 pixels em cada bochecha, na cor própria
   (`BochechaForte` ou `Enjoo`), que aparece também de perfil, para ler andando. O rubor das caras
   antigas não mudou.
+- **Gota de suor** (`Rosto.Gota`, só na `paranoico`): de frente, na têmpora da esquerda da tela, entre
+  a aba e a orelha, porque o braço que aponta o teto passa pela orelha direita; de perfil, atrás do
+  olho, sob a aba. É desenhada por cima dos braços da frente, para ficar sempre à vista, e entra na
+  área protegida do rosto.
+- **A 1×, a cara paranoica perde sinal:** a pupila some na linha de cima do olho, e as sobrancelhas e
+  a gota quase somem. No app, o tamanho mínimo é 2× (128 DIP a 100%), e as caras de efeito nunca
+  viram ícone do menu.
 
 **Caras passageiras (DEC-028).** Existem só nos rostos da arte, para as poses de uso e dos gestos; o
 núcleo não as conhece. Também aparecem em `previa/rostos-efeito.png`, de frente.
@@ -253,10 +264,14 @@ duração do uso no núcleo:
   virado para a parede, `cipo-2` e `escondido`, girada nas laterais), com a cara do uso e a
   sobreposição, sem o objeto. No esconderijo, a boca fica fora do quadro, e só os olhos mostram a cara.
   Poses de uso por apoio ficam para depois.
+- O baseado que ele fuma por conta própria (adendo de 2026-10-02 da DEC-028) não tem arte nova: usa
+  os mesmos quadros `fumando-1` a `fumando-5`, com o baseado na mão, a cara da pose e a fumaça do
+  chapado por cima, sempre no chão.
 
-**Poses provisórias dos gestos da onda (DEC-028), em `PosesPixel.DosGestos`.** Os seis gestos que só
-a onda de um item sorteia não têm desenho próprio ainda; usam as poses existentes, com os nomes do
-enum `Gesto` em minúsculas, e também ficam fora de `Todas`:
+**Poses dos gestos da onda (DEC-028), em `PosesPixel.DosGestos`.** Os oito gestos que só a onda
+sorteia têm os nomes do enum `Gesto` em minúsculas e ficam fora de `Todas`. Os seis primeiros não
+têm desenho próprio ainda e usam as poses existentes; os dois da paranoia (2026-10-01), no fim da
+lista, têm desenho próprio, com a cara `paranoico`:
 
 | Pose | Feita de |
 |---|---|
@@ -266,6 +281,18 @@ enum `Gesto` em minúsculas, e também ficam fora de `Todas`:
 | `espirro` | `parado`, com a cara `tossindo` e a poeira |
 | `tosse` | `parado`, com a cara `tossindo` e a fumaça |
 | `tremedeira` | `parado` deslocado 1 pixel, com a cara elétrica; a apresentação alterna as duas a cada 4 passos (7,5 vezes por segundo), com a cara elétrica também no `parado`: só o corpo treme |
+| `olharproteto` | desenho próprio: de joelhos dobrados, olha para cima e aponta o teto com o indicador reto para cima; o braço B sobe pela frente da orelha, longe do rosto, com o punho à direita da ponta da aba, para o dedo não encostar nela; o punho A aperta o peito; a cauda fica alta |
+| `agachar` | desenho próprio: agachado, com a cabeça encolhida entre os ombros, segura a aba do chapéu com os dois punhos e espia para cima; os cotovelos abrem para fora, e os antebraços sobem ao lado dos olhos, sem cobrir o rosto |
+
+- **Mão apontando** (`Mao.Apontando`, no fim do enum): o indicador sai do meio do alto do punho, reto
+  para cima, com 1 pixel de largura e 4 acima do punho. Na direção do antebraço, como no primeiro
+  desenho, ele lia como um joinha.
+- **Desvios da paranoia:** de frente, o boneco não tem como inclinar a cabeça para trás; no
+  `olharproteto`, o pescoço estica 1 pixel, como quem se estica para ver o teto. Não há arte de andar
+  na ponta dos pés: ele anda como sempre, com a cara, o suor e o tremidinho. Com as mãos abertas, no
+  `agachar`, as mãos pareciam orelhas, por isso viraram punhos.
+- O app mostra os dois gestos sempre com a cara da própria pose. Com outra cara, o `agachar` ficaria
+  com os punhos na copa e sem a gota da têmpora.
 
 ## 7a. Itens do tamagotchi
 
@@ -298,13 +325,16 @@ sem suavização; só os pixels opacos recebem clique.
   com a ponta de cima indo para a esquerda, rumo à boca.
 - **Pontos de teste:** cada item tem um ponto opaco, no corpo, e um transparente, no canto, para a
   verificação de tela conferir o clique no item.
+- **A bala** continua desenhada como um doce embrulhado em papel rosa listrado. Desde 2026-10-01, ela é
+  droga sintética na regra do jogo (DEC-028): começa a onda do eufórico, com os corações dele, e pode
+  trazer paranoia. O desenho não mudou; o tom fica para a revisão do usuário.
 
 ## 7b. Efeitos, modificadores e ícones
 
-**Sobreposições (`EfeitosPixel`).** Oito efeitos de desenho animado, cada um em 3 fases. A fase 0 é a
-parada: sem relógio, vale sempre ela (DEC-011); com o relógio ligado, a apresentação troca a fase a
-cada 12 passos no estado, 5 vezes por segundo. Os carimbos são só o preenchimento, com uma linha de
-contorno onde passam por cima do corpo.
+**Sobreposições (`EfeitosPixel`).** Nove efeitos de desenho animado, cada um em 3 fases; o nono, o
+suor, é da paranoia (2026-10-01). A fase 0 é a parada: sem relógio, vale sempre ela (DEC-011); com o
+relógio ligado, a apresentação troca a fase a cada 12 passos no estado, 5 vezes por segundo. Os
+carimbos são só o preenchimento, com uma linha de contorno onde passam por cima do corpo.
 
 | Efeito | Desenho | Onde |
 |---|---|---|
@@ -316,16 +346,22 @@ contorno onde passam por cima do corpo.
 | cores | losangos rosa, lilás, verde e azul | em volta da cabeça |
 | poeira | nuvenzinhas brancas | saem do nariz: de frente, dos dois lados; de perfil, à frente do focinho |
 | borrifo | gotinhas azuis | do frasco para o lenço, entre as mãos |
+| suor | gotas de suor azul-claras, uma grande, de 10 pixels, e uma pequena, de 7, cada uma com 1 pixel na ponta e 3 na base, saltando da cabeça num arco: 2, 2 e 3 por fase | de frente, da têmpora da esquerda e por cima da ponta direita da aba, longe do braço que aponta o teto; na fase 2, a gota da direita cai sobre a ponta da aba, e uma nova sai da têmpora; de perfil, da nuca e por cima da aba, à frente |
 
 - Nunca cobrem os traços do rosto: uma máscara dos olhos, das sobrancelhas, do nariz, do rubor e da
-  boca, com 1 pixel de folga (`EfeitosPixel.AreaDoRosto`). Por ser uma máscara, e não um retângulo, a
-  fumaça e as bolhas podem sair do canto da boca.
-- Ficam a 2 pixels das bordas do quadro.
-- Pendurado no cipó, nenhum carimbo cobre o cipó, as folhas ou a mão que o segura.
-- **Pela onda do item:** bêbado → bolhas; chapado → fumaça; elétrico → brilhos; tonto → estrelinhas;
-  eufórico → corações; viajando → cores. Satisfeito, alegre, relaxado e ligado não têm sobreposição. A
-  poeira e o borrifo são das poses de uso (cheirar e inalar) e dos gestos de espirro e tosse (poeira e
-  fumaça).
+  boca, com 1 pixel de folga (`EfeitosPixel.AreaDoRosto`), que, na cara paranoica, inclui a gota de
+  suor da têmpora com o contorno dela (`AreaDoRosto(pose, expressao)`; para as outras caras, a área é
+  a de antes). Por ser uma máscara, e não um retângulo, a fumaça e as bolhas podem sair do canto da
+  boca.
+- Ficam a 2 pixels das bordas do quadro. O suor fica a 3 pixels ou mais da mão que aponta, nas três
+  fases e com o tremidinho.
+- Pendurado no cipó, nenhum carimbo cobre o cipó, as folhas ou a mão que o segura. No suor, a gota que
+  cairia ali salta para o espelho da posição dela, do outro lado da cabeça, e o cipó fica com 2, 2 e 3
+  gotas; nos outros efeitos, o carimbo bloqueado só some, como antes.
+- **Pela onda:** bêbado → bolhas; chapado → fumaça; elétrico → brilhos; tonto → estrelinhas;
+  eufórico → corações; viajando → cores; paranoico → suor. Satisfeito, alegre, relaxado e ligado não
+  têm sobreposição. A poeira e o borrifo são das poses de uso (cheirar e inalar) e dos gestos de
+  espirro e tosse (poeira e fumaça).
 - **No app (passo T7):** só a onda da frente desenha; a de fundo, não. A sobreposição vai por cima de
   qualquer pose, inclusive dos quadros de uso, porque a onda começa ao soltar o item. Nos quadros de
   uso que já têm efeito próprio, como a fumaça do fumar ou a poeira do cheirar, podem aparecer dois
@@ -344,6 +380,7 @@ tempo de cada lado e um terço no meio, sem saltar mais de 10° de uma fase para
 | brilhos (elétrico) | o quadril treme de lado: 0, +1 e −1 pixel; cauda erguida |
 | corações (apaixonado) | tronco −3, 0 e +3; cauda erguida |
 | cores (viajando) | cabeça −4, +4 e 0 |
+| suor (paranoico) | o tremidinho: o corpo inteiro vai 0, −1 e +1 pixel de lado, sem mexer na cauda |
 
 **Ícones do menu (`IconesDoMenu`).**
 - **Rosto** (as opções da emoção dominante, DEC-027): o recorte de 40 × 32 pixels em (12, 0) do quadro
@@ -379,7 +416,7 @@ tempo de cada lado e um terço no meio, sem saltar mais de 10° de uma fase para
 | `src/Buzzy.Visual/Pixel/` | Gerador: paleta, grade e máscaras (`Tela`), carimbos do rosto (`Rostos`), esqueleto e desenho (`BonecoPixel`), poses (`PosesPixel`) e ícone da bandeja de 16 × 16 desenhado à mão (`Icone`). Do tamagotchi: itens no chão e na mão (`ItensPixel`), poses de uso (`UsosPixel`), sobreposições e modificadores (`EfeitosPixel`) e ícones do menu (`IconesDoMenu`). É a fonte editável. |
 | `assets/identidade/pixel/buzzy-poses.png` | Folha nativa (64 × 64 por quadro, na ordem de `PosesPixel`); é o asset que a Fase 6 vai usar. As poses de uso e as dos gestos da onda não entram nela. |
 | `assets/identidade/pixel/buzzy-itens.png` | Folha nativa dos itens: 24 × 24 por item, na ordem do menu (312 × 24). |
-| `assets/identidade/pixel/previa/` | Prévias ampliadas sem suavização, geradas, não editadas à mão: parado e andando a 8×, poses em fundo claro e escuro, `expressoes.png` (as 14 caras de humor, uma por ícone do menu), tamanho real; do tamagotchi, `rostos-efeito.png` (caras de efeito, de frente e de perfil, e passageiras), `itens-8x.png`, `itens-na-mao-8x.png` (com a pega e a ponta marcadas), `itens-tamanho-real.png` (ao lado do boneco, a 2× e 1×, em fundo claro e escuro), `usos.png` (cada verbo com cada item, a 2×), `usos-tamanho-real.png`, `efeitos.png`, `gestos.png` (os seis gestos, com a sobreposição da onda) e `icones-menu.png`. |
+| `assets/identidade/pixel/previa/` | Prévias ampliadas sem suavização, geradas, não editadas à mão: parado e andando a 8×, poses em fundo claro e escuro, `expressoes.png` (as 14 caras de humor, uma por ícone do menu), tamanho real; do tamagotchi, `rostos-efeito.png` (caras de efeito, de frente e de perfil, e passageiras), `itens-8x.png`, `itens-na-mao-8x.png` (com a pega e a ponta marcadas), `itens-tamanho-real.png` (ao lado do boneco, a 2× e 1×, em fundo claro e escuro), `usos.png` (cada verbo com cada item, a 2×), `usos-tamanho-real.png`, `efeitos.png` (os nove efeitos), `gestos.png` (os oito gestos, com a sobreposição da onda), `paranoico-8x.png` (a cara `paranoico` de frente e de perfil e os gestos `olharproteto` e `agachar` com o suor na fase parada, a 8×) e `icones-menu.png`. Desde 2026-10-01, `rostos-efeito.png` tem as 8 caras de efeito. |
 | `assets/identidade/arquivo-vetorial/` | Direção vetorial anterior (DEC-017), substituída; guardada só como histórico. |
 
 **Como editar:** mude poses ou carimbos em `src/Buzzy.Visual/Pixel/`, rode
@@ -400,3 +437,4 @@ valem, desde que o gerador seja atualizado junto ou a folha passe a ser a fonte,
 | 2026-09-30 | Pedidos do usuário de emoção dominante e tamagotchi adulto (DEC-027 e DEC-028), numa cópia isolada da árvore: 35 cores no fim da paleta; os 13 itens em 24 × 24, redesenhados olhando as prévias a 8×, 2× e 1×, porque vários carimbos do desenho, nunca renderizados, não se liam (a vodka sem letra, a água mais gorda, o baseado com cone e piteira, o café sem vapor, o cigarro engordado para 8 pixels de altura); as 7 caras de efeito e as 7 passageiras, o chapéu torto e o rubor maior; as poses de uso no chão, com a ponta do item levada à boca ou ao nariz por cinemática inversa; as sobreposições, os modificadores e os ícones do menu. |
 | 2026-10-01 | Depois de uma revisão adversarial: o espelhinho numa mão só (com as duas, na barriga, parecia roupa) e com moldura dourada; cotovelos para fora na tragada e no inalar; fumaça e bolhas saindo da boca, e não da orelha, com a máscara dos traços do rosto no lugar do retângulo; nada cobrindo o cipó e a mão que o segura; poses provisórias dos gestos da onda; a copa do chapéu eriçado 1 pixel mais baixa em `escalando-2`, com a exceção documentada do contorno na linha 0 (seção 5); baseado aceso, lenço em triângulo, bala sem o papel na boca e energético verde-neon (escuro, tinha as cores do pelo). A arte foi mesclada na árvore principal, e a folha nativa e as prévias de poses, desatualizadas desde antes do cipó e do esconderijo, foram regeneradas. A revisão visual e de tom pelo usuário continua pendente. |
 | 2026-10-01 | O app passou a mostrar a arte do tamagotchi (passos T2, T7 e T8): os rostos e os itens como ícones do menu, ampliados pelo DPI do monitor; os quadros de uso no chão, de frente e sem espelho; nos outros apoios, a pose do apoio com a cara do uso; a tremedeira alternando com o `parado` a cada 4 passos; a sobreposição só da onda da frente, em qualquer pose, com a fase trocada a cada 12 passos com o relógio ligado; o item numa janela de 48 × 48 DIP. Nenhum desenho mudou. A revisão visual e de tom pelo usuário continua pendente. |
+| 2026-10-01 | A pedido do usuário, a paranoia, de desenho animado (DEC-028), numa cópia isolada, depois mesclada: a cara `paranoico`, com a gota de suor na têmpora (`Rosto.Gota`); a `Mao.Apontando`; os gestos `olharproteto` e `agachar`, com desenho próprio; e a sobreposição de suor, com o tremidinho. Depois de uma revisão adversarial: o dedo reto para cima, saindo do meio do punho (parecia um joinha); a gota da fase 2 sobre a ponta da aba, longe do dedo; o pescoço esticado 1 pixel no lugar da cabeça inclinada; as gotas no cipó espelhadas do outro lado da cabeça; e testes da forma dos olhos, das sobrancelhas, da boca e das gotas. Os desenhos antigos ficaram idênticos, conferidos por impressão digital, e `expressoes.png` não mudou. No mesmo dia, a bala virou droga sintética na regra do jogo, com o desenho de doce de sempre. A revisão visual e de tom pelo usuário continua pendente. |

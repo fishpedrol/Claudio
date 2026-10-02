@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Buzzy.Core.Personagem;
 
 /// <summary>
@@ -55,4 +57,40 @@ public readonly record struct Aleatorio(ulong Estado)
         (int ms, Aleatorio proximo) = Entre((int)minimo.TotalMilliseconds, (int)maximo.TotalMilliseconds);
         return (TimeSpan.FromMilliseconds(ms), proximo);
     }
+
+    /// <summary>
+    /// Um sorteio com a chance dada, num passo só do gerador: um inteiro uniforme de 1 a <see cref="Chance.Em"/>, que sai se
+    /// for até <see cref="Chance.Vezes"/>. O passo acontece mesmo com a chance certa (1 em 1) ou nula (0 em 1).
+    /// </summary>
+    public (bool Saiu, Aleatorio Proximo) Sortear(Chance chance)
+    {
+        ArgumentNullException.ThrowIfNull(chance);
+        (int valor, Aleatorio proximo) = Entre(1, chance.Em);
+        return (valor <= chance.Vezes, proximo);
+    }
+}
+
+/// <summary>
+/// Uma chance de <see cref="Vezes"/> em <see cref="Em"/>, como "1 em 8", sorteada por <see cref="Aleatorio.Sortear(Chance)"/>.
+/// <see cref="Em"/> é pelo menos 1, e <see cref="Vezes"/> vai de 0 (nunca) a <see cref="Em"/> (sempre).
+/// </summary>
+public sealed record Chance
+{
+    public Chance(int vezes, int em)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(em, 1);
+        ArgumentOutOfRangeException.ThrowIfNegative(vezes);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(vezes, em);
+        Vezes = vezes;
+        Em = em;
+    }
+
+    /// <summary>Em quantas, de cada <see cref="Em"/>, sai.</summary>
+    public int Vezes { get; }
+
+    /// <summary>De quantas.</summary>
+    public int Em { get; }
+
+    /// <summary>"1 em 8", na cultura invariante.</summary>
+    public override string ToString() => string.Create(CultureInfo.InvariantCulture, $"{Vezes} em {Em}");
 }

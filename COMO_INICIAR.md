@@ -9,9 +9,14 @@
 > ferramenta de teste, não por uma pessoa; falta você conferir os desenhos, as animações e o tom.
 > Ao abrir de novo, ele volta onde estava quando você o fechou, escondido ou preso do mesmo jeito e
 > com a mesma emoção dominante (seção 5). Isso passou por testes automáticos, que abrem o Buzzy de
-> verdade com um perfil de teste, mas ainda não pela verificação na tela nem por você. Sozinho, ele
-> ainda fica no monitor em que está: atravessar para o outro monitor chega com a Fase 5, em
-> andamento. As poses ainda são quadros fixos por estado; as animações completas chegam na Fase 6.
+> verdade com um perfil de teste, mas ainda não pela verificação na tela nem por você. Desde
+> 2026-10-01, comer ou beber algo sem álcool acalma o efeito de um item aos poucos, e misturar uma
+> droga sintética do jogo com outra substância pode deixá-lo paranoico, de desenho animado; desde
+> 2026-10-02, de vez em quando ele fuma um baseado por conta própria, parado no chão (seção 5). Isso
+> passou por testes automáticos, inclusive os que abrem o Buzzy, mas ainda não pela verificação na
+> tela nem por você. Sozinho, ele ainda fica no monitor em que está: atravessar para o outro monitor
+> chega com a Fase 5, em andamento. As poses ainda são quadros fixos por estado; as animações
+> completas chegam na Fase 6.
 
 ## 1. Antes da primeira vez
 
@@ -77,7 +82,8 @@ Não use "Executar como administrador": o Buzzy recusa rodar assim e mostra um a
 | Escolher a emoção dominante | Menu → **Emoção dominante** → uma das caras, com o rosto ao lado do nome. Ela vira a cara de base e a mais frequente. **Automática** volta ao jeito de sempre. A opção atual fica marcada |
 | Invocar um item | Menu → **Itens** → o item. Ele aparece ao lado do Buzzy, cai no chão e fica esperando. Cabem até 6; o sétimo tira o mais antigo |
 | Dar um item a ele | Arraste o item com o mouse até o Buzzy e solte em cima dele: ele usa o item, com a animação do item e um efeito de desenho animado que passa sozinho. Clicar no item ou soltá-lo longe não faz ele usar: o item fica onde está ou cai de onde foi solto |
-| Interromper o uso | Clique no Buzzy ou arraste-o. O efeito do item continua até passar sozinho |
+| Interromper o uso | Clique no Buzzy ou arraste-o, também quando ele fuma sozinho. O efeito continua até passar sozinho |
+| Acalmar o efeito aos poucos | Dê a ele comida ou bebida sem álcool: **banana**, **água**, **café** ou **energético**. Cada um acalma um passo o efeito de uma substância, sem trazer o efeito dele; a água acalma qualquer efeito. Vários seguidos levam o efeito até o fim |
 | Tirar os itens da tela | Menu → **Itens** → **Recolher itens** |
 | Esconder o Buzzy | Menu → **Esconder Buzzy** |
 | Mostrar de novo | Clique no ícone da bandeja, ou menu da bandeja → **Mostrar Buzzy**, ou abra o `Buzzy.exe` outra vez |
@@ -87,6 +93,40 @@ Com o menu aberto, dá para usar o teclado: cada opção tem uma letra, a sublin
 mostra os sublinhados. Por exemplo, **D** e depois **F** escolhem a emoção **Feliz**, e **I** e
 depois **B** invocam a **Banana**. Com o Buzzy
 escondido, **Itens** fica indisponível; a emoção pode ser escolhida e aparece quando ele voltar.
+
+**Os efeitos são de desenho animado** e passam sozinhos. Desde 2026-10-01:
+
+- **Comida e bebida sem álcool acalmam aos poucos:** a banana, o café e o energético acalmam um passo
+  o efeito de uma substância; a água, qualquer efeito. Sem efeito nenhum, ou com um efeito leve, como
+  o da própria banana ou o do café, a banana, o café e o energético fazem o de sempre, e a água sem
+  efeito nenhum não faz nada. O tabaco, a cerveja, a vodka e as outras substâncias continuam como
+  antes.
+- **Paranoia:** se ele misturar uma droga sintética do jogo (bala, MD, cocaína ou lança-perfume) com
+  outra substância, pode ficar paranoico, "como o meme 'os cara tá no teto'": sua, treme, olha e
+  aponta pro teto e se agacha segurando o chapéu. A chance é de 1 em 8, sorteada uma vez por mistura:
+  usar mais coisas na mesma leva não aumenta a chance, e só uma leva nova, depois que os efeitos
+  passam por completo, tem a sua. Álcool e maconha, sozinhos ou juntos, nunca o deixam paranoico, nem
+  uma sintética sozinha, repetida. Comida e bebida sem álcool também acalmam a paranoia aos poucos.
+- **A bala** é droga sintética nessa regra do jogo: agora ela dá o efeito eufórico, com corações em
+  volta da cabeça, e pode entrar numa mistura. O desenho dela não mudou.
+- **Baseado por conta própria** (desde 2026-10-02): de vez em quando, parado no chão e sem estar
+  chapado, ele fuma um baseado sozinho, tirado do chapéu: nenhum item aparece na tela, e o efeito é o
+  mesmo do baseado do menu. Na energia Média, é mais ou menos um a cada 4 minutos em que ele fica
+  parado no chão, ou um a cada 14 ou 15 minutos no total; sem você dar nada a ele, ele fica chapado
+  cerca de 39% do tempo (20% na Baixa e 55% na Alta). Ele não acende outro já chapado ou paranoico,
+  nem fuma escondido, no ar ou enquanto você segura um item. Um clique nele interrompe, como em todo
+  uso, e com **Pausar movimento** ele não fuma. Enquanto ele fuma (3,5 s), um item solto nele não é
+  usado: cai, como em todo uso. O baseado não é droga sintética, mas conta na mistura: uma droga
+  sintética dada a ele chapado do baseado dele, ou ele fumando depois dela, pode deixá-lo paranoico
+  (1 em 8 por leva).
+
+A divisão dos itens é só regra do jogo, de desenho animado, e não diz nada sobre o mundo real.
+
+**Cópia na Área de Trabalho:** o Buzzy da pasta `net10.0-windows` na sua Área de Trabalho foi
+compilado às 18:32 de 2026-10-01, antes dessas regras, e ainda dá a paranoia na 4ª substância, trata
+a bala como alívio e não fuma sozinho. Para ver as regras novas, abra o `Buzzy.exe` da pasta do
+projeto (seção 3), depois de compilar de novo (seção 2), ou troque essa cópia por um build novo com
+o Buzzy fechado.
 
 Ao abrir de novo, o Buzzy lembra:
 
@@ -130,6 +170,15 @@ começa do jeito padrão; na próxima vez que gravar, guarda o arquivo estragado
 - Testes sem abrir janelas: `powershell -NoProfile -File tools\testar.ps1`.
 - Testes que abrem janelas ou movem o cursor, e a medição de desempenho: consulte os comandos e limites em
   `docs/PROJECT_CONTEXT.md`. Avise quem estiver usando o computador antes de rodá-los.
+- Com `--diagnostico`, cada sorteio da paranoia, saindo ou não, vira uma linha `PARANOIA` no log, com o
+  item, a chance, se saiu e as contagens da mistura, por exemplo
+  `PARANOIA|item=Bala|chance=1 em 8|saiu=sim|substancias=2|distintas=Vodka,Bala`. O sorteio que não
+  sai só aparece nessa linha; o contrato das linhas está em `docs/ARCHITECTURE.md`, seção 2.13.4.
+- Com `--diagnostico`, quando ele fuma sozinho, a linha `NUCLEO` da transição traz a regra, por
+  exemplo
+  `NUCLEO|evento=AutonomyTimer|motivo=agenda autônoma geração 1|de=Idle|para=Using|regra=IDLE + AUTONOMY_TIMER: Fumar Baseado por conta própria`.
+  Não há linha `ITEM`, porque nenhum item aparece; os quadros do fumar saem nas linhas `SPRITE`, com
+  `item=baseado`.
 - Sem opção nenhuma, o Buzzy lê e grava as suas configurações reais, em `%LOCALAPPDATA%\Buzzy`.
 - Para testar sem mexer nas suas configurações, abra o Buzzy com `--perfil-de-teste NOME`, por exemplo
   `Buzzy.exe --perfil-de-teste meu-teste`. Os dados dele ficam em `%LOCALAPPDATA%\Buzzy\testes\NOME`.

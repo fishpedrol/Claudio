@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Numerics;
 
 namespace Buzzy.Core.Personagem;
 
@@ -42,6 +43,8 @@ public enum VerboDeUso
 public enum Onda
 {
     Satisfeito,
+
+    /// <summary>Sem item desde 2026-10-01 (a bala, droga sintética, passou ao eufórico); fica no enum e na tabela, no mesmo lugar.</summary>
     Alegre,
     Relaxado,
     Ligado,
@@ -53,8 +56,9 @@ public enum Onda
     Viajando,
 
     /// <summary>
-    /// A paranoia (pedido do usuário de 2026-10-01), de desenho animado: "tem alguém no teto". Nenhum item a começa; ela
-    /// vem com a 4ª substância do episódio (<see cref="EstadoDoNucleo.Carga"/>), com a maior precedência de todas.
+    /// A paranoia (pedidos do usuário de 2026-10-01), de desenho animado: "tem alguém no teto". Nenhum item a começa; ela vem
+    /// do sorteio de um episódio de mistura de substâncias com droga sintética, um só por episódio, com a chance de 1 em 8
+    /// (<see cref="CargaDaParanoia.MisturaComSintetica"/>), com a maior precedência de todas.
     /// </summary>
     Paranoico,
 }
@@ -80,12 +84,17 @@ public enum FaseDaOnda
 /// </param>
 /// <param name="Intensidade">Quantos níveis o item soma à onda: 1 ou 2, e 0 na água. É ponto de jogo.</param>
 /// <param name="Alivio">
-/// Se o item é de alívio, comida ou bebida sem álcool (o pedido do usuário de 2026-10-01): a banana, a bala, a água, o
-/// café e o energético. Comer e beber acalmam a onda de desenho animado aos poucos, um passo por item
-/// (<see cref="DadosDaOnda.DeSubstancia"/>). Os outros itens, inclusive o cogumelo, que também se come, são de substância
-/// e combinam as ondas como sempre.
+/// Se o item é de alívio, comida ou bebida sem álcool (o pedido do usuário de 2026-10-01): a banana, a água, o café e o
+/// energético. Comer e beber acalmam a onda de desenho animado aos poucos, um passo por item
+/// (<see cref="DadosDaOnda.DeSubstancia"/>). Os outros itens, inclusive o cogumelo, que também se come, e a bala, que é
+/// droga sintética, são de substância e combinam as ondas como sempre.
 /// </param>
-public sealed record DadosDoItem(Item Item, VerboDeUso Verbo, int PassosDoUso, Expressao CaraDurante, Onda? Onda, int Intensidade, bool Alivio);
+/// <param name="Sintetica">
+/// Se o item é droga sintética (o pedido do usuário de 2026-10-01: "como bala, md, coca e lança"): a bala, o MD, a cocaína e
+/// o lança-perfume, todos de substância. É regra de jogo, de desenho animado: só um episódio que mistura substâncias com
+/// pelo menos uma delas sorteia a paranoia (<see cref="CargaDaParanoia.MisturaComSintetica"/>).
+/// </param>
+public sealed record DadosDoItem(Item Item, VerboDeUso Verbo, int PassosDoUso, Expressao CaraDurante, Onda? Onda, int Intensidade, bool Alivio, bool Sintetica);
 
 /// <summary>
 /// O perfil de uma fase da onda (desenho do núcleo, 4.3 e 4.4): percentuais sobre o perfil de energia (100 = igual),
@@ -264,6 +273,87 @@ public sealed record Uso(Item Item, VerboDeUso Verbo, int Passos, ApoioDoUso Apo
     /// interrompido leva a marca junto. Fica fora do construtor posicional.
     /// </summary>
     public bool ComecouAParanoia { get; init; }
+}
+
+/// <summary>
+/// A carga da paranoia num episódio (pedidos do usuário de 2026-10-01; DEC-028), parte do estado do núcleo e só em memória,
+/// como a onda: quantos itens de substância ele usou, se algum era droga sintética, quais itens de substância distintos
+/// foram e se o episódio já fez o sorteio da paranoia, o único dele. Cada item de substância entra depois da combinação
+/// (<see cref="Com"/>); a comida e a bebida sem álcool, nunca. Tudo volta junto a <see cref="Nenhuma"/> no fim de todo
+/// evento em que nem a onda da frente nem a de fundo é de substância (a paranoia conta como substância): o episódio acabou,
+/// e o seguinte sorteia de novo.
+/// </summary>
+/// <param name="Substancias">Quantos itens de substância no episódio; o retrato e a linha canônica (<c>carga=</c>) mostram este número.</param>
+/// <param name="Sintetica">Se algum deles era droga sintética (<see cref="DadosDoItem.Sintetica"/>).</param>
+/// <param name="Distintas">Os itens de substância distintos do episódio.</param>
+/// <param name="Sorteada">
+/// Se o episódio já fez o sorteio da paranoia (pedido do usuário de 2026-10-01, 19:00: "quero que a chance dele ficar
+/// paranoico seja de 1 em 8"; e a escolha dele às 23:03, "uma vez por mistura"): o uso que fecha a mistura com sintética
+/// sorteia, e, saindo ou não, o episódio não sorteia mais. Assim a chance de ele ficar paranoico num episódio é a da
+/// configuração, por mais substâncias que ele use.
+/// </param>
+public sealed record CargaDaParanoia(int Substancias, bool Sintetica, ConjuntoDeItens Distintas, bool Sorteada)
+{
+    /// <summary>Sem episódio: nada usado, nada sorteado.</summary>
+    public static readonly CargaDaParanoia Nenhuma = new(0, false, ConjuntoDeItens.Vazio, Sorteada: false);
+
+    /// <summary>
+    /// Se o episódio é uma mistura com droga sintética (o pedido do usuário de 2026-10-01): pelo menos uma sintética e pelo
+    /// menos dois itens de substância distintos. Só ela sorteia a paranoia, uma vez por episódio; álcool, maconha, cigarro e
+    /// cogumelo, sozinhos ou misturados entre si, e uma sintética sozinha, repetida, nunca.
+    /// </summary>
+    public bool MisturaComSintetica => Sintetica && Distintas.Quantidade >= 2;
+
+    /// <summary>
+    /// A carga com mais um item de substância: um a mais, a sintética se ele for, e ele entre os distintos; o sorteio feito
+    /// continua feito.
+    /// </summary>
+    public CargaDaParanoia Com(DadosDoItem dados)
+    {
+        ArgumentNullException.ThrowIfNull(dados);
+        if (dados.Alivio) throw new ArgumentException($"{dados.Item} é de alívio: não entra na carga da paranoia.", nameof(dados));
+        return new CargaDaParanoia(Substancias + 1, Sintetica || dados.Sintetica, Distintas.Com(dados.Item), Sorteada);
+    }
+}
+
+/// <summary>
+/// Um conjunto de itens, imutável e com igualdade por valor, um bit por item do enum: os itens de substância distintos de um
+/// episódio da paranoia (<see cref="CargaDaParanoia.Distintas"/>). O valor padrão é o vazio, e o estado do núcleo continua
+/// comparável por valor.
+/// </summary>
+public readonly record struct ConjuntoDeItens
+{
+    private readonly int _bits;
+
+    private ConjuntoDeItens(int bits) => _bits = bits;
+
+    /// <summary>Sem nenhum item.</summary>
+    public static ConjuntoDeItens Vazio => default;
+
+    /// <summary>Quantos itens.</summary>
+    public int Quantidade => BitOperations.PopCount((uint)_bits);
+
+    /// <summary>Os itens, na ordem do enum.</summary>
+    public IEnumerable<Item> Itens
+    {
+        get
+        {
+            int bits = _bits;
+            return Enum.GetValues<Item>().Where(i => (bits & Bit(i)) != 0);
+        }
+    }
+
+    /// <summary>Se o item está no conjunto; um valor fora do enum nunca está.</summary>
+    public bool Contem(Item item) => Enum.IsDefined(item) && (_bits & Bit(item)) != 0;
+
+    /// <summary>O conjunto com o item; o mesmo, se já estava. Um valor fora do enum lança.</summary>
+    public ConjuntoDeItens Com(Item item) => new(_bits | Bit(item));
+
+    /// <summary>Os itens separados por vírgula, na ordem do enum: <c>Vodka,Md</c>.</summary>
+    public override string ToString() => string.Join(",", Itens);
+
+    private static int Bit(Item item)
+        => Enum.IsDefined(item) && (int)item < 31 ? 1 << (int)item : throw new ArgumentOutOfRangeException(nameof(item), item, "Item desconhecido.");
 }
 
 /// <summary>

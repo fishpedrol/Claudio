@@ -221,17 +221,20 @@ internal static class OndaTestes
     }
 
     // Repouso sem relógio (DEC-011) e um temporizador só (invariante 25): uma hora simulada por semente, com a agenda livre,
-    // interações sorteadas e ondas semeadas de tipos e níveis sorteados, na configuração do aplicativo. Todo agendamento da
-    // onda é um disparo único de 1 s ou mais; com onda há exatamente um pendente, sem onda nenhum; o disparo nunca mexe no
-    // relógio, na agenda nem na janela, e só muda a onda e a cara; o relógio segue a regra de sempre; a onda acaba em no
-    // máximo 2 + nível disparos; a agenda sorteia na faixa do perfil efetivo, acima do piso (R11); os gestos, da onda ou
-    // não, só acontecem em IDLE; e o apoio vale depois de cada evento.
+    // interações sorteadas e ondas semeadas de tipos e níveis sorteados, na configuração do aplicativo, que às vezes o faz
+    // fumar um baseado por conta própria (pedido do usuário de 2026-10-01, 19:10). Todo agendamento da onda é um disparo único
+    // de 1 s ou mais; com onda há exatamente um pendente, sem onda nenhum; o disparo nunca mexe no relógio, na agenda nem na
+    // janela, e só muda as ondas, a carga do episódio e a cara, as duas primeiras pela regra (a frente avança, a de fundo só
+    // volta quando a frente acaba, e a carga só zera sem onda de substância); o relógio segue a regra de sempre (com o uso
+    // do baseado); a onda da frente acaba em no máximo 2 + nível disparos, contados de novo a cada uso e a cada troca da onda
+    // da frente; a agenda sorteia na faixa do perfil efetivo, acima do piso (R11); os gestos, da onda ou não, só acontecem
+    // em IDLE; e o apoio vale depois de cada evento.
     [Teste]
     public static void EmRepouso_ORelogioNaoLigaEOsDisparosSaoUnicos()
     {
         ConfiguracaoDoNucleo cfg = Ligado();
         var mestre = new Random(2029);
-        long eventos = 0, disparos = 0, episodios = 0, comOnda = 0;
+        long eventos = 0, disparos = 0, episodios = 0, comOnda = 0, fumou = 0, fundoVoltou = 0, cargaZerada = 0;
         for (int n = 0; n < 6; n++)
         {
             int semente = mestre.Next();
@@ -249,18 +252,41 @@ internal static class OndaTestes
                 Afirmar.Verdadeiro(agendas.Length + r.Efeitos.OfType<CancelarOnda>().Count() <= 1, $"{onde}: um temporizador da onda por vez");
                 Afirmar.Igual(depois.Onda is not null, depois.OndaAgendada, $"{onde}: com onda, exatamente um disparo pendente; sem onda, nenhum");
                 bool agarrado = depois.Estado is Estado.Climbing or Estado.Hanging && depois.Movimento.Agarrado;
-                bool relogio = (depois.Estado.EmMovimento() && !agarrado) || depois.Estado == Estado.Reacting || (depois.Estado == Estado.Idle && depois.Gesto != Gesto.Nenhum);
+                // USING também (invariante 29): a agenda do aplicativo às vezes o faz fumar um baseado por conta própria.
+                bool relogio = (depois.Estado.EmMovimento() && !agarrado) || depois.Estado is Estado.Reacting or Estado.Using || (depois.Estado == Estado.Idle && depois.Gesto != Gesto.Nenhum);
                 Afirmar.Igual(relogio, depois.RelogioAtivo, $"{onde}: o relógio segue a regra de sempre");
                 if (e is ItemEffectTimer)
                 {
                     Afirmar.Falso(r.Efeitos.Any(x => x is LigarRelogio or DesligarRelogio or AgendarDecisao or CancelarDecisao or MoverJanela or MostrarJanela or EsconderJanela), $"{onde}: o disparo não mexe no relógio, na agenda nem na janela");
-                    Afirmar.Igual(SemAOnda(antes), SemAOnda(depois), $"{onde}: o disparo só muda a onda e a cara");
+                    Afirmar.Igual(SemAOnda(antes), SemAOnda(depois), $"{onde}: o disparo só muda as ondas, a carga do episódio e a cara");
+                    // As ondas e a carga, pela regra escrita aqui à parte (revisão do baseado por conta própria, achado 9), já que
+                    // SemAOnda as deixa de fora: o disparo que vale (com a transição) avança a onda da frente (DepoisDoDisparo), e a
+                    // de fundo só muda quando a da frente acaba, voltando inteira para a frente; o que não vale não muda nenhuma.
+                    // A carga do episódio fica igual, a não ser que não sobre onda de substância, nem na frente nem no fundo: aí
+                    // ela volta a 0.
+                    (EstadoDaOnda? frente, EstadoDaOnda? fundo) = r.Transicoes.Count > 0 && antes.Onda is { } daFrente
+                        ? DepoisDoDisparo(daFrente, antes.OndaDeFundo)
+                        : (antes.Onda, antes.OndaDeFundo);
+                    Afirmar.Igual((frente, fundo), (depois.Onda, depois.OndaDeFundo), $"{onde}: a onda da frente e a de fundo depois do disparo (antes, fundo {antes.OndaDeFundo})");
+                    CargaDaParanoia carga = DeSubstancia(depois.Onda) || DeSubstancia(depois.OndaDeFundo) ? antes.Carga : CargaDaParanoia.Nenhuma;
+                    Afirmar.Igual(carga, depois.Carga, $"{onde}: a carga do episódio depois do disparo (antes, {antes.Carga.Substancias}; fundo {depois.OndaDeFundo})");
+                    if (antes.OndaDeFundo is not null && depois.OndaDeFundo is null) fundoVoltou++;
+                    if (antes.Carga != CargaDaParanoia.Nenhuma && depois.Carga == CargaDaParanoia.Nenhuma) cargaZerada++;
                     if (r.Transicoes.Count > 0)
                     {
                         disparos++;
                         disparosNoEpisodio++;
                         Afirmar.Verdadeiro(disparosNoEpisodio <= limite, $"{onde}: a onda acaba em no máximo {limite} disparos");
                     }
+                }
+                // Invariante 25, como em InvariantesTestes: a conta recomeça com a onda da frente nova, a de um uso (o baseado
+                // por conta própria) ou a de fundo que voltou.
+                bool comecouOUso = r.Transicoes.Any(t => t.Para == Estado.Using && t.De != Estado.Using);
+                if (depois.Onda is { } nova && (comecouOUso || antes.Onda is null || antes.Onda.Tipo != nova.Tipo))
+                {
+                    if (comecouOUso) fumou++;
+                    disparosNoEpisodio = 0;
+                    limite = 2 + nova.Nivel;
                 }
                 foreach (AgendarDecisao agenda in r.Efeitos.OfType<AgendarDecisao>())
                 {
@@ -296,13 +322,35 @@ internal static class OndaTestes
                 foreach (Evento e in Interacao(rnd, sim.Estado)) sim.Aplicar(e);
             }
         }
-        Console.WriteLine($"         {eventos} eventos em 6 horas simuladas; {episodios} ondas, {disparos} disparos; {comOnda} eventos com onda");
+        Console.WriteLine($"         {eventos} eventos em 6 horas simuladas; {episodios} ondas semeadas, {fumou} baseados por conta própria, {disparos} disparos; {comOnda} eventos com onda; "
+            + $"{fundoVoltou} disparos com a de fundo de volta e {cargaZerada} com a carga zerada");
         Afirmar.Verdadeiro(episodios >= 30 && disparos >= 3 * episodios / 2, $"ondas e disparos suficientes: {episodios} ondas, {disparos} disparos");
+        Afirmar.Verdadeiro(fundoVoltou > 0 && cargaZerada > 0, $"a regra do fundo e a da carga conferidas: {fundoVoltou} e {cargaZerada} disparos");
     }
 
-    /// <summary>O estado sem a cara, a onda, o temporizador dela e o sinal pontual: o que o disparo da onda não pode mudar.</summary>
+    /// <summary>Se a onda existe e é de substância, pela transcrição do desenho (4.2), escrita à parte do núcleo.</summary>
+    private static bool DeSubstancia(EstadoDaOnda? onda) => onda is not null && TabelasDoDesenho.Esperada(onda.Tipo).DeSubstancia;
+
+    /// <summary>
+    /// A onda da frente e a de fundo depois de um disparo que vale (4.5), escrito aqui à parte do núcleo: a subida vira o pico;
+    /// o pico desce um nível; o pico do nível 1 vira a queda, se a onda tem queda (pela transcrição do desenho); senão, e na
+    /// queda, a onda da frente acaba e a de fundo volta inteira para a frente, com o fundo vazio.
+    /// </summary>
+    private static (EstadoDaOnda? Frente, EstadoDaOnda? Fundo) DepoisDoDisparo(EstadoDaOnda frente, EstadoDaOnda? fundo) => frente.Fase switch
+    {
+        FaseDaOnda.Subida => (frente with { Fase = FaseDaOnda.Pico }, fundo),
+        FaseDaOnda.Pico when frente.Nivel > 1 => (frente with { Nivel = frente.Nivel - 1 }, fundo),
+        FaseDaOnda.Pico when TabelasDoDesenho.Esperada(frente.Tipo).QuedaBase is not null => (frente with { Fase = FaseDaOnda.Queda, Nivel = 1 }, fundo),
+        _ => (fundo, null),
+    };
+
+    /// <summary>
+    /// O estado sem a cara, as ondas, o temporizador delas, a carga do episódio e o sinal pontual: o que o disparo da onda não
+    /// pode mudar. A onda de fundo volta quando a da frente acaba, e a carga da paranoia zera quando não sobra onda de
+    /// substância (o baseado por conta própria começa uma).
+    /// </summary>
     private static EstadoDoNucleo SemAOnda(EstadoDoNucleo s)
-        => s with { Expressao = Expressao.Neutro, Onda = null, GeracaoDaOnda = 0, OndaAgendada = false, Sinal = Sinal.Nenhum };
+        => s with { Expressao = Expressao.Neutro, Onda = null, OndaDeFundo = null, Carga = CargaDaParanoia.Nenhuma, GeracaoDaOnda = 0, OndaAgendada = false, Sinal = Sinal.Nenhum };
 
     // ---------------------------------------------------------------- perfil e física em vigor
 
@@ -651,7 +699,8 @@ internal static class OndaTestes
     // ---------------------------------------------------------------- caras e gestos da fase
 
     // Com uma onda que não muda o comportamento (todos os percentuais em 100) e as caras e os gestos do pico do bêbado,
-    // dez minutos de agenda livre com interações sorteadas, na configuração do aplicativo: evento a evento, as mesmas
+    // dez minutos de agenda livre com interações sorteadas, na configuração do aplicativo sem o baseado por conta própria
+    // (que começaria uma onda na execução sem onda): evento a evento, as mesmas
     // transições (a não ser o nome do gesto), os mesmos efeitos (a não ser o agendamento da onda) e o mesmo estado, inclusive
     // o gerador, a não ser a cara e o gesto. Isto é, cada sorteio de cara e de gesto continua sendo um sorteio só (as
     // referências gravadas não mudam), com ou sem a emoção dominante. Com a onda, as trocas de cara (no chão, no
@@ -660,7 +709,9 @@ internal static class OndaTestes
     [Teste]
     public static void CarasEGestosDaFase_ComOsMesmosSorteios()
     {
-        ConfiguracaoDoNucleo cfg = Ligado() with { TabelaDeOndas = OndaNeutra };
+        // Sem o baseado por conta própria (FumarBaseado; BaseadoPorContaPropriaTestes): ele começaria uma onda de verdade na
+        // execução sem onda.
+        ConfiguracaoDoNucleo cfg = Ligado() with { TabelaDeOndas = OndaNeutra, Acoes = AcoesAutonomas.Todas };
         PerfilDaOnda bebado = TabelaDoTamagotchi.DaOnda(Onda.Bebado).Perfil(FaseDaOnda.Pico, 1);
         var carasDaFase = bebado.Caras.Select(c => c.Cara).ToHashSet();
         var gestosDaFase = bebado.Gestos.Select(g => g.Gesto).ToHashSet();
@@ -1075,8 +1126,8 @@ internal static class OndaTestes
 
     // 4.5: o mesmo tipo acumula, até o nível 3. Cerveja (bêbado 1) e depois vodka (+2): nível 3, pior 3, e a subida
     // recomeça; o pico dura três níveis e a queda, 150% (135 s). Na queda, outra cerveja volta ao pico, no nível 2, e mais
-    // uma vodka o deixa no nível 3, sem passar dele. Essa vodka é a 4ª substância do episódio: depois da combinação, a
-    // paranoia começa na frente (pedido do usuário de 2026-10-01; ParanoiaTestes), e o bêbado, já somado, vai para o fundo.
+    // uma vodka o deixa no nível 3, sem passar dele. Só álcool, sem droga sintética: nada de paranoia (pedido do usuário de
+    // 2026-10-01; ParanoiaTestes).
     [Teste]
     public static void MesmoTipo_AcumulaAteONivel3()
     {
@@ -1095,17 +1146,18 @@ internal static class OndaTestes
         Afirmar.Igual(new EstadoDaOnda(Onda.Bebado, FaseDaOnda.Pico, 2, 3), outra.Estado.Onda, "outra cerveja na queda: de volta ao pico, no nível 2");
         Afirmar.Sequencia([TimeSpan.FromSeconds(100)], outra.Efeitos.OfType<AgendarOnda>().Select(a => a.Atraso), "o pico recomeça");
         Usar(c, Item.Vodka);
-        Afirmar.Igual(new EstadoDaOnda(Onda.Bebado, FaseDaOnda.Pico, 3, 3), c.Atual.OndaDeFundo, "e nunca passa do nível 3 (no fundo: a 4ª substância começou a paranoia)");
-        Afirmar.Igual(new EstadoDaOnda(Onda.Paranoico, FaseDaOnda.Subida, 1, 1), c.Atual.Onda, "a paranoia na frente");
+        Afirmar.Igual((new EstadoDaOnda(Onda.Bebado, FaseDaOnda.Pico, 3, 3), (EstadoDaOnda?)null), (c.Atual.Onda, c.Atual.OndaDeFundo), "e nunca passa do nível 3; só álcool, sem paranoia");
     }
 
     // 4.5: uma onda de precedência maior ou igual vai para a frente, e a anterior fica atrás, congelada: o bêbado no pico do
     // nível 2 e, por cima, o lança-perfume (tonto, nível 2). Só o tonto avança e manda no comportamento; quando ele acaba,
-    // o bêbado volta à frente na fase em que estava, com a duração cheia (100 s) e a cara do pico.
+    // o bêbado volta à frente na fase em que estava, com a duração cheia (100 s) e a cara do pico. A vodka e o lança-perfume
+    // são uma mistura com droga sintética, que sorteia a paranoia; aqui ela fica de fora (a chance de 0 em 1), e os testes
+    // dela estão em ParanoiaTestes.
     [Teste]
     public static void MaisForte_VaiParaAFrenteEAAnteriorVolta()
     {
-        ConfiguracaoDoNucleo cfg = ApoioDosItens.SemFisica();
+        ConfiguracaoDoNucleo cfg = ApoioDosItens.SemFisica() with { ChanceDaParanoia = ApoioDosItens.NuncaParanoia };
         Cenario c = Cenario.Parado(cfg).Aplicar(new CmdPauseAutonomy());
         Usar(c, Item.Vodka);
         Disparar(c);
@@ -1125,23 +1177,25 @@ internal static class OndaTestes
         Afirmar.Igual("ITEM_EFFECT_TIMER: onda Tonto/Queda/1 -> fim; a de fundo volta: Bebado/Pico/2", c.Transicoes.Single().Regra, "a regra");
         Afirmar.Igual(Expressao.Bebado, c.Atual.Expressao, "com a cara do pico");
 
-        // Precedência igual também vai para a frente: a banana (satisfeito) e depois a bala (alegre), as duas de precedência 1.
+        // Precedência igual também vai para a frente: a banana (satisfeito) e depois o cigarro (relaxado), os dois de
+        // precedência 1. (Antes era a bala, com o alegre; desde 2026-10-01 a bala é droga sintética, com o eufórico.)
         Cenario iguais = Cenario.Parado(cfg).Aplicar(new CmdPauseAutonomy());
         Usar(iguais, Item.Banana);
-        Usar(iguais, Item.Bala);
-        Afirmar.Igual((Onda.Alegre, Onda.Satisfeito), (iguais.Atual.Onda!.Tipo, iguais.Atual.OndaDeFundo!.Tipo), "a de precedência igual vai para a frente");
+        Usar(iguais, Item.Cigarro);
+        Afirmar.Igual((Onda.Relaxado, Onda.Satisfeito), (iguais.Atual.Onda!.Tipo, iguais.Atual.OndaDeFundo!.Tipo), "a de precedência igual vai para a frente");
     }
 
     // 4.5: uma onda de precedência menor é absorvida: nem a onda nem o temporizador mudam, e nenhuma vai para o fundo. O
-    // cigarro (relaxado) por cima do elétrico e, entre as ondas leves, a banana e a bala (satisfeito e alegre) por cima do
-    // ligado do café e do energético. Com o alívio (pedido do usuário de 2026-10-01), a comida e a bebida sem álcool não são
-    // mais absorvidas por uma onda de substância: elas a aliviam um passo (AlivioTestes).
+    // cigarro (relaxado) por cima do elétrico e, entre as ondas leves, a banana (satisfeito) por cima do ligado do café e do
+    // energético. Com o alívio (pedido do usuário de 2026-10-01), a comida e a bebida sem álcool não são mais absorvidas por
+    // uma onda de substância: elas a aliviam um passo (AlivioTestes). A cocaína e o cigarro são uma mistura com droga
+    // sintética, que sorteia a paranoia; aqui ela fica de fora (a chance de 0 em 1; ParanoiaTestes).
     [Teste]
     public static void MaisFraca_EhAbsorvida()
     {
-        foreach ((Item forte, Item fraco) in new[] { (Item.Cocaina, Item.Cigarro), (Item.Cafe, Item.Banana), (Item.Cafe, Item.Bala), (Item.Energetico, Item.Banana), (Item.Energetico, Item.Bala) })
+        foreach ((Item forte, Item fraco) in new[] { (Item.Cocaina, Item.Cigarro), (Item.Cafe, Item.Banana), (Item.Energetico, Item.Banana) })
         {
-            Cenario c = Cenario.Parado(ApoioDosItens.SemFisica()).Aplicar(new CmdPauseAutonomy());
+            Cenario c = Cenario.Parado(ApoioDosItens.SemFisica() with { ChanceDaParanoia = ApoioDosItens.NuncaParanoia }).Aplicar(new CmdPauseAutonomy());
             Usar(c, forte);
             EstadoDoNucleo antes = c.Atual;
             Resultado absorvido = Usar(c, fraco);
@@ -1154,11 +1208,12 @@ internal static class OndaTestes
     }
 
     // 4.5: só cabem duas: bêbado, depois chapado, depois elétrico deixam o elétrico na frente e só o chapado atrás (o bêbado
-    // é descartado). Quando o elétrico acaba, volta o chapado; quando o chapado acaba, não sobra onda.
+    // é descartado). Quando o elétrico acaba, volta o chapado; quando o chapado acaba, não sobra onda. A cocaína fecha uma
+    // mistura com droga sintética, que sorteia a paranoia; aqui ela fica de fora (NuncaParanoia; ParanoiaTestes).
     [Teste]
     public static void SoCabemDuas()
     {
-        Cenario c = Cenario.Parado(ApoioDosItens.SemFisica()).Aplicar(new CmdPauseAutonomy());
+        Cenario c = Cenario.Parado(ApoioDosItens.SemFisica() with { ChanceDaParanoia = ApoioDosItens.NuncaParanoia }).Aplicar(new CmdPauseAutonomy());
         Usar(c, Item.Vodka);
         Usar(c, Item.Baseado);
         Afirmar.Igual((Onda.Chapado, Onda.Bebado), (c.Atual.Onda!.Tipo, c.Atual.OndaDeFundo!.Tipo), "chapado na frente, bêbado atrás");
@@ -1182,11 +1237,13 @@ internal static class OndaTestes
     // 4.5, com o desvio 3 do T5: um item do mesmo tipo da onda de fundo soma os níveis dela, que continua congelada; se ela
     // estava na queda, volta ao pico, como a da frente (manter a fase daria uma queda acima do nível 1, que não existe). A
     // vodka até a queda, o lança-perfume por cima (o bêbado vai para o fundo, na queda) e uma cerveja: o fundo fica no pico
-    // do nível 2, sem mexer no temporizador do tonto; quando o tonto acaba, o bêbado volta no pico, com a duração cheia.
+    // do nível 2, sem mexer no temporizador do tonto; quando o tonto acaba, o bêbado volta no pico, com a duração cheia. A
+    // vodka e o lança-perfume são uma mistura com droga sintética, que sorteia a paranoia; aqui ela fica de fora
+    // (NuncaParanoia; ParanoiaTestes).
     [Teste]
     public static void MesmoTipoDaDeFundo_NaQueda_VoltaAoPico()
     {
-        Cenario c = Cenario.Parado(ApoioDosItens.SemFisica()).Aplicar(new CmdPauseAutonomy());
+        Cenario c = Cenario.Parado(ApoioDosItens.SemFisica() with { ChanceDaParanoia = ApoioDosItens.NuncaParanoia }).Aplicar(new CmdPauseAutonomy());
         Usar(c, Item.Vodka);
         while (c.Atual.Onda!.Fase != FaseDaOnda.Queda) Disparar(c);
         var naQueda = new EstadoDaOnda(Onda.Bebado, FaseDaOnda.Queda, 1, 2);
@@ -1215,11 +1272,12 @@ internal static class OndaTestes
     // 4.5, a água, com o alívio (pedido do usuário de 2026-10-01): sem onda, nada; na subida acima do nível 1 e no pico acima
     // do 1, baixa um nível sem mexer no temporizador; no nível 1, da subida ou do pico, vai para a queda (ou acaba, sem
     // queda); na queda, acaba. Com uma onda de fundo, a que acaba dá lugar a ela. Antes do alívio, a subida do nível 1
-    // acabava; o resto é o mesmo.
+    // acabava; o resto é o mesmo. A vodka e o lança-perfume do fim são uma mistura com droga sintética, que sorteia a
+    // paranoia; aqui ela fica de fora (NuncaParanoia; ParanoiaTestes).
     [Teste]
     public static void Agua_BaixaUmNivelEEncerraAQueda()
     {
-        Cenario c = Cenario.Parado(ApoioDosItens.SemFisica()).Aplicar(new CmdPauseAutonomy());
+        Cenario c = Cenario.Parado(ApoioDosItens.SemFisica() with { ChanceDaParanoia = ApoioDosItens.NuncaParanoia }).Aplicar(new CmdPauseAutonomy());
         Resultado sem = Usar(c, Item.Agua);
         Afirmar.Nulo(sem.Estado.Onda, "sem onda: a água não faz nada");
         Afirmar.Falso(sem.Efeitos.Any(e => e is AgendarOnda or CancelarOnda), "nem no temporizador");

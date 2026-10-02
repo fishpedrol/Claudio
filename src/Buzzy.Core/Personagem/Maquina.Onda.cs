@@ -9,20 +9,15 @@ namespace Buzzy.Core.Personagem;
 /// <see cref="ItemEffectTimer"/>), sem relógio de passo fixo, e muda pesos, intervalos, gestos, caras e as três
 /// velocidades, com o cambaleio (exceção documentada ao invariante 12). Só a onda da frente vale; a de fundo fica
 /// congelada até a da frente acabar (4.5). Comer e beber algo sem álcool acalmam a onda da frente aos poucos, um passo
-/// por item (o alívio, pedido do usuário de 2026-10-01). E quem usa muitas substâncias seguidas fica paranoico, de
-/// desenho animado, achando que tem alguém no teto (a paranoia, outro pedido do mesmo dia): na 4ª do episódio, a onda
-/// <see cref="Onda.Paranoico"/> vai para a frente.
+/// por item (o alívio, pedido do usuário de 2026-10-01). E quem mistura substâncias com droga sintética pode ficar
+/// paranoico, de desenho animado, achando que tem alguém no teto (a paranoia, outros pedidos do mesmo dia): o uso que fecha
+/// um episódio de mistura com sintética sorteia, uma vez por episódio e com a chance de 1 em 8, a onda
+/// <see cref="Onda.Paranoico"/> na frente.
 /// </summary>
 public static partial class Maquina
 {
     /// <summary>Passos de uma volta do cambaleio: 0,8 s a 60 passos por segundo.</summary>
     public const int PassosDoCambaleio = 48;
-
-    /// <summary>
-    /// A carga que leva à paranoia (<see cref="EstadoDoNucleo.Carga"/>): da 4ª substância do episódio em diante, a paranoia
-    /// começa ou sobe um nível.
-    /// </summary>
-    public const int CargaDaParanoia = 4;
 
     /// <summary>
     /// Quanto dura o olhar pro teto do começo da paranoia (<see cref="Gesto.OlharProTeto"/>), em passos do relógio: 1,5 s a
@@ -168,13 +163,13 @@ public static partial class Maquina
 
         /// <summary>
         /// O que o item usado faz nas ondas: primeiro a combinação (4.5), com o alívio (<see cref="Combinar"/>); depois, a
-        /// carga da paranoia (<see cref="SomarACarga"/>). Devolve o texto da paranoia para a regra do soltar (vazio sem ela)
-        /// e se ela começou neste uso.
+        /// paranoia (<see cref="Paranoia"/>). Devolve o texto da paranoia para a regra do soltar (vazio sem ela) e se ela
+        /// começou neste uso.
         /// </summary>
         private (string Paranoia, bool Comecou) AplicarNaOnda(DadosDoItem dados)
         {
             Combinar(dados);
-            return SomarACarga(dados);
+            return Paranoia(dados);
         }
 
         /// <summary>
@@ -262,28 +257,36 @@ public static partial class Maquina
             return onda with { Nivel = nivel, Pior = Math.Max(onda.Pior, nivel), Fase = onda.Fase == FaseDaOnda.Subida ? FaseDaOnda.Subida : FaseDaOnda.Pico };
         }
 
-        // ---------------------------------------------------------------- a paranoia (pedido do usuário de 2026-10-01)
+        // ---------------------------------------------------------------- a paranoia (pedidos do usuário de 2026-10-01)
 
         /// <summary>
-        /// A paranoia, depois da combinação: um item de substância (todo item que não é de alívio) soma 1 à carga do episódio
-        /// (<see cref="EstadoDoNucleo.Carga"/>). Da <see cref="CargaDaParanoia"/>ª em diante: sem a paranoia na frente, ela
-        /// começa na frente, na subida do nível 1, e a frente vai para o fundo, congelada (a de fundo anterior é descartada),
-        /// como manda a precedência dela, a maior de todas; com ela na frente, sobe um nível (até 3), o pior acompanha e a
-        /// fase recomeça, como no mesmo tipo (<see cref="Somada"/>: a queda volta ao pico; a subida continua subida). Nenhum
-        /// sorteio. Devolve o texto da regra do soltar ("; a paranoia começa: Paranoico/Subida/1" ou "; a paranoia sobe:
-        /// Paranoico/Pico/1 -> Paranoico/Pico/2"; vazio sem paranoia) e se ela começou.
+        /// A paranoia, depois da combinação. Um item de substância (todo item que não é de alívio) entra na carga do episódio
+        /// (<see cref="CargaDaParanoia.Com"/>); a comida e a bebida sem álcool não fazem nada aqui. Com a paranoia na frente,
+        /// ela sobe um nível (até 3), o pior acompanha e a fase recomeça, como no mesmo tipo (<see cref="Somada"/>: a queda
+        /// volta ao pico; a subida continua subida), sem sorteio. Sem ela na frente, o uso que fecha um episódio de mistura
+        /// com droga sintética (<see cref="CargaDaParanoia.MisturaComSintetica"/>, contando o item atual) faz o sorteio do
+        /// episódio, o único (<see cref="CargaDaParanoia.Sorteada"/>), com a chance da configuração
+        /// (<see cref="ConfiguracaoDoNucleo.ChanceDaParanoia"/>, 1 em 8), num passo do gerador próprio da paranoia
+        /// (<see cref="EstadoDoNucleo.AleatorioDaParanoia"/>); o gerador principal, nunca. Saindo ou não, o episódio não
+        /// sorteia mais, até a carga voltar a zero. Se sai, ela começa na frente, na subida do nível 1, e a frente vai para o
+        /// fundo, congelada (a de fundo anterior é descartada), como manda a precedência dela, a maior de todas. Devolve o
+        /// texto da regra do soltar ("; a paranoia começa: Paranoico/Subida/1" ou "; a paranoia sobe: Paranoico/Pico/1 ->
+        /// Paranoico/Pico/2"; vazio sem paranoia, inclusive quando o sorteio não sai) e se ela começou.
         /// </summary>
-        private (string Texto, bool Comecou) SomarACarga(DadosDoItem dados)
+        private (string Texto, bool Comecou) Paranoia(DadosDoItem dados)
         {
             if (dados.Alivio) return ("", false);
-            _s = _s with { Carga = _s.Carga + 1 };
-            if (_s.Carga < CargaDaParanoia) return ("", false);
+            _s = _s with { Carga = _s.Carga.Com(dados) };
             if (_s.Onda is { Tipo: Onda.Paranoico } paranoia)
             {
                 EstadoDaOnda subiu = Somada(paranoia, 1);
                 IniciarFase(subiu);
                 return ($"; a paranoia sobe: {Descrever(paranoia)} -> {Descrever(subiu)}", false);
             }
+            if (!_s.Carga.MisturaComSintetica || _s.Carga.Sorteada) return ("", false);
+            (bool saiu, Aleatorio proximo) = _s.AleatorioDaParanoia.Sortear(_cfg.ChanceDaParanoia);
+            _s = _s with { AleatorioDaParanoia = proximo, Carga = _s.Carga with { Sorteada = true } };
+            if (!saiu) return ("", false);
             var comeca = new EstadoDaOnda(Onda.Paranoico, FaseDaOnda.Subida, 1, 1);
             _s = _s with { OndaDeFundo = _s.Onda };
             IniciarFase(comeca);
@@ -305,14 +308,15 @@ public static partial class Maquina
         }
 
         /// <summary>
-        /// No fim de todo evento, a carga da paranoia volta a 0 se nem a onda da frente nem a de fundo é de substância: o
-        /// episódio acabou. A paranoia é de substância, então a carga dura enquanto ela durar. Com o tamagotchi desligado,
-        /// nada muda.
+        /// No fim de todo evento, a carga da paranoia volta toda a <see cref="CargaDaParanoia.Nenhuma"/> (as substâncias, a
+        /// sintética, os itens distintos e o sorteio feito, juntos) se nem a onda da frente nem a de fundo é de substância: o
+        /// episódio acabou, e o seguinte sorteia de novo. A paranoia é de substância, então a carga dura enquanto ela durar. O
+        /// gerador da paranoia segue, sem voltar ao começo. Com o tamagotchi desligado, nada muda.
         /// </summary>
         private void ZerarACargaSemSubstancia()
         {
-            if (_cfg.Tamagotchi && _s.Carga > 0 && !DeSubstancia(_s.Onda) && !DeSubstancia(_s.OndaDeFundo))
-                _s = _s with { Carga = 0 };
+            if (_cfg.Tamagotchi && _s.Carga != CargaDaParanoia.Nenhuma && !DeSubstancia(_s.Onda) && !DeSubstancia(_s.OndaDeFundo))
+                _s = _s with { Carga = CargaDaParanoia.Nenhuma };
         }
 
         /// <summary>Se a onda existe e é de substância, pela tabela (<see cref="DadosDaOnda.DeSubstancia"/>).</summary>

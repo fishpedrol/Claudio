@@ -1,38 +1,46 @@
 # Continuidade compartilhada — Buzzy
 
-> Registro único de handoff e backup para Claude e Codex. Atualizado em 2026-09-30.
+> Registro único de handoff e backup para Claude e Codex. Atualizado em 2026-10-02 por Claude, na passagem para o Codex.
 > As fontes canônicas em `docs/`, o código e as instruções atuais do usuário prevalecem. Este arquivo registra o estado de trabalho entre sessões; confirme tudo no checkout antes de agir.
 
 ## Retomada atual
 
-O usuário pediu que Claude volte a implementar o que falta. A diretiva está em [prompt_usuario.md](prompt_usuario.md); a autorização contínua de Claude está em DEC-015. A divisão anterior que deixava a Fase 2 com Codex foi substituída.
+**Quem assume agora: o Codex.** Na mensagem das 19:10 de 2026-10-01, o usuário pediu: "acabando esse workflow pare de produzir o projeto, atualize o arquivo de continuidade para o codex assumir, antes queria que adicionasse também uma funcionalidade que o macaco fume maconha à vontade quando ele quiser". Claude concluiu esse trabalho em 2026-10-02, às 02:20, e parou. A autorização contínua de implementação segue em DEC-015 e [prompt_usuario.md](prompt_usuario.md).
 
-**Estado em 2026-09-30 20:35 (Claude). Os commits `828c1f7`, `803a54b`, `0699c08` e `87c4203` foram feitos com a identidade git do usuário; o resto está no checkout, sem commit:**
+**Estado em 2026-10-02 (Claude):**
 
-- **Fase 2:** VERIFIED.
-- **Fases 3 e 4:** implementadas na árvore principal e verificadas por automação e input SINTÉTICO; continuam PLANNED por pendências [MANUAL]/[HW]:
-  - Fase 3: UAC, DPI misto e ClickLock;
-  - Fase 4: gravação de tela a 120 qps.
-- **Fase 4 inclui os pedidos do usuário:**
-  - toon force (DEC-023);
-  - cipó e "preso onde você solta" (DEC-024);
-  - esconderijo pelo clique duplo (DEC-025).
-- **Fase 5:** bloco A (P1–P5) implementado pelo workflow `wf_10b65660-ce6` e em correção; **ainda não verificado por Claude** (detalhes no log das 20:35).
-- As cópias `scratchpad\f4` e `scratchpad\cipo` estão obsoletas; a árvore principal é a fonte.
+- **Git:** o último commit é `7fe929e` (18:51 de 2026-10-01), feito pelo usuário. Todo o trabalho desta leva está na árvore, **sem commit**: 40 arquivos modificados (contando este) e 4 novos. Os 4 novos são exigidos pelo build e pelos testes:
+  - `tests/Buzzy.App.Testes/Integracao/SementesDaParanoia.cs`;
+  - `tests/Buzzy.App.Testes/Integracao/SementesDoBaseado.cs`;
+  - `tests/Buzzy.Core.Testes/Tamagotchi/BaseadoPorContaPropriaTestes.cs`;
+  - `tests/Buzzy.Core.Testes/Referencias/09-baseado-por-conta-propria.txt`.
+  - Os commits são feitos pelo usuário; não faça commit automático.
+- **Fases:** o estado canônico de cada uma está em [docs/PROJECT_CONTEXT.md](docs/PROJECT_CONTEXT.md) e [docs/TODO.md](docs/TODO.md). Em resumo:
+  - Fase 2 VERIFIED;
+  - Fases 1, 3 e 4 implementadas, com pendências [MANUAL] ou [HW];
+  - Fase 5 em andamento: blocos A e B (passos P1–P9) prontos, P10–P16 por fazer;
+  - a Interação (DEC-027 e DEC-028), intercalada com a Fase 5.
+- **Pronto nesta leva** (DEC-028 e passos T10 a T12 do TODO):
+  - **alívio:** banana, água, café e energético acalmam o efeito aos poucos;
+  - **bala como droga sintética e paranoia:** misturar uma sintética (bala, MD, cocaína ou lança-perfume) com outra substância faz **um único sorteio de 1 em 8 por mistura**, que pode deixá-lo paranoico, de desenho animado. O "uma vez por mistura" foi escolha do usuário às 23:03 de 2026-10-01;
+  - **baseado por conta própria:** às vezes, parado no chão, ele fuma sozinho, sem item na tela; não fuma já chapado nem paranoico, e o clique interrompe.
+- **Evidência (Claude, 2026-10-02, 02:17–02:20):** `tools\testar.ps1 -Integracao`, código 0, "Tudo verde".
+  - Build sem avisos nem erros; portão de APIs APROVADO; auditoria com 0 pacotes vulneráveis.
+  - Núcleo 492/492; Portão 74/74; App 364/364, com os 32 de integração; arquivos reais do usuário intocados.
+  - Nada disso é verificação de tela com input sintético nem gesto humano.
 
 ### Próximas ações em ordem
 
-1. **Fase 5**, seguindo a ordem P1–P16 de `scratchpad\fase5\critico-integracao.md`, com as resoluções C1–C18 e os desenhos em `scratchpad\fase5\projetista-*.md`:
-   - numeração das DECs da Fase 5: DEC-029 (persistência), DEC-030 (chave e topologia), DEC-031 (sessão, energia e minimização) e DEC-032 (travessia e escala). DEC-027 e DEC-028 foram para os pedidos novos do usuário;
-   - na travessia, respeite a DEC-023: na passagem, a agenda sorteia entre atravessar e escalar (C14);
-   - isolamento dos testes por `--perfil-de-teste` antes de gravar qualquer arquivo real (C17).
-2. **Pedidos novos do usuário (2026-09-30, 18:00)** — emoção dominante no menu (DEC-027) e tamagotchi adulto com 13 itens em pixel art (DEC-028):
-   - itens invocados pelo menu, que caem no chão ao lado dele, e usados quando o usuário os arrasta e solta sobre ele, com animação de fumar, cheirar, beber, comer, engolir ou inalar;
-   - efeitos cartunescos no comportamento, sem necessidades que decaem com o tempo;
-   - o desenho está sendo feito pelo workflow só de leitura `wf_401d9729-204` (resultado em `scratchpad\tamagotchi\`, a extrair);
-   - implementar depois do bloco A da Fase 5 (`wf_10b65660-ce6`, rodando), antes dos blocos B a D.
-3. Depois da Fase 5: a curiosidade (DEC-026) com o observador de janela ativa (P7), junto com o modo de tela cheia.
-4. Toda verificação de tela avisa o usuário antes. Nada de commit automático.
+1. **Perguntar ao usuário as duas escolhas do baseado por conta própria** (DEC-028, itens 39 e 41; [MANUAL] no TODO):
+   - **frequência:** só com a autonomia, na energia Média, ele fuma cerca de 1 baseado a cada 14,6 min e fica chapado cerca de 39% do tempo (20% na Baixa, 55% na Alta). O peso já é o menor inteiro; reduzir pede regra nova, como um intervalo mínimo depois do chapado ou a calibração pelo tempo total;
+   - **bala dada sozinha:** com ele chapado do baseado dele, uma bala fecha a mistura e pode deixá-lo paranoico. Na simulação, isso acontece com cerca de 6,6% das balas dadas sozinhas (1 em 12 a 15). A alternativa é o baseado dele não contar como item distinto da mistura.
+2. **Verificação de tela com input SINTÉTICO.** Ela move o cursor: avise o usuário antes e confirme que não há Buzzy aberto.
+   - Tamagotchi, V16 a V19, de 7 a 13 min: depois de `tools\testar.ps1`, rode `tests\Buzzy.Verificacao\bin\Release\net10.0-windows\Buzzy.Verificacao.exe --injetar-input-na-tela --fase tamagotchi`. O V17 pode sair INCONCLUSIVO se a agenda real sair da simulação.
+   - Bloco B da Fase 5: `--fase 1`, `3` e `4` e as medições de 10 minutos ([docs/TODO.md](docs/TODO.md)).
+3. **Build novo para a cópia da Área de Trabalho** (`C:\Users\Cliente\Desktop\net10.0-windows`, compilada às 18:32 de 2026-10-01). Ela ainda tem a regra antiga, com a paranoia na 4ª substância e a bala de alívio, e não fuma sozinha. Atualize só com o Buzzy dele fechado e com o ok do usuário.
+4. **Revisão visual e de tom pelo usuário** [MANUAL]: a paranoia, o alívio, a bala (desenhada como doce, agora com os corações do eufórico) e o baseado por conta própria.
+5. **Seguir a Fase 5 pelo passo P10** (sessão, energia e minimização), com a ordem e as resoluções em [docs/TODO.md](docs/TODO.md).
+6. Toda verificação de tela avisa o usuário antes. Nada de commit automático.
 
 ## Estado e evidência que orientam o handoff
 
@@ -50,7 +58,9 @@ O usuário pediu que Claude volte a implementar o que falta. A diretiva está em
   - Core 267/267; App 37/37 com a integração.
   - `--fase 4`: 28 OK, 0 falhas, cobrindo queda segurada, caminhada, escalada, repouso, quique, lateral interna, cipó, parede e esconderijo.
   - Pendência [MANUAL]: critério 5, gravação a 120 qps.
-- **Fase 5 (em andamento):** P1–P5 com evidência só dos agentes do workflow, em Debug: Core 307/307, portão 73/73, App 52 (+11 de integração não executados). Falta a bateria em Release, que depende de o usuário fechar o Buzzy aberto a partir da pasta Release, e a integração e as verificações de tela com `--perfil-de-teste`.
+- **Fase 5 (em andamento):** blocos A e B (passos P1–P9) implementados e verificados por testes automatizados e de integração; o bloco B foi revisado e corrigido em 2026-10-01. Pendem a verificação de tela do bloco B, as medições de 10 minutos e os passos P10–P16. Detalhes em [docs/PROJECT_CONTEXT.md](docs/PROJECT_CONTEXT.md).
+- **Interação (DEC-027, DEC-028):** núcleo, arte e app verificados, inclusive pela tela com input SINTÉTICO em 2026-10-01 às 10:35 (46 OK, 1 N/A, 0 falhas). Isso foi antes do alívio, da paranoia e do baseado por conta própria, que só têm evidência de testes automatizados e de integração. V17, V17b, V18 e V19 estão escritas e nunca rodaram.
+- **Relatórios desta leva:** no scratchpad da sessão `b1e376a9`, em `retomada\1-…` a `9-…`. As entradas de 2026-10-01 e 2026-10-02 do log abaixo resumem cada um.
 - **Identidade:** DEC-018/DEC-019 aprovaram pixel art fiel às pranchas e semelhança intencional com Luffy, incluindo chapéu de palha e faixa vermelha. O quadro parado e o ícone já estão integrados; animações pertencem à Fase 6. A fonte visual é `docs/IDENTIDADE_VISUAL.md` e os arquivos em `src/Buzzy.Visual/Pixel/` / `assets/identidade/pixel/`.
 
 ## Alertas históricos
@@ -398,3 +408,79 @@ Mantenha aqui um resumo do estado atual e acrescente uma entrada curta por marco
     - verificação escrita V17 (paranoia) e V18 (alívio), sem executar;
     - revisor, corretor e docs do alívio e da paranoia (DEC-028 etc.).
   - **Depois:** Claude roda a verificação de tela completa (Fase 4 e tamagotchi com V16, V17 e V18) e as medições, avisando o usuário antes.
+- **2026-10-01 19:00 — Claude:** **refino da paranoia pedido pelo usuário** (18:50): "só quero que ele fique paranoico se misturar substâncias com alguma droga sintética, como bala, md, coca e lança; usando álcool e maconha não".
+  - **Commits do usuário:** `af586e1` (12:08) e `7fe929e` (18:51) gravaram a árvore, inclusive o núcleo da paranoia com o gatilho antigo e o início da apresentação.
+  - **Workflow `wf_aad0e340-b2a` interrompido** por Claude às 18:53. O núcleo tinha terminado (Core 468; relatório em `scratchpad\paranoia-relatorios\impl-paranoia-nucleo.md`). O gesto OlharProTeto passou para o fim do uso que começou a paranoia; Claude aprovou o desvio.
+  - **Decisão nova:**
+    - **Sintéticas:** bala, MD, cocaína e lança-perfume.
+    - **Bala é droga sintética:** sai do alívio e passa a dar Euforico com intensidade 1. A onda Alegre fica sem item; a arte não muda.
+    - **Alívio:** banana, água, café e energético.
+    - **Paranoia:** na 4ª substância do episódio, **só** se houve ao menos uma sintética **e** ao menos 2 itens de substância distintos. Álcool, maconha, cigarro e cogumelo nunca disparam; 4 MD sozinhas também não, porque não é mistura.
+  - **Workflow `wf_ea155e4b-e66` lançado:** refino do núcleo → apresentação (Paranoico → Suor, gestos) e verificação escrita V17, V17b e V18 → revisor → corretor → docs (alívio, bala e paranoia).
+  - **Depois:** Claude roda a verificação de tela completa (Fase 4 e tamagotchi com V16, V17, V17b e V18) e as medições, avisando antes.
+- **2026-10-01 19:05 — Claude:** **mais um pedido do usuário** (19:00): "quero que a chance dele ficar paranoico seja de 1 em 8".
+  - O workflow `wf_ea155e4b-e66` foi parado antes de mexer em qualquer arquivo; só `CONTINUIDADE.md` estava modificado.
+  - **Regra final da paranoia:**
+    - a cada item de substância usado, depois da combinação, se a paranoia não está na frente e o episódio é **mistura com sintética** (≥1 entre bala, MD, cocaína e lança-perfume, e ≥2 itens de substância distintos), há um sorteio com **chance de 1 em 8**;
+    - **não há mais o mínimo de 4**;
+    - com a paranoia na frente, qualquer substância sobe um nível, sem sorteio;
+    - o sorteio usa um **gerador próprio da paranoia**, guardado no estado e semeado a partir da semente do núcleo, sem tocar no gerador principal;
+    - a chance fica em `ConfiguracaoDoNucleo.ChanceDaParanoia`, substituível nos testes.
+  - **Bala** continua como droga sintética (Euforico 1, fora do alívio).
+  - **Workflow `wf_a31830b5-a6e` lançado:** refino do núcleo → apresentação e verificação escrita (V17 com semente escolhida, V17b e V18) → revisor → corretor → docs.
+- **2026-10-01 19:15 — Claude:** **instrução do usuário (19:10):** "acabando esse workflow pare de produzir o projeto, atualize o arquivo de continuidade para o codex assumir, antes queria que adicionasse também uma funcionalidade que o macaco fume maconha à vontade quando ele quiser".
+  - **Plano:**
+    1. esperar o `wf_a31830b5-a6e` (paranoia com chance de 1 em 8);
+    2. implementar o **baseado por conta própria**;
+    3. rodar `testar.ps1` e `-Integracao`;
+    4. atualizar este arquivo para o Codex;
+    5. **parar**.
+  - **Baseado por conta própria** (decisão de Claude, a registrar como adendo da DEC-028):
+    - **Ação:** autônoma nova, `FumarBaseado`, no fim do enum de ações, só com a chave `Tamagotchi` ligada.
+    - **Quando:** só em IDLE no chão, visível, com a autonomia não pausada, sem item na mão do usuário. Peso zero quando a onda da frente é Chapado ou Paranoico, para ele não emendar.
+    - **Uso:** entra em USING com `Uso(Baseado, Fumar, 210 passos, Chão)`, a mesma animação de fumar, **sem janela de item e sem item no mundo** (ele "tira do chapéu").
+    - **Efeito:** a onda do Baseado (Chapado 2) pela combinação normal.
+    - **Episódio:** conta como substância. Não é sintética, então sozinho nunca dá paranoia; num episódio que já é mistura com sintética, vale o sorteio de 1 em 8.
+    - **Prioridade do usuário:** PRESS interrompe, como em todo USING.
+    - **Peso:** calibrado por simulação para cerca de 1 baseado a cada 4 minutos de **tempo elegível** (IDLE no chão, sem Chapado nem Paranoico na frente) na energia Média (relatar Baixa, Média e Alta). *Correção de 2026-10-02:* no tempo total, isso dá cerca de 1 a cada 14,3 a 14,6 min na Média; veja a entrada das 02:30.
+    - **Invariante 23 ajustado:** itens só nascem por `CMD_SUMMON_ITEM`; um uso vem do ITEM_DRAG_END do usuário **ou** da ação autônoma `FumarBaseado` (só o baseado, só em IDLE no chão, nunca cria item no mundo).
+    - **Referências 01–05:** não mudam, porque as listas `# acoes:` delas não incluem a ação nova.
+    - **Verificação de tela:** V19 escrita, sem executar.
+- **2026-10-01 23:10 — Claude (sessão nova `b1e376a9`):** **o PC reiniciou às 21:08 (boot às 21:13) no meio do workflow `wf_a31830b5-a6e`; o trabalho foi retomado.**
+  - **Onde parou:** o refino do núcleo, a apresentação e o revisor terminaram. Os relatórios foram tirados do journal e salvos em `retomada\1-nucleo.md`, `2-app.md` e `3-revisor.md`, no scratchpad da sessão `b1e376a9`. O corretor parou no meio de 27 edições: o build compilava e havia 1 teste vermelho. A documentação não tinha começado. Nenhum arquivo foi corrompido (conferido).
+  - **Achado principal do revisor:** com um sorteio a cada substância, a chance de 1 em 8 se acumulava: cerca de 33% com 3 sorteios e 55% com 6.
+  - **Decisão do usuário (23:03):** "Uma vez por mistura". Quando ele mistura uma droga sintética com outra substância, há um único sorteio de 1 em 8, e usar mais coisas na mesma leva não aumenta a chance. O corretor interrompido já tinha começado isso no código (`CargaDaParanoia.Sorteada`), e as edições foram mantidas.
+  - **Nenhum Buzzy aberto** depois do reinício, então o `-Integracao` pode rodar.
+  - **Workflow de continuação `wf_75f755af-3ae` lançado:**
+    1. corretor da paranoia (termina o sorteio único e os outros achados);
+    2. em paralelo: os docs do alívio, da bala e da paranoia, e o baseado por conta própria (implementação → revisor → corretor);
+    3. os docs do baseado.
+  - Cada agente grava o relatório em `retomada\4-corretor-paranoia.md` … `9-docs-baseado.md`. **Se o PC cair de novo**, continue a partir desses arquivos e do journal do workflow.
+  - **Depois:** bateria final (`testar.ps1` e `-Integracao`), este arquivo para o Codex e parar (instrução das 19:10).
+- **2026-10-02 01:15 — Claude:** andamento do workflow `wf_75f755af-3ae`. Os relatórios estão em `retomada\` no scratchpad da sessão `b1e376a9`.
+  - **Corretor da paranoia, pronto às 23:55** (`4-corretor-paranoia.md`): o sorteio único por episódio está pronto e testado.
+    - Chance real com 4000 episódios: com 2, 4 e 8 substâncias deu 491, 524 e 522 (de 12,3% a 13,1%; faixa aceita de 417 a 583).
+    - Linha nova `PARANOIA` no diagnóstico (só com `--diagnostico`) a cada sorteio, saindo ou não.
+    - `testar.ps1 -Integracao` às 23:48: código 0, Núcleo 479, Portão 74, App 361 de 361. Referências 01–08 inalteradas.
+  - **Docs do alívio, da bala e da paranoia, prontos às 00:23** (`5-docs-paranoia.md`): DEC-028 (adicional de 2026-10-01, itens 28 a 35), ARCHITECTURE, IDENTIDADE_VISUAL, PRODUCT_SPEC, SECURITY, TODO (T10 e T11), PROJECT_CONTEXT, DEVELOPMENT_LOG, README e COMO_INICIAR.
+  - **Baseado por conta própria implementado às 00:46** (`6-impl-baseado.md`):
+    - ação `FumarBaseado = 64`, fora de `Todas`, ligada só no app; peso 1 nos três níveis;
+    - frequência na energia Média, só com a autonomia: cerca de 1 a cada 3,9 min de tempo elegível e 1 a cada 14,6 min no total; **chapado cerca de 39% do tempo** (20% na Baixa, 55% na Alta). Pode parecer demais para o usuário: o peso já é o menor inteiro, e reduzir pede uma decisão nova;
+    - mesmo caminho do item arrastado (`ComecarOUso`), sem item no mundo nem janela; app sem mudança de código; referência 09 nova; V19 escrita, não rodada;
+    - `testar.ps1 -Integracao` às 00:40: código 0, Núcleo 491, Portão 74, App 364 de 364.
+  - **Tentativa de acelerar, a pedido do usuário** ("se usar mais agentes não vai ser mais rápido?"):
+    - preparei uma variante com 4 revisores em paralelo, cada um numa cópia própria da árvore, e os docs em 3 partes; ela ficou em `retomada\variante-paralela.js`;
+    - não foi usada: o aviso da fronteira chegou 21 min atrasado, quando o revisor único já estava adiantado, e trocar teria ficado mais lento. O workflow seguiu como estava.
+  - **Agora:** revisor do baseado (desde 00:47) → corretor → docs do baseado. Depois: bateria final, este arquivo para o Codex e parar.
+- **2026-10-02 02:21 — Claude:** **workflow `wf_75f755af-3ae` concluído (6 agentes, 0 erros, cerca de 2h48) e passagem para o Codex.**
+  - **Revisor do baseado** (01:20, `retomada\7-revisor-baseado.md`): 10 achados, nenhum defeito que contrarie a decisão. Os dois de produto (tempo chapado; bala dada sozinha) viraram as escolhas do item 1 das "Próximas ações", no topo.
+  - **Corretor do baseado** (01:52, `8-corretor-baseado.md`): só mudaram testes.
+    - Invariantes reforçados: menu em USING, IDLE fora do chão e 3 casos exigidos novos.
+    - `OndaTestes.EmRepouso` confere as ondas e a carga pela regra.
+    - Teste novo da bala dada sozinha; referência 09 reordenada (76 linhas).
+    - Integração e V19 esperam o quadro `fumando-3` antes do clique.
+    - 10 mutações, todas reprovadas. Núcleo 492.
+  - **Docs do baseado** (02:16, `9-docs-baseado.md`): DEC-028 com o adendo de 2026-10-02 (itens 36 a 42, passo T12); ARCHITECTURE (2.6, 2.11, 2.13.4 e 2.16); PRODUCT_SPEC; TODO; PROJECT_CONTEXT; DEVELOPMENT_LOG; SECURITY §10; IDENTIDADE_VISUAL §7; README e COMO_INICIAR.
+  - **Bateria final de Claude** (02:17–02:20): `tools\testar.ps1 -Integracao`, código 0. Núcleo 492/492, Portão 74/74, App 364/364 com 32 de integração; portão de APIs APROVADO; 0 vulneráveis; arquivos reais intocados. Nenhum Buzzy aberto depois.
+  - **Não feito:** commit; verificação de tela (V16 a V19 e as fases do bloco B); build da Área de Trabalho; revisão do usuário.
+  - **Claude parou aqui, como pedido às 19:10.** Próximo passo: "Próximas ações em ordem", no topo deste arquivo.

@@ -17,6 +17,13 @@ internal static class ApoioDosItens
     public static ConfiguracaoDoNucleo SemFisica() => new() { Tamagotchi = true };
 
     /// <summary>
+    /// Uma chance de paranoia que nunca sai (0 em 1: o sorteio acontece, mas não sai). Os testes que misturam uma droga
+    /// sintética com outra substância sem falar da paranoia a usam, para não dependerem de a semente não sortear a paranoia;
+    /// ela tem os testes dela (ParanoiaTestes).
+    /// </summary>
+    public static readonly Chance NuncaParanoia = new(0, 1);
+
+    /// <summary>
     /// A configuração do aplicativo, com a física, e o tamagotchi ligado de forma explícita: o aplicativo o liga desde o
     /// passo T9, e estes testes não dependem de a configuração dele continuar assim.
     /// </summary>

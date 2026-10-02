@@ -1039,6 +1039,9 @@ public static partial class Maquina
             Opcao(AcoesAutonomas.Descansar, perfil.PesoDescansar);
             Opcao(AcoesAutonomas.Gesto, perfil.PesoGesto);
             Opcao(AcoesAutonomas.TrocarExpressao, perfil.PesoTrocarExpressao);
+            // O baseado por conta própria (DEC-028; pedido do usuário de 2026-10-01, 19:10), a última opção: sem ela (a chave
+            // desligada, fora do chão, com a onda Chapado ou a paranoia na frente), o sorteio é o de sempre.
+            Opcao(AcoesAutonomas.FumarBaseado, PodeFumarPorContaPropria ? perfil.PesoFumarBaseado : 0);
             if (opcoes.Count == 0) return;
 
             (int indice, Aleatorio a) = _s.Aleatorio.Ponderado([.. opcoes.Select(o => o.Peso)]);
@@ -1076,6 +1079,9 @@ public static partial class Maquina
                     // O sorteio avança o gerador em _s: a cara vai para uma variável antes do "with".
                     Expressao nova = SortearTrocaDeCara();
                     _s = _s with { Expressao = nova };
+                    break;
+                case AcoesAutonomas.FumarBaseado:
+                    FumarPorContaPropria();
                     break;
             }
         }

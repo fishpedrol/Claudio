@@ -611,6 +611,9 @@ internal sealed partial class Aplicacao
                 Evento[] eventosDoLote = [.. _motivosDoNucleo.Keys];
                 var efeitos = new List<(Evento Evento, Efeito Efeito, string Motivo)>();
                 long descartadosAntes = _nucleo.Descartados;
+                // O estado antes de cada evento do lote, para a linha do sorteio da paranoia (só com --diagnostico).
+                EstadoDoNucleo anterior = _nucleo.Estado;
+                Chance chanceDaParanoia = _nucleo.Configuracao.ChanceDaParanoia;
                 try
                 {
                     _nucleo.Processar((eventoAplicado, resultado) =>
@@ -625,6 +628,10 @@ internal sealed partial class Aplicacao
                                 ("para", transicao.Para),
                                 ("regra", transicao.Regra));
                         }
+                        // O sorteio da paranoia, saindo ou não, numa linha à parte da regra (LigacaoDosItens.SorteioDaParanoia).
+                        if (Diagnostico.Ligado && LigacaoDosItens.SorteioDaParanoia(anterior, resultado.Estado, chanceDaParanoia) is { } sorteio)
+                            Diagnostico.Evento("PARANOIA", sorteio);
+                        anterior = resultado.Estado;
                         foreach (Efeito efeito in resultado.Efeitos)
                             efeitos.Add((eventoAplicado, efeito, motivoEvento));
                     });

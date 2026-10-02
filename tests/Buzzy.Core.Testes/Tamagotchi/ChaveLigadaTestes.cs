@@ -24,12 +24,14 @@ internal static class ChaveLigadaTestes
         return aplicados;
     }
 
-    // Invariante 22 com a física do aplicativo: sem itens, sem onda e com a emoção automática, ligar a chave não muda nada.
-    // A configuração ligada é a do aplicativo (DoAplicativo, com a chave ligada desde o passo T9), e a desligada, a mesma
-    // com a chave apagada. Com a mesma semente e os mesmos eventos (10 minutos por semente, com cliques, arrastes, clique
-    // duplo, bandeja e pausa sorteados, e a agenda livre quase todo o tempo), nos três níveis de energia, com todas as ações
-    // ou só escalar, com ou sem pular (muitas subidas, foguetes e pulos), evento a evento: as mesmas transições, os mesmos
-    // efeitos e o mesmo estado, inclusive o gerador.
+    // Invariante 22 com a física do aplicativo: sem itens, sem onda, com a emoção automática e sem o baseado por conta
+    // própria, ligar a chave não muda nada. A configuração ligada é a do aplicativo (DoAplicativo, com a chave ligada desde o
+    // passo T9), com as ações de sempre (Todas, sem FumarBaseado: o baseado por conta própria muda o sorteio da agenda de
+    // propósito, e tem os testes dele, BaseadoPorContaPropriaTestes), e a desligada, a mesma com a chave apagada. Com a mesma
+    // semente e os mesmos eventos (10 minutos por semente, com cliques, arrastes, clique duplo, bandeja e pausa sorteados, e a
+    // agenda livre quase todo o tempo), nos três níveis de energia, com todas as ações de sempre ou só escalar, com ou sem
+    // pular (muitas subidas, foguetes e pulos), evento a evento: as mesmas transições, os mesmos efeitos e o mesmo estado,
+    // inclusive o gerador.
     [Teste]
     public static void ChaveLigadaSemItens_IgualADesligada()
     {
@@ -85,15 +87,15 @@ internal static class ChaveLigadaTestes
     // Invariante 27 com a física do aplicativo e a chave ligada, com itens e ondas: as duas execuções, com a emoção
     // automática e com a dominante escolhida pela carga, recebem os mesmos eventos (10 minutos de agenda livre por semente,
     // com itens invocados, soltos sobre ele, o que começa, soma, combina e alivia ondas, ou longe, largados e recolhidos, e
-    // com ele posto no chão, no ar, na parede, no cipó e no esconderijo, pausado ou não). Evento a evento: as mesmas
-    // transições, os mesmos efeitos e o mesmo estado, inclusive o gerador, os itens, o uso e as ondas, a não ser a cara e
-    // a própria emoção.
+    // com ele posto no chão, no ar, na parede, no cipó e no esconderijo, pausado ou não), e a agenda do aplicativo às vezes o
+    // faz fumar um baseado por conta própria. Evento a evento: as mesmas transições, os mesmos efeitos e o mesmo estado,
+    // inclusive o gerador, os itens, o uso e as ondas, a não ser a cara e a própria emoção.
     [Teste]
     public static void Dominante_SoMudaACara_ComItensEOndas()
     {
         ConfiguracaoDoNucleo cfg = ConfiguracaoDoNucleo.DoAplicativo(Sprite) with { Tamagotchi = true };
         var mestre = new Random(2034);
-        long eventos = 0, comOnda = 0, comFundo = 0, usos = 0, comOutraCara = 0;
+        long eventos = 0, comOnda = 0, comFundo = 0, usos = 0, comOutraCara = 0, fumou = 0;
         for (int n = 0; n < 40; n++)
         {
             int semente = mestre.Next();
@@ -130,12 +132,14 @@ internal static class ChaveLigadaTestes
                 if (sem.Estado.Onda is not null) comOnda++;
                 if (sem.Estado.OndaDeFundo is not null) comFundo++;
                 usos += sem.Transicoes.Count(t => t.Para == Estado.Using && t.De != Estado.Using);
+                fumou += sem.Transicoes.Count(t => t.Para == Estado.Using && a[i].Evento is AutonomyTimer);
                 if (sem.Estado.Expressao != com.Estado.Expressao) comOutraCara++;
             }
             eventos += a.Count;
         }
-        Console.WriteLine($"         {eventos} eventos em 40 sementes de 10 minutos; {usos} usos, {comOnda} eventos com onda ({comFundo} com onda de fundo), {comOutraCara} com outra cara");
+        Console.WriteLine($"         {eventos} eventos em 40 sementes de 10 minutos; {usos} usos ({fumou} do baseado por conta própria), {comOnda} eventos com onda ({comFundo} com onda de fundo), {comOutraCara} com outra cara");
         Afirmar.Verdadeiro(usos >= 100 && comOnda >= eventos / 10 && comFundo > 0, "os itens e as ondas foram exercitados");
+        Afirmar.Verdadeiro(fumou > 0, "o baseado por conta própria também");
         Afirmar.Verdadeiro(comOutraCara > eventos / 10, "a dominante muda a cara em boa parte do tempo");
     }
 

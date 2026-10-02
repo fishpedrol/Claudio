@@ -49,6 +49,10 @@
   -->
   <ItemGroup>
     <Compile Include="..\Buzzy.Core.Testes\Movimento\SimuladorDeTempo.cs" Link="Compartilhado\SimuladorDeTempo.cs" />
+    <!-- A semente em que o primeiro sorteio da paranoia sai (V17b e V17): a mesma escolha do teste de integração dela. -->
+    <Compile Include="..\Buzzy.App.Testes\Integracao\SementesDaParanoia.cs" Link="Compartilhado\SementesDaParanoia.cs" />
+    <!-- A semente em que a primeira decisão é o baseado por conta própria (V19): a mesma escolha do teste de integração dele. -->
+    <Compile Include="..\Buzzy.App.Testes\Integracao\SementesDoBaseado.cs" Link="Compartilhado\SementesDoBaseado.cs" />
     <ProjectReference Include="..\..\src\Buzzy.Visual\Buzzy.Visual.csproj" />
   </ItemGroup>
 

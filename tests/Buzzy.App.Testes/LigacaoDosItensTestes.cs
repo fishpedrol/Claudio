@@ -195,4 +195,82 @@ internal sealed class LigacaoDosItensTestes
         LigacaoDosItens.Executar(new MostrarItem(1, Item.Bala, Lugar(10)), g, null, null);
         Afirmar.Nulo(g.ItemEmGesto);
     }
+
+    // A linha do sorteio da paranoia no log (pedidos do usuário de 2026-10-01; DEC-028), à parte da regra do soltar: só com
+    // o gerador da paranoia mudado no evento (o sorteio do episódio, um passo), com o item do uso, a chance, se saiu (o uso
+    // começou a paranoia) e a carga do episódio; o sorteio que não sai também tem a linha. Sem sorteio, nenhuma linha: nem
+    // com o gerador principal mudado, nem com a paranoia subindo de nível (o gerador dela fica o mesmo).
+    [Teste]
+    public void SorteioDaParanoia_UmaLinhaSoQuandoOGeradorDaParanoiaAnda()
+    {
+        var chance = new Chance(1, 8);
+        EstadoDoNucleo antes = EstadoDoNucleo.Inicial(6);
+        CargaDaParanoia carga = CargaDaParanoia.Nenhuma.Com(TabelaDoTamagotchi.DoItem(Item.Vodka)).Com(TabelaDoTamagotchi.DoItem(Item.Bala)) with { Sorteada = true };
+        EstadoDoNucleo saiu = antes with
+        {
+            AleatorioDaParanoia = antes.AleatorioDaParanoia.Sortear().Proximo,
+            Uso = new Uso(Item.Bala, VerboDeUso.Engolir, 90, ApoioDoUso.Chao) { ComecouAParanoia = true },
+            Carga = carga,
+            Onda = new EstadoDaOnda(Onda.Paranoico, FaseDaOnda.Subida, 1, 1),
+        };
+        static string[] Linha((string Campo, object? Valor)[]? campos) => [.. Afirmar.NaoNulo(campos, "a linha do sorteio").Select(c => $"{c.Campo}={c.Valor}")];
+        Afirmar.Sequencia(["item=Bala", "chance=1 em 8", "saiu=sim", "substancias=2", "distintas=Vodka,Bala"], Linha(LigacaoDosItens.SorteioDaParanoia(antes, saiu, chance)), "o sorteio saiu");
+        EstadoDoNucleo naoSaiu = saiu with { Uso = saiu.Uso! with { ComecouAParanoia = false }, Onda = null };
+        Afirmar.Sequencia(["item=Bala", "chance=1 em 8", "saiu=nao", "substancias=2", "distintas=Vodka,Bala"], Linha(LigacaoDosItens.SorteioDaParanoia(antes, naoSaiu, chance)), "o sorteio não saiu: a linha vem também");
+        Afirmar.Nulo(LigacaoDosItens.SorteioDaParanoia(antes, antes with { Aleatorio = antes.Aleatorio.Sortear().Proximo, Carga = carga }, chance), "só o gerador principal mudou: sem linha");
+        Afirmar.Nulo(LigacaoDosItens.SorteioDaParanoia(saiu, saiu with { Onda = new EstadoDaOnda(Onda.Paranoico, FaseDaOnda.Subida, 2, 2) }, chance), "a paranoia subiu, sem sorteio: sem linha");
+    }
+
+    // O baseado por conta própria (pedido do usuário de 2026-10-01, 19:10; DEC-028): o núcleo, de verdade, o faz fumar
+    // sozinho, sem item no mundo. Dos efeitos novos do tamagotchi, só o temporizador da onda (o chapado) chega à raiz: nenhuma
+    // janela de item é criada, mostrada, movida ou fechada, e nenhum Id de item é pedido. Sozinho, ele não sorteia a
+    // paranoia (sem linha); depois da bala, o baseado fecha a mistura com sintética, e a linha do sorteio leva item=Baseado.
+    [Teste]
+    public void BaseadoPorContaPropria_SoOTemporizadorDaOnda_NenhumaJanelaDeItem()
+    {
+        var cfg = new ConfiguracaoDoNucleo { Tamagotchi = true, Acoes = AcoesAutonomas.FumarBaseado, ChanceDaParanoia = new Chance(1, 1) };
+        var topologia = new Topologia([M96]);
+        static bool DoTamagotchi(Efeito e) => e is MostrarItem or MoverItem or EsconderItem or RemoverItem or LiberarCapturaDoItem or AgendarOnda or CancelarOnda;
+        (EstadoDoNucleo Estado, List<Efeito> Efeitos) Aplicar(EstadoDoNucleo s, params Evento[] eventos)
+        {
+            var efeitos = new List<Efeito>();
+            foreach (Evento e in eventos)
+            {
+                Resultado r = Maquina.Aplicar(s, e, cfg);
+                s = r.Estado;
+                efeitos.AddRange(r.Efeitos);
+            }
+            return (s, efeitos);
+        }
+
+        (EstadoDoNucleo carregado, _) = Aplicar(EstadoDoNucleo.Inicial(7), new Loaded(topologia, null, Preferencias.Padrao));
+        (EstadoDoNucleo fumando, List<Efeito> efeitos) = Aplicar(carregado, new AutonomyTimer(carregado.Geracao));
+        Afirmar.Igual((Estado.Using, Item.Baseado), (fumando.Estado, fumando.Uso?.Item), "fumou por conta própria");
+        Efeito[] doTamagotchi = [.. efeitos.Where(DoTamagotchi)];
+        Afirmar.Sequencia([typeof(AgendarOnda)], doTamagotchi.Select(e => e.GetType()), "só o temporizador da onda");
+        var c = new Cenario();
+        foreach (Efeito e in doTamagotchi) c.Executar(e);
+        Afirmar.Igual((0, 0), (c.Criadas.Count, c.Itens.Quantas), "nenhuma janela de item");
+        Afirmar.Verdadeiro(c.Onda.Pendente, "o disparo da onda pendente");
+        c.Onda.Parar();
+        Afirmar.Nulo(LigacaoDosItens.SorteioDaParanoia(carregado, fumando, cfg.ChanceDaParanoia), "sozinho, sem sorteio: sem linha");
+
+        // A bala, solta nele pelo usuário (invocada, no chão, arrastada até o meio dele), e depois o baseado por conta própria.
+        (EstadoDoNucleo comBala, _) = Aplicar(carregado, new CmdSummonItem(Item.Bala));
+        for (int i = 0; i < 600 && comBala.Itens.AlgumCaindo; i++) comBala = Maquina.Aplicar(comBala, new Tick(), cfg).Estado;
+        ItemNoMundo bala = comBala.Itens.Todos.Single();
+        Posicionamento l = comBala.Lugar!;
+        var meio = new PontoPx(l.Ancora.X, l.Retangulo.Topo + l.Tamanho.Altura / 2 + 24 - 10);
+        (comBala, _) = Aplicar(comBala, new ItemPress(bala.Id, new PontoPx(bala.Lugar.Ancora.X, bala.Lugar.Ancora.Y - 10)), new ItemDragStart(bala.Id),
+            new ItemDragMove(bala.Id, meio), new ItemDragEnd(bala.Id, meio));
+        Afirmar.Igual(Estado.Using, comBala.Estado, "usou a bala");
+        for (int i = 0; i < 90; i++) comBala = Maquina.Aplicar(comBala, new Tick(), cfg).Estado;
+        Afirmar.Igual(Estado.Idle, comBala.Estado, "o fim do uso da bala");
+        (EstadoDoNucleo fechou, List<Efeito> efeitosDoFechamento) = Aplicar(comBala, new AutonomyTimer(comBala.Geracao));
+        Afirmar.Igual(Estado.Using, fechou.Estado, "fumou por conta própria depois da bala");
+        Afirmar.Falso(efeitosDoFechamento.Any(e => e is MostrarItem or MoverItem or EsconderItem or RemoverItem or LiberarCapturaDoItem), "nenhuma janela de item");
+        static string[] Linha((string Campo, object? Valor)[]? campos) => [.. Afirmar.NaoNulo(campos, "a linha do sorteio").Select(x => $"{x.Campo}={x.Valor}")];
+        Afirmar.Sequencia(["item=Baseado", "chance=1 em 1", "saiu=sim", "substancias=2", "distintas=Baseado,Bala"],
+            Linha(LigacaoDosItens.SorteioDaParanoia(comBala, fechou, cfg.ChanceDaParanoia)), "o baseado fechou a mistura com a bala, e o sorteio saiu");
+    }
 }

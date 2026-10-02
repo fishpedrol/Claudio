@@ -113,6 +113,34 @@ internal static class FilaEAleatorioTestes
         Afirmar.Lanca<ArgumentOutOfRangeException>(() => new Aleatorio(1).Entre(5, 4));
     }
 
+    // Uma chance de "Vezes em Em" (a da paranoia, 1 em 8, pedido do usuário de 2026-10-01): um sorteio é exatamente um passo
+    // do gerador, um inteiro uniforme de 1 a Em que sai se for até Vezes, mesmo com a chance certa (1 em 1) ou nula (0 em 1).
+    // Em 80 mil sorteios de 1 em 8, sai perto de 1/8 (a tolerância de 0,5 ponto é mais de 4 desvios-padrão da binomial,
+    // σ ≈ 0,12 ponto). Uma chance fora da faixa não existe.
+    [Teste]
+    public static void ChanceEhUmPassoDoGerador()
+    {
+        var a = new Aleatorio(5);
+        int saiu = 0;
+        for (int i = 0; i < 80000; i++)
+        {
+            (bool sorteada, Aleatorio proximo) = a.Sortear(new Chance(1, 8));
+            (int valor, Aleatorio umPasso) = a.Entre(1, 8);
+            Afirmar.Igual((valor == 1, umPasso), (sorteada, proximo), "um passo: um inteiro de 1 a 8, que sai se for 1");
+            if (sorteada) saiu++;
+            a = proximo;
+        }
+        Afirmar.Aproximado(0.125, saiu / 80000.0, 0.005, "perto de 1/8");
+        var b = new Aleatorio(77);
+        Afirmar.Igual((true, b.Sortear().Proximo), b.Sortear(new Chance(1, 1)), "1 em 1 sempre sai, num passo");
+        Afirmar.Igual((false, b.Sortear().Proximo), b.Sortear(new Chance(0, 1)), "0 em 1 nunca sai, num passo também");
+        Afirmar.Igual((3, 4), (new Chance(3, 4).Vezes, new Chance(3, 4).Em), "as partes");
+        Afirmar.Igual("1 em 8", new Chance(1, 8).ToString(), "escrita como na decisão");
+        Afirmar.Lanca<ArgumentOutOfRangeException>(() => _ = new Chance(1, 0), "em zero");
+        Afirmar.Lanca<ArgumentOutOfRangeException>(() => _ = new Chance(-1, 8), "vezes negativas");
+        Afirmar.Lanca<ArgumentOutOfRangeException>(() => _ = new Chance(9, 8), "mais vezes que o total");
+    }
+
     [Teste]
     public static void PonderadoRespeitaOsPesos()
     {

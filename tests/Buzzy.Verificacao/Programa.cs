@@ -34,8 +34,10 @@ internal static class Programa
         ATENÇÃO: abre o Buzzy e uma janela de teste, move o cursor e envia cliques e teclas por
         SendInput. Rode só com o computador livre e depois de avisar quem o usa. A Fase 3 também
         arrasta o Buzzy pela tela e usa Alt+Tab e a tecla Windows no meio de um arraste. O
-        tamagotchi invoca itens pelo menu, arrasta-os até o personagem e o deixa andar sozinho;
-        leva de 8 a 10 minutos, com um repouso de 60 s em que nada deve ser tocado.
+        tamagotchi invoca itens pelo menu, arrasta-os até o personagem e o deixa andar sozinho,
+        também paranoico, achando que tem alguém no teto, e fumando um baseado por conta própria
+        (de desenho animado); leva de 7 a 13 minutos, com um repouso de 60 s em que nada deve ser
+        tocado.
 
         Os Buzzy abertos usam o perfil de teste "verificacao" (%LOCALAPPDATA%\Buzzy\testes\verificacao),
         apagado antes de cada abertura: as configurações reais do usuário não são lidas nem gravadas.

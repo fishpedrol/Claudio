@@ -21,9 +21,11 @@ internal static class TabelasDoDesenho
         [VerboDeUso.Inalar] = 120,
     };
 
-    // 4.1, com o verbo do coordenador e a classe do alívio (pedido do usuário de 2026-10-01: a comida e a bebida sem álcool
-    // são de alívio; os outros itens, de substância): item | verbo | cara durante | onda | intensidade | duração sozinho (s) |
-    // classe.
+    // 4.1, com o verbo do coordenador e a classe de cada item (pedidos do usuário de 2026-10-01): "alivio", a comida e a
+    // bebida sem álcool, que acalmam a onda; "substancia", os outros; e "sintetica", a droga sintética ("como bala, md, coca
+    // e lança"), que também é de substância e é a única que pode trazer a paranoia, numa mistura. A bala é droga sintética:
+    // começa o eufórico no nível 1 (o MD, no 2). É regra de jogo, de desenho animado. Item | verbo | cara durante | onda |
+    // intensidade | duração sozinho (s) | classe.
     private static readonly string[] Itens =
     [
         "Banana | Comer | Feliz | Satisfeito | 1 | 63 | alivio",
@@ -32,19 +34,20 @@ internal static class TabelasDoDesenho
         "Cerveja | Beber | Feliz | Bebado | 1 | 198 | substancia",
         "Baseado | Fumar | Pensativo | Chapado | 2 | 342.5 | substancia",
         "Cigarro | Fumar | Pensativo | Relaxado | 1 | 63 | substancia",
-        "Cocaina | Cheirar | Surpreso | Eletrico | 2 | 265.5 | substancia",
-        "Md | Engolir | Travesso | Euforico | 2 | 385 | substancia",
-        "LancaPerfume | Inalar | Surpreso | Tonto | 2 | 43.5 | substancia",
+        "Cocaina | Cheirar | Surpreso | Eletrico | 2 | 265.5 | sintetica",
+        "Md | Engolir | Travesso | Euforico | 2 | 385 | sintetica",
+        "LancaPerfume | Inalar | Surpreso | Tonto | 2 | 43.5 | sintetica",
         "Cafe | Beber | Determinado | Ligado | 1 | 125 | alivio",
         "Energetico | Beber | Empolgado | Ligado | 2 | 211.25 | alivio",
         "Cogumelo | Comer | Curioso | Viajando | 2 | 375 | substancia",
-        "Bala | Engolir | Feliz | Alegre | 1 | 62 | alivio",
+        "Bala | Engolir | Feliz | Euforico | 1 | 245 | sintetica",
     ];
 
     // 4.2, com a classe do alívio (a onda de substância é a que a comida e a bebida sem álcool acalmam; a leve, só a água):
     // onda | precedência | subida (s) | cada nível do pico (s) | queda base (s) | cara na subida | cara no pico | cara na
-    // queda | classe. A última é a paranoia (decisão do coordenador para a DEC-028, pedido do usuário de 2026-10-01), que
-    // nenhum item começa: precedência 4, maior que todas, e de substância.
+    // queda | classe. O alegre fica sem item desde 2026-10-01 (a bala passou ao eufórico), mas continua aqui e no enum. A
+    // última é a paranoia (decisão do coordenador para a DEC-028, pedidos do usuário de 2026-10-01), que nenhum item começa:
+    // precedência 4, maior que todas, e de substância.
     private static readonly string[] Ondas =
     [
         "Satisfeito | 1 | 3 | 60 | - | Feliz | Feliz | - | leve",
@@ -108,8 +111,11 @@ internal static class TabelasDoDesenho
         "Paranoico | OlharProTeto 4, Agachar 3, Tremedeira 2, OlharAoRedor 2, Espiar 1 | Paranoico 5, Assustado 2, Surpreso 1 | OlharAoRedor 2, Espreguicar 1 | Sonolento 2, Pensativo 1, Neutro 1",
     ];
 
-    /// <summary>Uma linha da tabela 4.1; <paramref name="Alivio"/> diz se o item é de alívio (senão, de substância).</summary>
-    public sealed record ItemEsperado(Item Item, VerboDeUso Verbo, Expressao CaraDurante, Onda? Onda, int Intensidade, TimeSpan? DuracaoSozinho, bool Alivio);
+    /// <summary>
+    /// Uma linha da tabela 4.1; <paramref name="Alivio"/> diz se o item é de alívio (senão, de substância), e
+    /// <paramref name="Sintetica"/>, se é droga sintética (uma substância também).
+    /// </summary>
+    public sealed record ItemEsperado(Item Item, VerboDeUso Verbo, Expressao CaraDurante, Onda? Onda, int Intensidade, TimeSpan? DuracaoSozinho, bool Alivio, bool Sintetica);
 
     /// <summary>
     /// Uma onda das tabelas 4.2 a 4.4: tempos, caras e os perfis esperados já na linha canônica de
@@ -139,12 +145,20 @@ internal static class TabelasDoDesenho
     /// <summary>A tabela 4.1, na ordem do desenho.</summary>
     public static IReadOnlyList<ItemEsperado> ItensEsperados() =>
     [
-        .. Itens.Select(Celulas).Select(c => new ItemEsperado(
-            Enum.Parse<Item>(c[0]), Enum.Parse<VerboDeUso>(c[1]), Enum.Parse<Expressao>(c[2]),
-            c[3] == "-" ? null : Enum.Parse<Onda>(c[3]), int.Parse(c[4], CultureInfo.InvariantCulture),
-            c[5] == "-" ? null : TimeSpan.FromMilliseconds(double.Parse(c[5], CultureInfo.InvariantCulture) * 1000),
-            Classe(c[6], "alivio", "substancia"))),
+        .. Itens.Select(Celulas).Select(c =>
+        {
+            string classe = ClasseDoItem(c[6]);
+            return new ItemEsperado(
+                Enum.Parse<Item>(c[0]), Enum.Parse<VerboDeUso>(c[1]), Enum.Parse<Expressao>(c[2]),
+                c[3] == "-" ? null : Enum.Parse<Onda>(c[3]), int.Parse(c[4], CultureInfo.InvariantCulture),
+                c[5] == "-" ? null : TimeSpan.FromMilliseconds(double.Parse(c[5], CultureInfo.InvariantCulture) * 1000),
+                Alivio: classe == "alivio", Sintetica: classe == "sintetica");
+        }),
     ];
+
+    /// <summary>A classe de um item na transcrição: alivio, substancia ou sintetica; outra coisa é erro de transcrição.</summary>
+    private static string ClasseDoItem(string celula)
+        => celula is "alivio" or "substancia" or "sintetica" ? celula : throw new InvalidOperationException($"Classe de item desconhecida na transcrição: {celula}.");
 
     /// <summary>As ondas das tabelas 4.2 a 4.4, na ordem do desenho.</summary>
     public static IReadOnlyList<OndaEsperada> OndasEsperadas() => [.. Ondas.Select(Celulas).Select(MontarOnda)];

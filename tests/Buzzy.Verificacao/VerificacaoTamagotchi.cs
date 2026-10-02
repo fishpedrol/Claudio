@@ -14,12 +14,16 @@ namespace Buzzy.Verificacao;
 /// <summary>
 /// Verificação sintética do tamagotchi adulto e da emoção dominante (DEC-027 e DEC-028; crítica de integração, seção 6,
 /// casos V1 a V16 e X1), com a chave ligada no aplicativo (passo T9), mais o caso "pausar com ele na parede sem estar
-/// preso" (correção do núcleo, achado 4). Abre o receptor (o "aplicativo do usuário", com o foco) e o Buzzy várias vezes,
-/// sempre com o perfil de teste <c>verificacao</c>, <c>--diagnostico</c> e <c>--semente</c>: pausado com uma semente fixa
-/// (V1 a V7, V10 e V13 a V15, X1 e, de novo, V9) e com a agenda ligada e sementes escolhidas por simulação do núcleo
-/// (<see cref="SementesDoTamagotchi"/>: V8, V11, V12 e a parede). Todo clique, arraste e tecla é SINTÉTICO (SendInput),
-/// com as conferências do <see cref="Injetor"/> (dono do ponto, deriva do cursor, input de outra fonte). Os itens só
-/// aparecem pelo nome no menu; tudo é de desenho animado.
+/// preso" (correção do núcleo, achado 4), os do alívio e da paranoia (pedidos do usuário de 2026-10-01: V18, V17b e
+/// V17) e o do baseado por conta própria (pedido das 19:10: V19). Abre o receptor (o "aplicativo do usuário", com o foco) e
+/// o Buzzy várias vezes, sempre com o perfil de teste
+/// <c>verificacao</c>, <c>--diagnostico</c> e <c>--semente</c>: pausado com uma semente fixa (V1 a V7, V10 e V13 a V15,
+/// X1, V18 e, de novo, V9), pausado com a semente em que o primeiro sorteio da paranoia sai (V17b) e com a agenda ligada e
+/// sementes escolhidas por simulação do núcleo (<see cref="SementesDoTamagotchi"/>: V8, V11, V12, a parede e V17; e
+/// <see cref="Buzzy.App.Testes.Integracao.SementesDoBaseado"/>: V19). Todo
+/// clique, arraste e tecla é SINTÉTICO (SendInput), com as conferências do <see cref="Injetor"/> (dono do ponto, deriva do
+/// cursor, input de outra fonte). Os itens só aparecem pelo nome no menu; tudo é de desenho animado, e a classe de cada
+/// item (droga sintética ou não) é regra de jogo.
 ///
 /// O V16 (a emoção restaurada ao reabrir, com a persistência ligada no passo P7 da Fase 5) reabre o Buzzy sem limpar a
 /// pasta do perfil e confere o settings.json dela pelo esquema do núcleo. O que não dá para exercitar aqui fica como N/A ou
@@ -115,6 +119,19 @@ internal sealed partial class Verificacao
             Digitar("T17-nivel3;");
             PausarComEleNaParedeSemEstarPreso(topologia);
             Digitar("T18-parede;");
+
+            // Parte 4: o alívio e a paranoia (pedidos do usuário de 2026-10-01), de novo da posição inicial: pausado (V18 e
+            // V17b) e com a agenda ligada (V17).
+            V18ComidaAcalmaUmPasso();
+            Digitar("T19-alivio;");
+            V17bMisturaSemSinteticaNaoDeixaParanoico();
+            Digitar("T20-sem-sintetica;");
+            V17ParanoiaComMisturaComSintetica(topologia);
+            Digitar("T21-paranoia;");
+
+            // Parte 5: o baseado por conta própria (pedido do usuário de 2026-10-01, 19:10), com a agenda ligada.
+            V19BaseadoPorContaPropria(topologia);
+            Digitar("T22-baseado;");
 
             Registrar("Menus do tamagotchi — depois de fechar, o foco volta ao aplicativo em uso", _menusSemVoltarOFoco == 0,
                 $"{_menusDoTamagotchi} menu(s) operado(s); em {_menusSemVoltarOFoco}, o receptor não voltou sozinho ao primeiro plano em 2 s e foi ativado pela ferramenta");
@@ -1070,6 +1087,393 @@ internal sealed partial class Verificacao
         return PontoDoCorpo();
     }
 
+    // ------------------------------------------------------------------ parte 4: o alívio e a paranoia
+
+    /// <summary>A regra do soltar da banana sobre o bêbado do nível 2: um passo abaixo, na mesma fase.</summary>
+    private static readonly Regex ReBananaNaVodka = new(@"Comer Banana; alivia Bebado/(?<fase>Subida|Pico)/2 -> Bebado/\k<fase>/1$", RegexOptions.Compiled);
+
+    /// <summary>As transições que o pico da paranoia nunca tem: ele não escala, não pula e não descansa (DEC-028).</summary>
+    private static readonly string[] ForaDoPicoDaParanoia = ["Climbing", "Jumping", "Resting"];
+
+    /// <summary>Um uso visto no log: a regra do soltar (ITEM_DRAG_END → USING), a marca do log logo antes do arraste e se o uso acabou a tempo (SETTLING → IDLE).</summary>
+    private sealed record UsoVisto(string Regra, long Marca, bool Acabou);
+
+    /// <summary>
+    /// V18 (o alívio, pedido do usuário de 2026-10-01, 12:20: "só quero que alimentos ou bebidas sem ser alcoólicas diminuam
+    /// aos poucos o efeito da onda"): pausado, a vodka e a banana invocadas pelo menu; a vodka arrastada até ele (o bêbado,
+    /// do nível 2) e, logo depois do uso dela, a banana. Comer acalma um passo a onda de substância da frente, sem começar a
+    /// onda da própria banana: só o nível cai, na mesma fase, e o temporizador em curso continua, sem reagendar; na subida,
+    /// a virada seguinte (o mesmo disparo agendado no soltar da vodka) já sai do nível 1.
+    /// </summary>
+    private void V18ComidaAcalmaUmPasso()
+    {
+        const string Criterio = "V18 — comida acalma um passo uma onda de substância: a banana na vodka (Bebado/…/2 → Bebado/…/1), sem começar a onda dela nem reagendar o temporizador";
+        AbrirBuzzyDoTamagotchi(_sementeDoTamagotchi, pausado: true, "V18");
+        try
+        {
+            long marcaItens = LogDoBuzzy.Marca();
+            if (InvocarItem(Item.Vodka, 'V', "V18") is not { } vodka || InvocarItem(Item.Banana, 'B', "V18") is not { } banana) return;
+            if (EsperarItemNoChao(vodka, marcaItens, _areaUtilPrincipal, 4000) is not { } chaoDaVodka
+                || EsperarItemNoChao(banana, marcaItens, _areaUtilPrincipal, 4000) is not { } chaoDaBanana)
+            {
+                Registrar(Criterio, Falhou, "os itens não pararam no chão em 4 s");
+                return;
+            }
+            // O foco é conferido depois dos menus, que dão o primeiro plano ao dono deles de propósito (DEC-016).
+            int marcaR = _logReceptor.Contar();
+            (UsoVisto? usoDaVodka, string situacao, string motivo) = UsarNoCentroDele(vodka, chaoDaVodka);
+            if (usoDaVodka is null)
+            {
+                Registrar(Criterio, situacao, $"vodka: {motivo}");
+                return;
+            }
+            (UsoVisto? usoDaBanana, situacao, motivo) = UsarNoCentroDele(banana, chaoDaBanana);
+            if (usoDaBanana is null)
+            {
+                Registrar(Criterio, situacao, $"vodka: {usoDaVodka.Regra}; banana: {motivo}");
+                return;
+            }
+
+            // O disparo da onda agendado no soltar da vodka: a subida do bêbado, num disparo único.
+            List<EventoBuzzy> desdeAVodka = LogDoBuzzy.Desde(usoDaVodka.Marca);
+            EventoBuzzy? agendada = desdeAVodka.FirstOrDefault(e => e.Chave == "ONDA" && e["agendada"] == "sim");
+            Match alivio = ReBananaNaVodka.Match(usoDaBanana.Regra);
+            bool naSubida = alivio.Success && alivio.Groups["fase"].Value == "Subida";
+            // Na subida, a virada seguinte vem no fim dela (8 s depois do soltar da vodka): espera por ela, do nível 1.
+            EventoBuzzy? virada = naSubida
+                ? LogDoBuzzy.Esperar(usoDaBanana.Marca, e => e.Chave == "NUCLEO" && e["evento"] == "ItemEffectTimer", 12000, () => _buzzy is { HasExited: true })
+                : null;
+            List<EventoBuzzy> desdeABanana = LogDoBuzzy.Desde(usoDaBanana.Marca);
+            int iSoltou = desdeABanana.FindIndex(e => e.Chave == "NUCLEO" && e["evento"] == "ItemDragEnd" && e["para"] == "Using");
+            int iVirada = desdeABanana.FindIndex(e => e.Chave == "NUCLEO" && e["evento"] == "ItemEffectTimer");
+            // Do soltar da banana até a virada (ou, sem ela, até agora): nenhum disparo novo agendado.
+            int ate = iVirada >= 0 ? iVirada : desdeABanana.Count;
+            bool reagendou = iSoltou >= 0 && desdeABanana.Skip(iSoltou).Take(ate - iSoltou).Any(e => e.Chave == "ONDA" && e["agendada"] == "sim");
+            EventoBuzzy? disparo = iVirada >= 0 ? desdeABanana.Take(iVirada).LastOrDefault(e => e.Chave == "ONDA" && e["disparada"] == "sim") : null;
+            bool viradaDoNivel1 = virada?["regra"].Contains("onda Bebado/Subida/1 -> Bebado/Pico/1", StringComparison.Ordinal) == true;
+            bool mesmoDisparo = disparo is not null && agendada is not null && disparo["geracao"] == agendada["geracao"];
+            bool ondaDaBanana = desdeAVodka.Any(e => e.Chave == "NUCLEO" && e["regra"].Contains(nameof(Onda.Satisfeito), StringComparison.Ordinal));
+            (bool frente, bool desativou) = FocoNoReceptor(marcaR);
+            bool ok = usoDaVodka.Regra.Contains("Beber Vodka", StringComparison.Ordinal) && agendada is not null && alivio.Success && !reagendou && !ondaDaBanana
+                && (!naSubida || (viradaDoNivel1 && mesmoDisparo)) && usoDaVodka.Acabou && usoDaBanana.Acabou && frente && !desativou;
+            Registrar(Criterio, ok,
+                $"vodka: {usoDaVodka.Regra} (disparo agendado: {agendada?["atrasoMs"] ?? "?"} ms, geração {agendada?["geracao"] ?? "?"}); banana: {usoDaBanana.Regra}; "
+                + $"um passo abaixo, na mesma fase={alivio.Success}; disparo novo agendado entre o soltar da banana e a virada seguinte={reagendou}; a onda da banana (Satisfeito) apareceu={ondaDaBanana}; "
+                + (naSubida
+                    ? $"virada seguinte: {virada?["regra"] ?? "nenhuma em 12 s"} (do nível 1={viradaDoNivel1}; o mesmo disparo agendado no soltar da vodka={mesmoDisparo}, geração {disparo?["geracao"] ?? "?"})"
+                    : "no pico, a virada seguinte é longa e não foi esperada")
+                + $"; usos acabaram={usoDaVodka.Acabou && usoDaBanana.Acabou}; receptor na frente={frente}; desativado={desativou}");
+        }
+        finally
+        {
+            FecharBuzzy("V18");
+        }
+    }
+
+    /// <summary>
+    /// V17b (pedido do usuário de 2026-10-01, 18:50: "só quero que ele fique paranoico se misturar substâncias com alguma
+    /// droga sintética, como bala, md, coca e lança; usando álcool e maconha não"): pausado, com a semente em que o primeiro
+    /// sorteio do gerador da paranoia sai (<see cref="SementesDoTamagotchi.SementeEmQueOPrimeiroSorteioDaParanoiaSai"/>), a
+    /// vodka, o baseado, o cigarro, o cogumelo e a bala invocados pelo menu; os quatro primeiros, um depois do outro, soltos
+    /// nele: nenhuma regra fala da paranoia, e nem a cara paranoica, nem o suor, nem os gestos dela aparecem. Com esta
+    /// semente, um sorteio gasto por qualquer um deles teria saído, e a paranoia teria começado ali: não houve sorteio. O
+    /// controle: a bala depois deles, a primeira droga sintética do episódio, fecha a mistura com sintética e faz o primeiro
+    /// sorteio, que sai na hora ("a paranoia começa").
+    /// </summary>
+    private void V17bMisturaSemSinteticaNaoDeixaParanoico()
+    {
+        const string Criterio = "V17b — álcool, maconha, cigarro e cogumelo misturados (vodka, baseado, cigarro e cogumelo) não deixam paranoico e não sorteiam; a bala depois deles faz o primeiro sorteio, que sai";
+        if (SementesDoTamagotchi.SementeEmQueOPrimeiroSorteioDaParanoiaSai() is not { } semente)
+        {
+            Registrar(Criterio, Inconclusivo, "nenhuma semente em que o primeiro sorteio do gerador da paranoia sai");
+            return;
+        }
+        _rel.Linha($"   V17b: semente {semente}: o primeiro sorteio do gerador da paranoia sai (chance de {SementesDoTamagotchi.Configuracao.ChanceDaParanoia})");
+        AbrirBuzzyDoTamagotchi(semente, pausado: true, "V17b");
+        try
+        {
+            // Os cinco itens no chão antes do primeiro uso (cabem seis): os menus ficam todos antes dos usos.
+            long marcaItens = LogDoBuzzy.Marca();
+            var itens = new List<ItemVisto>();
+            foreach ((Item item, char tecla) in new[] { (Item.Vodka, 'V'), (Item.Baseado, 'S'), (Item.Cigarro, 'I'), (Item.Cogumelo, 'U'), (Item.Bala, 'A') })
+            {
+                if (InvocarItem(item, tecla, "V17b") is not { } visto) return;
+                itens.Add(visto);
+            }
+            var noChao = new List<Nativo.RECT>();
+            foreach (ItemVisto visto in itens)
+            {
+                if (EsperarItemNoChao(visto, marcaItens, _areaUtilPrincipal, 4000) is not { } r)
+                {
+                    Registrar(Criterio, Falhou, $"{visto.Nome} não parou no chão em 4 s");
+                    return;
+                }
+                noChao.Add(r);
+            }
+            // O foco é conferido depois dos menus, que dão o primeiro plano ao dono deles de propósito (DEC-016).
+            int marcaR = _logReceptor.Contar();
+            long inicio = LogDoBuzzy.Marca();
+            var regras = new List<string>();
+            bool acabaram = true;
+            for (int i = 0; i < 4; i++)
+            {
+                (UsoVisto? uso, string situacao, string motivo) = UsarNoCentroDele(itens[i], noChao[i]);
+                if (uso is null)
+                {
+                    Registrar(Criterio, situacao, $"semente {semente}; {itens[i].Nome}: {motivo}; regras do soltar até aqui: {string.Join(" | ", regras)}");
+                    return;
+                }
+                regras.Add(uso.Regra);
+                acabaram &= uso.Acabou;
+            }
+            List<EventoBuzzy> semSintetica = LogDoBuzzy.Desde(inicio);
+            string[] paranoiaNoNucleo = [.. semSintetica.Where(e => e.Chave == "NUCLEO" && (e["regra"].Contains("paranoia", StringComparison.Ordinal) || e["regra"].Contains(nameof(Onda.Paranoico), StringComparison.Ordinal))).Select(e => e["regra"])];
+            string[] paranoiaNoSprite = [.. semSintetica.Where(e => e.Chave == "SPRITE" && (e["expressao"] == "paranoico" || e["efeito"] == nameof(EfeitoVisual.Suor) || e["pose"] is "olharproteto" or "agachar"))
+                .Select(e => $"{e["pose"]}/{e["expressao"]}/{e["efeito"]}")];
+
+            // O controle: a bala, a primeira droga sintética do episódio, faz o primeiro sorteio, que sai com esta semente.
+            (UsoVisto? usoDaBala, string situacaoDaBala, string motivoDaBala) = UsarNoCentroDele(itens[4], noChao[4]);
+            bool comecouNaBala = usoDaBala?.Regra.Contains("Engolir Bala; a paranoia começa: Paranoico/Subida/1", StringComparison.Ordinal) == true;
+            (bool frente, bool desativou) = FocoNoReceptor(marcaR);
+            string resultado = usoDaBala is null ? situacaoDaBala
+                : paranoiaNoNucleo.Length == 0 && paranoiaNoSprite.Length == 0 && comecouNaBala && acabaram && frente && !desativou ? Ok : Falhou;
+            Registrar(Criterio, resultado,
+                $"semente {semente}; regras do soltar: {string.Join(" | ", regras)}; usos acabaram={acabaram}; "
+                + $"a paranoia no log do núcleo antes da bala: {(paranoiaNoNucleo.Length == 0 ? "nenhuma" : string.Join(" | ", paranoiaNoNucleo))}; "
+                + $"a cara paranoica, o suor ou os gestos dela antes da bala: {(paranoiaNoSprite.Length == 0 ? "nenhum" : string.Join(" | ", paranoiaNoSprite))}; "
+                + $"bala: {usoDaBala?.Regra ?? motivoDaBala} (a paranoia começou nela, no primeiro sorteio={comecouNaBala}); receptor na frente={frente}; desativado={desativou}");
+        }
+        finally
+        {
+            FecharBuzzy("V17b");
+        }
+    }
+
+    /// <summary>
+    /// V17 (a paranoia, pedidos do usuário de 2026-10-01; DEC-028), com a agenda ligada e a semente escolhida por simulação
+    /// do núcleo (<see cref="SementesDoTamagotchi.ParanoiaNoPico"/>), em que o sorteio de 1 em 8 sai cedo: a vodka, a bala e
+    /// a água invocadas pelo menu; a vodka arrastada até ele e, durante o uso dela, a bala segurada sobre ele e solta logo
+    /// que o uso acaba (como no V12): a mistura com droga sintética. Confere, pelo log: a regra do soltar da bala ("a
+    /// paranoia começa: Paranoico/Subida/1") e a virada para o pico (NUCLEO com a onda Paranoico); no fim do uso, o olhar pro
+    /// teto (NUCLEO, sem a agenda, e SPRITE olharproteto, com a cara da pose e o suor); a cara paranoica com o suor (SPRITE);
+    /// no pico, o agachar da agenda (NUCLEO e SPRITE agachar, com o suor) e nenhuma transição para CLIMBING, JUMPING ou
+    /// RESTING; e a água arrastada até ele, que acalma um passo: o pico vira queda. Sem a agenda seguir a simulação (a
+    /// primeira decisão antes da vodka, nenhum agachar decidido no pico, o pico acabado antes da água), o resultado é
+    /// INCONCLUSIVO, não defeito.
+    /// </summary>
+    private void V17ParanoiaComMisturaComSintetica(Topologia topologia)
+    {
+        const string Criterio = "V17 — paranoia: a mistura com droga sintética (vodka e bala) invocada pelo menu e arrastada até ele, com o sorteio de 1 em 8 do episódio saindo na bala: a onda Paranoico; olha pro teto e agacha, com a cara paranoica e o suor; no pico, nenhuma transição para CLIMBING, JUMPING ou RESTING; uma água acalma um passo";
+        if (SementesDoTamagotchi.ParanoiaNoPico(topologia) is not { Agachar: { } agacharPrevisto } p)
+        {
+            Registrar(Criterio, Inconclusivo, "nenhuma semente em que o sorteio da paranoia sai na bala e ele agacha cedo no pico, longe da água");
+            return;
+        }
+        _rel.Linha($"   V17: {p.Resumo}");
+        AbrirBuzzyDoTamagotchi(p.Semente, pausado: false, "V17");
+        try
+        {
+            long marcaItens = LogDoBuzzy.Marca();
+            if (InvocarItem(Item.Vodka, 'V', "V17") is not { } vodka || InvocarItem(Item.Bala, 'A', "V17") is not { } bala
+                || InvocarItem(Item.Agua, 'G', "V17") is not { } agua) return;
+            if (EsperarItemNoChao(vodka, marcaItens, _areaUtilPrincipal, 4000) is not { } chaoDaVodka
+                || EsperarItemNoChao(bala, marcaItens, _areaUtilPrincipal, 4000) is not { } chaoDaBala
+                || EsperarItemNoChao(agua, marcaItens, _areaUtilPrincipal, 4000) is not { } chaoDaAgua)
+            {
+                Registrar(Criterio, Falhou, "os itens não pararam no chão em 4 s");
+                return;
+            }
+            // O foco é conferido depois dos menus, que dão o primeiro plano ao dono deles de propósito (DEC-016).
+            int marcaR = _logReceptor.Contar();
+            if (LogDoBuzzy.Desde(_inicioLogBuzzy).Any(e => e.Chave == "AGENDA" && e.Campos.ContainsKey("disparo")))
+            {
+                Registrar(Criterio, Inconclusivo, $"semente {p.Semente}: a primeira decisão da agenda (prevista em {p.PrimeiraDecisao.TotalSeconds:0.0} s) veio antes da vodka; a sequência saiu da simulada");
+                return;
+            }
+            long marca = LogDoBuzzy.Marca();
+            if (!ArrastarItem(vodka, chaoDaVodka, SolturaNoCentroDele(vodka, chaoDaVodka), out string recusa))
+            {
+                Registrar(Criterio, Inconclusivo, recusa);
+                return;
+            }
+            if (Nucleo(marca, "ItemDragEnd", "Idle", "Using", 3000) is null)
+            {
+                Registrar(Criterio, Falhou, "a vodka solta nele não começou o uso");
+                return;
+            }
+            // Durante o uso da vodka, a bala na mão, sobre ele; solta logo que o uso acaba (o atento pausa a agenda).
+            Nativo.POINT soltura = SolturaNoCentroDele(bala, chaoDaBala);
+            if (!ArrastarItem(bala, chaoDaBala, soltura, out recusa, soltar: false, esperarCliqueDuplo: false))
+            {
+                Registrar(Criterio, Inconclusivo, recusa);
+                return;
+            }
+            EventoBuzzy? acabou = LogDoBuzzy.Esperar(marca, e => e.Chave == "NUCLEO" && e["evento"] == "Tick" && e["de"] == "Settling" && e["para"] == "Idle", 5000);
+            long marcaDaBala = LogDoBuzzy.Marca();
+            _inj.SoltarEsquerdo(soltura.X, soltura.Y);
+            EventoBuzzy? usouABala = acabou is null ? null : Nucleo(marcaDaBala, "ItemDragEnd", "Idle", "Using", 3000);
+            if (usouABala is null)
+            {
+                Registrar(Criterio, Falhou, $"o uso da vodka acabou com a bala na mão={acabou is not null}; a bala solta nele não começou o uso");
+                return;
+            }
+            bool comecou = usouABala["regra"].Contains("Engolir Bala; a paranoia começa: Paranoico/Subida/1", StringComparison.Ordinal);
+            // As esperas só dão o ritmo; as conferências usam o log inteiro desde o soltar da bala, lido depois da água.
+            LogDoBuzzy.Esperar(marcaDaBala, e => e.Chave == "SPRITE" && e["pose"] == "olharproteto", 5000);
+            // O agachar que a simulação previu no pico: até 10 s além da previsão, contada do soltar da bala.
+            LogDoBuzzy.Esperar(marcaDaBala, e => e.Chave == "SPRITE" && e["pose"] == "agachar", (int)agacharPrevisto.TotalMilliseconds + 10000, () => _buzzy is { HasExited: true });
+
+            // A água, arrastada até ele (parado, no gesto ou depois dele): o alívio.
+            long marcaDaAgua = LogDoBuzzy.Marca();
+            bool arrastouAAgua = ArrastarItem(agua, chaoDaAgua, SolturaNoCentroDele(agua, chaoDaAgua), out string recusaDaAgua);
+            EventoBuzzy? bebeu = arrastouAAgua
+                ? LogDoBuzzy.Esperar(marcaDaAgua, e => e.Chave == "NUCLEO" && e["evento"] == "ItemDragEnd" && e["para"] == "Using", 3000)
+                : null;
+            if (bebeu is not null) LogDoBuzzy.Esperar(marcaDaAgua, e => e.Chave == "NUCLEO" && e["evento"] == "Tick" && e["de"] == "Using", 5000);
+
+            List<EventoBuzzy> ev = LogDoBuzzy.Desde(marcaDaBala);
+            int iPico = ev.FindIndex(e => e.Chave == "NUCLEO" && e["evento"] == "ItemEffectTimer" && e["regra"].Contains("onda Paranoico/Subida/1 -> Paranoico/Pico/1", StringComparison.Ordinal));
+            int iAgua = ev.FindIndex(e => e.Chave == "NUCLEO" && e["evento"] == "ItemDragEnd" && e["para"] == "Using" && e["regra"].Contains("Beber Agua", StringComparison.Ordinal));
+            int iQueda = ev.FindIndex(e => e.Chave == "NUCLEO" && e["evento"] == "ItemEffectTimer" && e["regra"].Contains("onda Paranoico/Pico/1 -> Paranoico/Queda/1", StringComparison.Ordinal));
+            // O pico, da virada para ele até a água (ou até a queda pelo temporizador, se ela veio antes).
+            int fimDoPico = iQueda >= 0 && (iAgua < 0 || iQueda < iAgua) ? iQueda : iAgua >= 0 ? iAgua : ev.Count;
+            List<EventoBuzzy> noPico = iPico >= 0 ? ev.GetRange(iPico, Math.Max(0, fimDoPico - iPico)) : [];
+            string[] proibidas = [.. noPico.Where(e => e.Chave == "NUCLEO" && ForaDoPicoDaParanoia.Contains(e["para"])).Select(e => $"{e["de"]}→{e["para"]} ({e["regra"]})")];
+            string[] gestos = [.. noPico.Where(e => e.Chave == "NUCLEO" && e["regra"].StartsWith("IDLE + AUTONOMY_TIMER: gesto ", StringComparison.Ordinal)).Select(e => e["regra"]["IDLE + AUTONOMY_TIMER: gesto ".Length..])];
+            bool decidiuAgachar = gestos.Contains(nameof(Gesto.Agachar));
+            EventoBuzzy? olhou = ev.FirstOrDefault(e => e.Chave == "NUCLEO" && e["regra"] == $"IDLE: a paranoia começou, gesto {nameof(Gesto.OlharProTeto)}");
+            EventoBuzzy? teto = ev.FirstOrDefault(e => e.Chave == "SPRITE" && e["pose"] == "olharproteto");
+            EventoBuzzy? agachou = ev.FirstOrDefault(e => e.Chave == "SPRITE" && e["pose"] == "agachar");
+            EventoBuzzy? cara = ev.FirstOrDefault(e => e.Chave == "SPRITE" && e["expressao"] == "paranoico");
+            bool tetoComSuor = teto is not null && teto["expressao"] == "-" && teto["item"] == "-" && teto["efeito"] == nameof(EfeitoVisual.Suor);
+            bool agacharComSuor = agachou is not null && agachou["expressao"] == "-" && agachou["item"] == "-" && agachou["efeito"] == nameof(EfeitoVisual.Suor);
+            bool caraComSuor = cara?["efeito"] == nameof(EfeitoVisual.Suor);
+            bool aguaNoPico = iAgua >= 0 && iPico >= 0 && iPico < iAgua && (iQueda < 0 || iQueda > iAgua);
+            bool acalmou = bebeu?["regra"].Contains("Beber Agua; alivia Paranoico/Pico/1 -> Paranoico/Queda/1", StringComparison.Ordinal) == true;
+            (bool frente, bool desativou) = FocoNoReceptor(marcaR);
+
+            bool defeito = !comecou || iPico < 0 || olhou is null || !tetoComSuor || !caraComSuor || proibidas.Length > 0
+                || (decidiuAgachar && !agacharComSuor) || (aguaNoPico && !acalmou) || !frente || desativou;
+            // Sem defeito, o que depende da agenda seguir a simulação: o agachar decidido no pico e a água ainda nele.
+            string resultado = defeito ? Falhou : !decidiuAgachar || !aguaNoPico ? Inconclusivo : Ok;
+            Registrar(Criterio, resultado,
+                $"semente {p.Semente}; bala: {usouABala["regra"]} (a paranoia começou={comecou}); virada para o pico={iPico >= 0}; "
+                + $"olhar pro teto no fim do uso: {olhou?["regra"] ?? "nenhum"}, quadro {DescreverQuadro(teto)}; cara paranoica: quadro {DescreverQuadro(cara)}; "
+                + $"gestos da agenda no pico: [{string.Join(", ", gestos)}] (agachar previsto {agacharPrevisto.TotalSeconds:0.0} s depois da bala), quadro do agachar {DescreverQuadro(agachou)}; "
+                + $"transições para CLIMBING, JUMPING ou RESTING no pico: {(proibidas.Length == 0 ? "nenhuma" : string.Join(" | ", proibidas))}; "
+                + $"água: {(arrastouAAgua ? bebeu?["regra"] ?? "não começou o uso" : recusaDaAgua)} (solta no pico={aguaNoPico}; um passo, do pico à queda={acalmou}); "
+                + $"receptor na frente={frente}; desativado={desativou}");
+        }
+        finally
+        {
+            FecharBuzzy("V17");
+        }
+    }
+
+    /// <summary>
+    /// V19 (o baseado por conta própria, pedido do usuário de 2026-10-01, 19:10; DEC-028), com a agenda ligada e a semente em
+    /// que a primeira decisão, cedo, é fumar (<see cref="Buzzy.App.Testes.Integracao.SementesDoBaseado"/>, pela simulação do
+    /// núcleo com a configuração do aplicativo e a topologia desta máquina, a mesma escolha do teste de integração): sem
+    /// nenhum item invocado, ele fuma sozinho. No log: NUCLEO de IDLE para USING pelo AUTONOMY_TIMER, com a regra do baseado
+    /// por conta própria e a subida do chapado agendada (um disparo único de 10 s); SPRITE com a pose de fumar, o baseado na
+    /// mão, a cara da pose e a fumaça do chapado; nenhuma linha ITEM (nenhuma janela de item aberta). Um PRESS SINTÉTICO no
+    /// corpo, no meio do uso (depois do primeiro trago, no quadro fumando-3), o interrompe no mesmo evento (USING para
+    /// PRESSED), o soltar vira clique e a onda continua (nada cancelado; depois da reação, parado, a fumaça do chapado). Se a
+    /// agenda real sair da simulada (a primeira decisão não é o baseado) ou o uso acabar antes do clique, INCONCLUSIVO.
+    /// </summary>
+    private void V19BaseadoPorContaPropria(Topologia topologia)
+    {
+        const string Criterio = "V19 — o baseado por conta própria: com a agenda ligada e nenhum item, ele fuma sozinho (NUCLEO IDLE→USING pelo AUTONOMY_TIMER, com o uso do baseado e a onda Chapado), com a pose de fumar e o baseado na mão, sem janela de item; o clique no meio do uso o interrompe, e a onda continua";
+        if (Buzzy.App.Testes.Integracao.SementesDoBaseado.PrimeiraEmQueFumaCedo(SementesDoTamagotchi.Configuracao, topologia, TimeSpan.FromSeconds(12), 5000) is not { } escolha)
+        {
+            Registrar(Criterio, Inconclusivo, "nenhuma semente até 5000 em que a primeira decisão, em até 12 s, é o baseado por conta própria");
+            return;
+        }
+        (ulong semente, TimeSpan primeira) = escolha;
+        _rel.Linha($"   V19: semente {semente}: a primeira decisão da agenda, prevista em {primeira.TotalSeconds:0.0} s, é o baseado por conta própria");
+        AbrirBuzzyDoTamagotchi(semente, pausado: false, "V19");
+        try
+        {
+            int marcaR = _logReceptor.Contar();
+            long inicio = _inicioLogBuzzy;
+            bool Decisao(EventoBuzzy e) => e.Chave == "NUCLEO" && e["evento"] == "AutonomyTimer";
+            EventoBuzzy? decisao = LogDoBuzzy.Esperar(inicio, Decisao, (int)primeira.TotalMilliseconds + 8000, () => _buzzy is { HasExited: true }) is null
+                ? null
+                : LogDoBuzzy.Desde(inicio).First(Decisao);
+            if (decisao is null || decisao["para"] != "Using")
+            {
+                Registrar(Criterio, Inconclusivo, $"semente {semente}: a primeira decisão da agenda (prevista em {primeira.TotalSeconds:0.0} s) foi {(decisao is null ? "nenhuma" : $"{decisao["de"]}→{decisao["para"]} ({decisao["regra"]})")}; a agenda saiu da simulada");
+                return;
+            }
+            EventoBuzzy? subida = LogDoBuzzy.Esperar(inicio, e => e.Chave == "ONDA" && e["agendada"] == "sim", 3000);
+            EventoBuzzy? quadro = LogDoBuzzy.Esperar(inicio, e => e.Chave == "SPRITE" && e["pose"].StartsWith("fumando-", StringComparison.Ordinal), 3000);
+
+            // O clique no meio do uso (3,5 s), e não no primeiro quadro (revisão do baseado por conta própria, achado 5): depois
+            // do primeiro trago, no quadro fumando-3 (o passo 50 dos 210, 0,8 s depois do começo), um PRESS SINTÉTICO no corpo.
+            EventoBuzzy? meio = LogDoBuzzy.Esperar(inicio, e => e.Chave == "SPRITE" && e["pose"] == "fumando-3", 3000);
+            long marcaPress = LogDoBuzzy.Marca();
+            Nativo.POINT corpo;
+            try
+            {
+                corpo = PontoDoCorpo();
+                _inj.Pressionar(corpo.X, corpo.Y, _hBuzzy);
+            }
+            catch (CliqueRecusado e)
+            {
+                Registrar(Criterio, Inconclusivo, $"o PRESS no meio do baseado foi recusado: {e.Message}");
+                return;
+            }
+            EventoBuzzy? press = LogDoBuzzy.Esperar(marcaPress, e => e.Chave == "NUCLEO" && e["evento"] == "Press", 1500);
+            _inj.SoltarEsquerdo(corpo.X, corpo.Y);
+            EventoBuzzy? clique = Nucleo(marcaPress, "Click", "Pressed", "Reacting", 2000);
+            EventoBuzzy? parado = LogDoBuzzy.Esperar(marcaPress, e => e.Chave == "SPRITE" && e["pose"] == "parado" && e["efeito"] == nameof(EfeitoVisual.Fumaca), 5000);
+
+            List<EventoBuzzy> ev = LogDoBuzzy.Desde(inicio);
+            bool regra = decisao["de"] == "Idle" && decisao["regra"] == "IDLE + AUTONOMY_TIMER: Fumar Baseado por conta própria";
+            string atrasoDaSubida = ((long)TabelaDoTamagotchi.DaOnda(Onda.Chapado).Duracao(FaseDaOnda.Subida, 2).TotalMilliseconds).ToString(CultureInfo.InvariantCulture);
+            bool chapado = subida?["atrasoMs"] == atrasoDaSubida;
+            bool fumando = quadro is not null && quadro["item"] == "baseado" && quadro["expressao"] == "-" && quadro["efeito"] == nameof(EfeitoVisual.Fumaca);
+            string[] itens = [.. ev.Where(e => e.Chave == "ITEM").Select(e => string.Join("|", e.Campos.Select(c => $"{c.Key}={c.Value}")))];
+            bool cancelada = ev.Any(e => e.Chave == "ONDA" && e["cancelada"] == "sim");
+            (bool frente, bool desativou) = FocoNoReceptor(marcaR);
+            if (press is not null && press["de"] != "Using")
+            {
+                Registrar(Criterio, Inconclusivo, $"semente {semente}: o uso acabou antes do clique (PRESS de {press["de"]}); regra={regra}, quadro {DescreverQuadro(quadro)}, quadro do meio {DescreverQuadro(meio)}, linhas ITEM={itens.Length}");
+                return;
+            }
+            bool ok = regra && chapado && fumando && meio is not null && itens.Length == 0 && press?["para"] == "Pressed" && clique is not null && !cancelada && parado is not null && frente && !desativou;
+            Registrar(Criterio, ok,
+                $"semente {semente}; decisão {decisao["de"]}→{decisao["para"]} ({decisao["regra"]}); subida do chapado agendada {subida?["atrasoMs"] ?? "nenhuma"} ms (esperado {atrasoDaSubida}); "
+                + $"quadro {DescreverQuadro(quadro)}; linhas ITEM: {(itens.Length == 0 ? "nenhuma" : string.Join(" ; ", itens))}; "
+                + $"PRESS SINTÉTICO no ponto {corpo} no meio do uso, depois do quadro {DescreverQuadro(meio)}: {press?["de"] ?? "?"}→{press?["para"] ?? "?"}; soltar virou clique={clique is not null}; onda cancelada={cancelada}; "
+                + $"depois da reação, parado com a fumaça: quadro {DescreverQuadro(parado)}; receptor na frente={frente}; desativado={desativou}");
+        }
+        finally
+        {
+            FecharBuzzy("V19");
+        }
+    }
+
+    /// <summary>Um quadro do log (SPRITE) em uma linha: pose, cara, item, sobreposição e fase; "nenhum" sem a linha.</summary>
+    private static string DescreverQuadro(EventoBuzzy? quadro)
+        => quadro is null ? "nenhum" : $"{quadro["pose"]}/{quadro["expressao"]}/{quadro["item"]}/{quadro["efeito"]}/{quadro["fase"]}";
+
+    /// <summary>
+    /// Arrasta o item, já no chão, até o centro dele e solta (o arraste SINTÉTICO de sempre, com as conferências do
+    /// injetor); espera o uso começar (ITEM_DRAG_END → USING) e acabar (SETTLING → IDLE), no tempo do uso mais 3 s. Devolve
+    /// o uso visto, ou nulo com a situação do registro (INCONCLUSIVO numa recusa do injetor; FALHOU sem o uso) e o motivo.
+    /// </summary>
+    private (UsoVisto? Uso, string Situacao, string Motivo) UsarNoCentroDele(ItemVisto visto, Nativo.RECT noChao)
+    {
+        long marca = LogDoBuzzy.Marca();
+        if (!ArrastarItem(visto, noChao, SolturaNoCentroDele(visto, noChao), out string recusa)) return (null, Inconclusivo, recusa);
+        EventoBuzzy? uso = LogDoBuzzy.Esperar(marca, e => e.Chave == "NUCLEO" && e["evento"] == "ItemDragEnd" && e["para"] == "Using", 3000);
+        if (uso is null) return (null, Falhou, $"{visto.Nome} solto nele não começou o uso (ITEM_DRAG_END→USING)");
+        int limiteMs = TabelaDoTamagotchi.DoItem(visto.Item).PassosDoUso * 1000 / SementesDoTamagotchi.Configuracao.PassosPorSegundo + 3000;
+        bool acabou = LogDoBuzzy.Esperar(marca, e => e.Chave == "NUCLEO" && e["evento"] == "Tick" && e["de"] == "Settling" && e["para"] == "Idle", limiteMs) is not null;
+        return (new UsoVisto(uso["regra"], marca, acabou), Ok, "");
+    }
+
     // ------------------------------------------------------------------ apoio do tamagotchi
 
     private static ushort Vk(char letra) => char.ToUpperInvariant(letra);
@@ -1442,6 +1846,10 @@ internal sealed partial class Verificacao
         _rel.Linha("     - V16 (emoção restaurada ao reabrir): com a persistência do passo P7 da Fase 5, só no perfil de teste da verificação");
         _rel.Linha("     - [MANUAL] marca de rádio ao lado do rosto nos temas claro, escuro e alto contraste; ícones dos itens nos três temas; Narrador lendo os submenus");
         _rel.Linha("     - [MANUAL] revisão visual das animações de uso, dos efeitos e do tom; conforto para agarrar os itens pequenos (L14); gravação a 120 qps das animações de uso");
+        _rel.Linha("     - [MANUAL] revisão pelo usuário do tom da paranoia (o suor, o olhar pro teto, o agachar; a chance de 1 em 8 vale uma vez por mistura com droga sintética, no uso que a fecha; a arte da bala continua um doce, agora com os corações do eufórico) e do alívio aos poucos (V17, V17b e V18 só conferem a regra e os quadros)");
+        _rel.Linha("     - [MANUAL] revisão pelo usuário do baseado por conta própria: a frequência (cerca de um a cada 4 minutos parado no chão, sem estar chapado, na energia Média) e o tom (V19 só confere a regra, os quadros e o clique)");
+        _naoExercitados.Add("revisão da frequência e do tom do baseado por conta própria pelo usuário [MANUAL]");
+        _naoExercitados.Add("revisão de tom da paranoia e do alívio pelo usuário [MANUAL]");
         _rel.Linha("     - [HW] menu e janelas de item a 125, 150, 175 e 200%; arrastar um item entre monitores de escalas diferentes; desconectar o monitor com itens na tela (depois da P12)");
         _naoExercitados.Add("marca de rádio e ícones do menu nos temas claro, escuro e alto contraste [MANUAL]");
         _naoExercitados.Add("Narrador nos submenus do menu [MANUAL]");

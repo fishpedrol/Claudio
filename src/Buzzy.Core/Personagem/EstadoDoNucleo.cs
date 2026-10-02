@@ -114,12 +114,22 @@ public sealed record EstadoDoNucleo
     public EstadoDaOnda? OndaDeFundo { get; init; }
 
     /// <summary>
-    /// A carga da paranoia (pedido do usuário de 2026-10-01; DEC-028), de 0 para cima: quantos itens de substância ele usou
-    /// no episódio. Cada um soma 1, depois da combinação; da 4ª em diante, a paranoia (a onda <c>Paranoico</c>) começa ou
-    /// sobe. Volta a 0 no fim de todo evento em que nem a onda da frente nem a de fundo é de substância (a paranoia conta
-    /// como substância). Só em memória, como a onda.
+    /// A carga da paranoia no episódio (pedidos do usuário de 2026-10-01; DEC-028): quantos itens de substância ele usou, se
+    /// algum era droga sintética, quais itens distintos e se o episódio já sorteou. Cada item de substância entra depois da
+    /// combinação; o uso que fecha um episódio de mistura com sintética, sem a paranoia na frente, sorteia a paranoia (a onda
+    /// <c>Paranoico</c>), uma vez por episódio, com o gerador <see cref="AleatorioDaParanoia"/>. Volta toda a
+    /// <see cref="CargaDaParanoia.Nenhuma"/> no fim de todo evento em que nem a onda da frente nem a de fundo é de substância
+    /// (a paranoia conta como substância). Só em memória, como a onda.
     /// </summary>
-    public int Carga { get; init; }
+    public CargaDaParanoia Carga { get; init; } = CargaDaParanoia.Nenhuma;
+
+    /// <summary>
+    /// O gerador próprio da paranoia (decisão do coordenador para o pedido do usuário de 2026-10-01, a chance de 1 em 8),
+    /// semeado da semente do núcleo (<see cref="SementeDaParanoia"/>): só os sorteios da paranoia o usam, um passo cada, no
+    /// máximo um por episódio, e eles nunca usam o <see cref="Aleatorio"/> principal, para a agenda, as caras e as
+    /// reproduções gravadas não mudarem por causa deles. Não volta ao começo com o episódio. Só em memória.
+    /// </summary>
+    public Aleatorio AleatorioDaParanoia { get; init; }
 
     /// <summary>Geração do último agendamento do temporizador da onda.</summary>
     public long GeracaoDaOnda { get; init; }
@@ -151,8 +161,18 @@ public sealed record EstadoDoNucleo
     /// <summary>Acontecimento pontual do último evento, para a apresentação.</summary>
     public Sinal Sinal { get; init; }
 
-    /// <summary>Estado inicial, em <see cref="Estado.Booting"/>, com a semente dada.</summary>
-    public static EstadoDoNucleo Inicial(ulong semente) => new() { Aleatorio = new Aleatorio(semente) };
+    /// <summary>
+    /// Estado inicial, em <see cref="Estado.Booting"/>, com a semente dada: o gerador principal parte dela, e o da paranoia,
+    /// de <see cref="SementeDaParanoia"/>.
+    /// </summary>
+    public static EstadoDoNucleo Inicial(ulong semente) => new()
+    {
+        Aleatorio = new Aleatorio(semente),
+        AleatorioDaParanoia = new Aleatorio(SementeDaParanoia(semente)),
+    };
+
+    /// <summary>A semente do gerador da paranoia, derivada da do núcleo: semente × 41 + 13, em aritmética de 64 bits sem sinal.</summary>
+    public static ulong SementeDaParanoia(ulong semente) => unchecked((semente * 41) + 13);
 
     /// <summary>O que a apresentação e os testes enxergam (ARCHITECTURE.md 2.10).</summary>
     public Retrato Retrato() => new(
@@ -173,7 +193,7 @@ public sealed record EstadoDoNucleo
         EmocaoDominante = Preferencias.EmocaoDominante,
         Onda = Onda,
         OndaDeFundo = OndaDeFundo,
-        Carga = Carga,
+        Carga = Carga.Substancias,
         Uso = Uso,
         PassoDoUso = Uso is { } uso ? uso.Passos - PassosRestantes : 0,
         Itens = Itens,
@@ -209,7 +229,10 @@ public sealed record Retrato(
     /// <summary>A onda de fundo, congelada atrás da da frente (DEC-028); nula sem ela.</summary>
     public EstadoDaOnda? OndaDeFundo { get; init; }
 
-    /// <summary>A carga da paranoia (pedido do usuário de 2026-10-01): quantos itens de substância ele usou no episódio; 0 sem episódio.</summary>
+    /// <summary>
+    /// A carga da paranoia (pedidos do usuário de 2026-10-01): quantos itens de substância ele usou no episódio
+    /// (<see cref="CargaDaParanoia.Substancias"/>); 0 sem episódio.
+    /// </summary>
     public int Carga { get; init; }
 
     /// <summary>O uso em curso, em USING (DEC-028): o item, o verbo, a duração e o apoio, para a pose de uso; nulo fora dele.</summary>

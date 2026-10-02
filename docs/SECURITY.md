@@ -2,7 +2,7 @@
 
 > Regras de segurança do produto. As Fases 1 a 4 estão implementadas e verificadas nos limites descritos na seção 10; a Fase 5 está em andamento, intercalada com a emoção dominante e o tamagotchi adulto (DEC-027 e DEC-028). O modelo completo de segurança continua PLANNED até a Fase 9.
 >
-> Última atualização: 2026-10-01
+> Última atualização: 2026-10-02
 
 ## 1. Modelo de segurança
 
@@ -101,7 +101,7 @@ Local: `%LOCALAPPDATA%\Buzzy` sem pacote, obtido pela API de pastas conhecidas; 
 
 Desde o passo P7 da Fase 5, o Buzzy do usuário, aberto sem perfil de teste, lê e grava o `settings.json` real e o `.bak` nessa pasta; os testes e as ferramentas usam a pasta do perfil deles, em `testes\NOME`. O arquivo tem cerca de 500 bytes.
 
-Os itens do tamagotchi, o uso de um item e a onda de desenho animado (DEC-028) ficam só em memória: nada deles vai para o `settings.json` nem para outro arquivo, fora as linhas do log de diagnóstico opcional (seção 6), e tudo some ao sair do app. Os dados novos gravados desde o passo P7 são a emoção dominante e a postura (a borda do esconderijo e a marca de preso).
+Os itens do tamagotchi, o uso de um item e a onda de desenho animado (DEC-028) ficam só em memória: nada deles vai para o `settings.json` nem para outro arquivo, fora as linhas do log de diagnóstico opcional (seção 6), e tudo some ao sair do app. Desde 2026-10-01, o mesmo vale para a paranoia: a carga do episódio (as substâncias, a sintética, os itens distintos e o sorteio feito) e o gerador próprio dela ficam só em memória e recomeçam a cada abertura, a partir da semente do núcleo. Os dados novos gravados desde o passo P7 são a emoção dominante e a postura (a borda do esconderijo e a marca de preso).
 
 ## 6. Dados que nunca devem ser coletados
 
@@ -121,7 +121,7 @@ STATUS: PLANNED.
 - os avisos da leitura do `settings.json` só levam nomes de campo do esquema e o motivo, nunca valores nem nomes vindos do arquivo;
 - o nome de perfil recusado e a chave lida do arquivo não vão para o log, e o caminho da pasta de dados nunca vai.
 
-*No tamagotchi e no menu (DEC-027 e DEC-028; contrato em ARCHITECTURE.md 2.13.4):* as linhas `MENU`, `ITEM` e `ONDA` levam só nomes de comandos, de caras e de itens, Ids, pontos e retângulos das janelas do próprio Buzzy, o DPI e o HWND delas, contagens e tempos. Na perda da captura, não vai qual janela ficou com o mouse, e uma falha do Windows vai só com o código.
+*No tamagotchi e no menu (DEC-027 e DEC-028; contrato em ARCHITECTURE.md 2.13.4):* as linhas `MENU`, `ITEM` e `ONDA` levam só nomes de comandos, de caras e de itens, Ids, pontos e retângulos das janelas do próprio Buzzy, o DPI e o HWND delas, contagens e tempos. Na perda da captura, não vai qual janela ficou com o mouse, e uma falha do Windows vai só com o código. A linha `PARANOIA` (desde 2026-10-01) leva só o nome do item, a chance, `sim` ou `nao` e as contagens do episódio, com os nomes dos itens distintos.
 
 *Na Fase 5, bloco B (passos P6, P7 e P9; DEC-029 e DEC-030; contrato em ARCHITECTURE.md 2.13.4):*
 - as linhas `TOPOLOGIA`, `POSICAO` e `ITEM` levam a chave do monitor, que é o resumo opaco, e o nome GDI (`\\.\DISPLAYn`); nunca o caminho do dispositivo nem o nome do monitor. A falha da consulta da configuração de vídeo ou da leitura de um monitor vai só com a função e o código;
@@ -213,4 +213,14 @@ STATUS: PLANNED. Cada prática vira item de teste a partir da Fase 1.
   - **a confirmar com o usuário:** a revisão de segurança apontou que os arquivos reais de configuração (`settings.json` e `settings.json.bak`) foram criados às 12:12 e gravados até as 12:22 de 2026-10-01. O provável é que o próprio usuário tenha aberto o Buzzy pelo `bin\Release`, que desde o passo P7 grava as configurações reais. Desde a correção, toda execução da integração, da verificação de tela e da medição falha se essa foto mudar;
   - não ficou para este bloco: limitar as rodadas seguidas de reaplicação do lugar causadas pelo próprio `WM_DPICHANGED`, que só podem acontecer com o sprite atravessando monitores ou com a histerese de escala (passos P13 e P14; DEC-030);
   - pendentes: a verificação de tela e as medições de 10 minutos depois do bloco B, o Process Monitor (seção 8, item 4) e a sessão de uma hora sem rede da Fase 9.
+- 2026-10-01, alívio, bala como droga sintética e paranoia (adicional da DEC-028), na última rodada da correção, das 23:48 às 23:52:
+  - `tools/testar.ps1 -Integracao` e depois `tools/testar.ps1` (Release), os dois com código 0: portão binário e de fonte APROVADO, com as mesmas quatro permissões do apphost, 74 testes do portão e nenhum pacote vulnerável; na integração, 361/361 no app, com a foto dos arquivos reais do usuário igual antes e depois. O núcleo da paranoia não chama o Windows, e a linha `PARANOIA` usa o log de sempre: nenhum P/Invoke novo;
+  - a carga, o episódio e o gerador da paranoia ficam só em memória (seção 5), e a linha `PARANOIA` não leva dado pessoal (seção 6);
+  - a revisão adversarial do refino conferiu o tom: de desenho animado, sem informação real sobre drogas; a classificação dos itens é regra de jogo pedida pelo usuário, sem dose, obtenção, preparo nem efeito real;
+  - pendentes: a revisão de tom pelo usuário, a verificação de tela (V17, V17b e V18) e o Process Monitor (seção 8, item 4).
+- 2026-10-02, o baseado por conta própria (adendo da DEC-028), na última rodada da correção, das 01:46 às 01:50:
+  - `tools/testar.ps1 -Integracao` e depois `tools/testar.ps1` (Release), os dois com código 0: portão binário e de fonte APROVADO, com as mesmas quatro permissões do apphost, 74 testes do portão e nenhum pacote vulnerável; na integração, 364/364 no app, com a foto dos arquivos reais do usuário igual antes e depois;
+  - o app não mudou: nenhum P/Invoke novo, nenhuma janela nova (o baseado dele não cria item nem janela de item), nenhum tipo de linha de log novo e nenhum dado novo em disco; o uso, a onda e a carga ficam só em memória (seção 5);
+  - a revisão adversarial conferiu o tom: de desenho animado, sem informação real sobre drogas, e sem texto novo para o usuário além da regra no log de diagnóstico;
+  - pendentes: a revisão de tom pelo usuário, a verificação de tela (V19) e o Process Monitor (seção 8, item 4).
 - O resultado de dez minutos e o portão aprovado não verificam todas as práticas da seção 8; a Fase 9 permanece pendente.

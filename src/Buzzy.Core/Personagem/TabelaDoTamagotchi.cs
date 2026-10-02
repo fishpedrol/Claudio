@@ -2,12 +2,13 @@ namespace Buzzy.Core.Personagem;
 
 /// <summary>
 /// As tabelas do tamagotchi adulto (DEC-028; desenho do núcleo, tabelas 4.1 a 4.4), só dados: os itens na ordem do
-/// menu, o verbo e a duração do uso de cada um, e as ondas, com precedência, tempos, caras e perfis por fase. A classe do
-/// alívio (pedido do usuário de 2026-10-01) também é dado: o item de alívio (a comida e a bebida sem álcool) e a onda de
-/// substância. A paranoia (outro pedido do mesmo dia) é a última onda, que nenhum item começa. Tudo é de desenho
-/// animado: os números são de jogo, escolhidos para o comportamento se ler na tela, sem relação com nada real.
-/// A configuração do núcleo aponta para cá (<see cref="ConfiguracaoDoNucleo.TabelaDeItens"/> e
-/// <see cref="ConfiguracaoDoNucleo.TabelaDeOndas"/>), e os testes podem trocar as tabelas por outras.
+/// menu, o verbo e a duração do uso de cada um, e as ondas, com precedência, tempos, caras e perfis por fase. A classe de
+/// cada item (pedidos do usuário de 2026-10-01) também é dado: o item de alívio (a comida e a bebida sem álcool), a droga
+/// sintética e as outras substâncias; e a onda de substância. A paranoia (outro pedido do mesmo dia) é a última onda, que
+/// nenhum item começa. Tudo é de desenho animado: os números e as classes são regra de jogo, escolhidos para o
+/// comportamento se ler na tela, sem relação com nada real. A configuração do núcleo aponta para cá
+/// (<see cref="ConfiguracaoDoNucleo.TabelaDeItens"/> e <see cref="ConfiguracaoDoNucleo.TabelaDeOndas"/>), e os testes podem
+/// trocar as tabelas por outras.
 /// </summary>
 public static class TabelaDoTamagotchi
 {
@@ -45,22 +46,34 @@ public static class TabelaDoTamagotchi
             ? DadosDasOndas[(int)onda]
             : throw new ArgumentOutOfRangeException(nameof(onda), onda, "Onda desconhecida.");
 
-    // 4.1, na ordem do enum: verbo, cara durante o uso, onda, intensidade e se é de alívio.
+    /// <summary>
+    /// A classe do item (pedidos do usuário de 2026-10-01), regra de jogo: o alívio (a comida e a bebida sem álcool), a
+    /// droga sintética ("como bala, md, coca e lança") e as outras substâncias.
+    /// </summary>
+    private enum Classe
+    {
+        Alivio,
+        Substancia,
+        Sintetica,
+    }
+
+    // 4.1, na ordem do enum: verbo, cara durante o uso, onda, intensidade e a classe. A bala é droga sintética desde
+    // 2026-10-01 (palavras do usuário): começa o eufórico no nível 1 (o MD, no 2), e a arte dela não muda.
     private static readonly DadosDoItem[] DadosDosItens =
     [
-        DeItem(Item.Banana, VerboDeUso.Comer, Expressao.Feliz, Onda.Satisfeito, 1, alivio: true),
-        DeItem(Item.Agua, VerboDeUso.Beber, Expressao.Feliz, null, 0, alivio: true),
-        DeItem(Item.Vodka, VerboDeUso.Beber, Expressao.Determinado, Onda.Bebado, 2, alivio: false),
-        DeItem(Item.Cerveja, VerboDeUso.Beber, Expressao.Feliz, Onda.Bebado, 1, alivio: false),
-        DeItem(Item.Baseado, VerboDeUso.Fumar, Expressao.Pensativo, Onda.Chapado, 2, alivio: false),
-        DeItem(Item.Cigarro, VerboDeUso.Fumar, Expressao.Pensativo, Onda.Relaxado, 1, alivio: false),
-        DeItem(Item.Cocaina, VerboDeUso.Cheirar, Expressao.Surpreso, Onda.Eletrico, 2, alivio: false),
-        DeItem(Item.Md, VerboDeUso.Engolir, Expressao.Travesso, Onda.Euforico, 2, alivio: false),
-        DeItem(Item.LancaPerfume, VerboDeUso.Inalar, Expressao.Surpreso, Onda.Tonto, 2, alivio: false),
-        DeItem(Item.Cafe, VerboDeUso.Beber, Expressao.Determinado, Onda.Ligado, 1, alivio: true),
-        DeItem(Item.Energetico, VerboDeUso.Beber, Expressao.Empolgado, Onda.Ligado, 2, alivio: true),
-        DeItem(Item.Cogumelo, VerboDeUso.Comer, Expressao.Curioso, Onda.Viajando, 2, alivio: false),
-        DeItem(Item.Bala, VerboDeUso.Engolir, Expressao.Feliz, Onda.Alegre, 1, alivio: true),
+        DeItem(Item.Banana, VerboDeUso.Comer, Expressao.Feliz, Onda.Satisfeito, 1, Classe.Alivio),
+        DeItem(Item.Agua, VerboDeUso.Beber, Expressao.Feliz, null, 0, Classe.Alivio),
+        DeItem(Item.Vodka, VerboDeUso.Beber, Expressao.Determinado, Onda.Bebado, 2, Classe.Substancia),
+        DeItem(Item.Cerveja, VerboDeUso.Beber, Expressao.Feliz, Onda.Bebado, 1, Classe.Substancia),
+        DeItem(Item.Baseado, VerboDeUso.Fumar, Expressao.Pensativo, Onda.Chapado, 2, Classe.Substancia),
+        DeItem(Item.Cigarro, VerboDeUso.Fumar, Expressao.Pensativo, Onda.Relaxado, 1, Classe.Substancia),
+        DeItem(Item.Cocaina, VerboDeUso.Cheirar, Expressao.Surpreso, Onda.Eletrico, 2, Classe.Sintetica),
+        DeItem(Item.Md, VerboDeUso.Engolir, Expressao.Travesso, Onda.Euforico, 2, Classe.Sintetica),
+        DeItem(Item.LancaPerfume, VerboDeUso.Inalar, Expressao.Surpreso, Onda.Tonto, 2, Classe.Sintetica),
+        DeItem(Item.Cafe, VerboDeUso.Beber, Expressao.Determinado, Onda.Ligado, 1, Classe.Alivio),
+        DeItem(Item.Energetico, VerboDeUso.Beber, Expressao.Empolgado, Onda.Ligado, 2, Classe.Alivio),
+        DeItem(Item.Cogumelo, VerboDeUso.Comer, Expressao.Curioso, Onda.Viajando, 2, Classe.Substancia),
+        DeItem(Item.Bala, VerboDeUso.Engolir, Expressao.Feliz, Onda.Euforico, 1, Classe.Sintetica),
     ];
 
     // 4.2 a 4.4, na ordem do enum.
@@ -69,8 +82,8 @@ public static class TabelaDoTamagotchi
         Satisfeito(), Alegre(), Relaxado(), Ligado(), Bebado(), Chapado(), Eletrico(), Euforico(), Tonto(), Viajando(), Paranoico(),
     ];
 
-    private static DadosDoItem DeItem(Item item, VerboDeUso verbo, Expressao caraDurante, Onda? onda, int intensidade, bool alivio)
-        => new(item, verbo, PassosDoUso(verbo), caraDurante, onda, intensidade, alivio);
+    private static DadosDoItem DeItem(Item item, VerboDeUso verbo, Expressao caraDurante, Onda? onda, int intensidade, Classe classe)
+        => new(item, verbo, PassosDoUso(verbo), caraDurante, onda, intensidade, Alivio: classe == Classe.Alivio, Sintetica: classe == Classe.Sintetica);
 
     private static TimeSpan S(int segundos) => TimeSpan.FromSeconds(segundos);
 
@@ -88,6 +101,7 @@ public static class TabelaDoTamagotchi
         return new(Onda.Satisfeito, 1, S(3), S(60), TimeSpan.Zero, Expressao.Feliz, Expressao.Feliz, null, [pico, pico, pico], null, DeSubstancia: false);
     }
 
+    /// <summary>O alegre, sem item desde 2026-10-01 (a bala passou ao eufórico); continua na tabela, sem mexer em ordinais.</summary>
     private static DadosDaOnda Alegre()
     {
         (Gesto, int)[] gestos = [(Gesto.Brincar, 2), (Gesto.Danca, 2), (Gesto.Gargalhada, 1)];

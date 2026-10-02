@@ -61,7 +61,8 @@ public enum Estado
     /// Usa o item que o usuário soltou sobre ele (DEC-028): come, bebe, fuma, cheira, engole ou inala, de desenho
     /// animado, por um número fixo de passos, no apoio em que estava (chão, parede, cipó ou esconderijo). O relógio
     /// corre; no grupo do usuário, nada autônomo chega; um PRESS o segura na hora. No fim, a acomodação o devolve ao
-    /// mesmo apoio.
+    /// mesmo apoio. Também é o estado do baseado que ele fuma por conta própria, no chão, sem item no mundo
+    /// (<see cref="AcoesAutonomas.FumarBaseado"/>).
     /// </summary>
     Using,
 }
@@ -293,7 +294,22 @@ public enum AcoesAutonomas
     Descansar = 8,
     Gesto = 16,
     TrocarExpressao = 32,
+
+    /// <summary>
+    /// As seis ações de sempre (Fases 2 a 4). A do tamagotchi, <see cref="FumarBaseado"/>, fica de fora: só a configuração do
+    /// aplicativo a liga (<see cref="ConfiguracaoDoNucleo.DoAplicativo"/>) e os testes que a pedem, e toda configuração de
+    /// antes continua igual.
+    /// </summary>
     Todas = Andar | Escalar | Pular | Descansar | Gesto | TrocarExpressao,
+
+    /// <summary>
+    /// Fumar um baseado por conta própria, quando ele quer (pedido do usuário de 2026-10-01, 19:10; DEC-028), de desenho
+    /// animado: no fim do enum, sem mudar os valores das outras. Só existe com a chave do tamagotchi ligada
+    /// (<see cref="ConfiguracaoDoNucleo.Tamagotchi"/>); desligada, o peso é zero e nada muda. Só em IDLE, no chão, sem estar
+    /// escondido, e nunca com a onda Chapado ou a paranoia na frente (<see cref="PerfilDeEnergia.PesoFumarBaseado"/>): ele
+    /// "tira do chapéu" o baseado, sem item no mundo, e o usa como o baseado que o usuário solta nele.
+    /// </summary>
+    FumarBaseado = 64,
 }
 
 /// <summary>Consultas sobre os estados.</summary>

@@ -12,8 +12,10 @@ namespace Buzzy.App.Testes.Integracao;
 /// seção 6): o menu (pelo personagem, pela bandeja e pelo botão direito num item; "Recolher itens" desabilitado sem
 /// itens), as janelas dos itens, o arraste até ele, o fim do gesto (captura solta e ordem Z), o uso, o PRESS no meio do
 /// uso, recolher, esconder e mostrar (também com outra janela "sempre no topo" à frente), minimizar no meio do arraste de
-/// um item, arrastar o personagem com um item na tela, sair com itens na tela, o temporizador da onda e a paranoia (adicional
-/// de 2026-10-01: quatro substâncias seguidas, o olhar pro teto com o suor e a água que acalma um passo).
+/// um item, arrastar o personagem com um item na tela, sair com itens na tela, o temporizador da onda, a paranoia (pedidos
+/// de 2026-10-01: a mistura com droga sintética, com a semente em que o sorteio de 1 em 8 sai, o olhar pro teto com o suor e
+/// a água que acalma um passo) e o baseado por conta própria (pedido de 19:10: com a agenda ligada e a semente em que a
+/// primeira decisão é fumar, ele fuma sozinho, sem janela de item, fica chapado, e o clique o interrompe).
 /// Tudo por mensagens POSTADAS às janelas do próprio Buzzy aberto pelo teste, com o PID de cada janela conferido antes
 /// de cada mensagem (as dos itens, a do dono de cada menu e a de serviço vêm do log): nada passa pela fila de input do
 /// Windows nem por outro aplicativo, e o resultado vale como integração automatizada, não como gesto. Só rodam com
@@ -157,53 +159,60 @@ internal sealed class ItensIntegracaoTestes
     }
 
     [Teste]
-    public void Paranoia_QuatroSubstanciasSeguidas_OlhaProTetoComOSuor_EAAguaAcalmaUmPasso()
+    public void Paranoia_MisturaComSintetica_OSorteioSaiNaBala_OlhaProTetoComOSuor_EAAguaAcalmaUmPasso()
     {
-        // A paranoia (adicional de 2026-10-01, DEC-028), de desenho animado: pausado, a vodka, a cerveja, o cigarro e o
-        // baseado, um depois do outro, soltos nele. Na 4ª substância, a onda Paranoico vai para a frente; no fim do uso que
-        // a começou, ele olha pro teto na hora (a pose da arte, com a cara dela e o suor por cima); depois, parado, a cara
-        // paranoica com o suor. A água acalma um passo: o pico vira queda.
-        using BuzzyEmTeste b = BuzzyEmTeste.Iniciar();
+        // A paranoia (pedidos do usuário de 2026-10-01, DEC-028), de desenho animado: pausado, com a semente em que o primeiro
+        // sorteio do gerador da paranoia sai, a vodka e depois a bala, soltas nele. A vodka sozinha (álcool) não sorteia nada;
+        // a bala, droga sintética na regra do jogo, fecha a mistura com sintética, e o primeiro sorteio sai: a onda Paranoico
+        // vai para a frente. No fim do uso que a começou, ele olha pro teto na hora (a pose da arte, com a cara dela e o suor
+        // por cima); depois, parado, a cara paranoica com o suor. A água acalma um passo: o pico vira queda.
+        ulong semente = SementeEmQueOPrimeiroSorteioDaParanoiaSai();
+        using BuzzyEmTeste b = BuzzyEmTeste.Iniciar(semente: semente);
         PontoPx personagem = Preparar(b);
         long inicio = BuzzyEmTeste.MarcaDoLog();
         DadosDaOnda paranoia = TabelaDoTamagotchi.DaOnda(Onda.Paranoico);
         string Ms(TimeSpan t) => ((long)t.TotalMilliseconds).ToString(CultureInfo.InvariantCulture);
 
         var regras = new List<string>();
-        long marcaDaQuarta = 0;
-        foreach ((char tecla, string nome) in new[] { ('v', "Vodka"), ('c', "Cerveja"), ('i', "Cigarro"), ('s', "Baseado") })
+        long marcaDaBala = 0;
+        foreach ((char tecla, string nome) in new[] { ('v', "Vodka"), ('a', "Bala") })
         {
             long marcaDoItem = BuzzyEmTeste.MarcaDoLog();
             ItemNaTela item = Invocar(b, () => AbrirPeloPersonagem(b, personagem), tecla, nome);
             (_, PontoPx opaco) = EsperarParado(b, marcaDoItem, item);
-            marcaDaQuarta = BuzzyEmTeste.MarcaDoLog();
+            marcaDaBala = BuzzyEmTeste.MarcaDoLog();
             Arrastar(b, item, opaco, personagem);
-            regras.Add(EsperarDesde(b, marcaDaQuarta, e => e.Chave == "NUCLEO" && e["evento"] == "ItemDragEnd" && e["para"] == "Using", 3000, $"{nome} solto nele: USING")["regra"]);
-            EsperarDesde(b, marcaDaQuarta, e => e.Chave == "NUCLEO" && e["de"] == "Settling" && e["para"] == "Idle", 8000, $"o fim do uso de {nome}");
+            regras.Add(EsperarDesde(b, marcaDaBala, e => e.Chave == "NUCLEO" && e["evento"] == "ItemDragEnd" && e["para"] == "Using", 3000, $"{nome} solto nele: USING")["regra"]);
+            EsperarDesde(b, marcaDaBala, e => e.Chave == "NUCLEO" && e["de"] == "Settling" && e["para"] == "Idle", 8000, $"o fim do uso de {nome}");
         }
-        for (int i = 0; i < 3; i++)
-            Afirmar.Falso(regras[i].Contains("paranoia", StringComparison.Ordinal), $"a {i + 1}ª substância ainda não começa a paranoia: {regras[i]}");
-        Afirmar.Contem("Fumar Baseado; a paranoia começa: Paranoico/Subida/1", regras[3]);
+        Afirmar.Falso(regras[0].Contains("paranoia", StringComparison.Ordinal), $"a vodka sozinha (álcool) não sorteia nem começa a paranoia: {regras[0]}");
+        Afirmar.Contem("Engolir Bala; a paranoia começa: Paranoico/Subida/1", regras[1]);
+        // O sorteio, numa linha à parte da regra (a que também mostra o sorteio que não sai): só um, o da bala, que fechou a
+        // mistura com a vodka e saiu; a vodka sozinha não sorteou.
+        EventoDoLog[] sorteios = [.. BuzzyEmTeste.EventosDesde(inicio).Where(e => e.Chave == "PARANOIA")];
+        Afirmar.Igual(1, sorteios.Length, "um sorteio só no log, o da bala");
+        Afirmar.Igual(("Bala", "1 em 8", "sim", "2", "Vodka,Bala"), (sorteios[0]["item"], sorteios[0]["chance"], sorteios[0]["saiu"], sorteios[0]["substancias"], sorteios[0]["distintas"]),
+            "a linha do sorteio: a bala, 1 em 8, saiu, com a vodka no episódio");
 
         // A onda, em disparos únicos com a duração da tabela: a subida e, depois dela, o pico do nível 1. Tudo é procurado
-        // depois do soltar do baseado: o temporizador da onda anterior (o bêbado) pode ter disparado no meio do arraste.
-        int soltou = BuzzyEmTeste.EventosDesde(marcaDaQuarta).FindIndex(e => e.Chave == "NUCLEO" && e["evento"] == "ItemDragEnd" && e["para"] == "Using");
-        int iSubida = EsperarIndice(b, marcaDaQuarta, e => e.Chave == "ONDA" && e["agendada"] == "sim", 3000, "a subida da paranoia agendada", aPartirDe: soltou);
-        EventoDoLog subida = BuzzyEmTeste.EventosDesde(marcaDaQuarta)[iSubida];
+        // depois do soltar da bala: o temporizador da onda anterior (o bêbado) pode ter disparado no meio do arraste.
+        int soltou = BuzzyEmTeste.EventosDesde(marcaDaBala).FindIndex(e => e.Chave == "NUCLEO" && e["evento"] == "ItemDragEnd" && e["para"] == "Using");
+        int iSubida = EsperarIndice(b, marcaDaBala, e => e.Chave == "ONDA" && e["agendada"] == "sim", 3000, "a subida da paranoia agendada", aPartirDe: soltou);
+        EventoDoLog subida = BuzzyEmTeste.EventosDesde(marcaDaBala)[iSubida];
         Afirmar.Igual(Ms(paranoia.Duracao(FaseDaOnda.Subida, 1)), subida["atrasoMs"], "a subida da paranoia, um disparo único");
-        EsperarDesde(b, marcaDaQuarta, e => e.Chave == "NUCLEO" && e["evento"] == "ItemEffectTimer" && e["regra"].Contains("Paranoico/Subida/1 -> Paranoico/Pico/1", StringComparison.Ordinal),
+        EsperarDesde(b, marcaDaBala, e => e.Chave == "NUCLEO" && e["evento"] == "ItemEffectTimer" && e["regra"].Contains("Paranoico/Subida/1 -> Paranoico/Pico/1", StringComparison.Ordinal),
             4000, "a subida vira pico", aPartirDe: soltou);
-        EventoDoLog pico = EsperarDesde(b, marcaDaQuarta, e => e.Chave == "ONDA" && e["agendada"] == "sim", 3000, "o pico agendado", aPartirDe: iSubida);
+        EventoDoLog pico = EsperarDesde(b, marcaDaBala, e => e.Chave == "ONDA" && e["agendada"] == "sim", 3000, "o pico agendado", aPartirDe: iSubida);
         Afirmar.Igual(Ms(paranoia.Duracao(FaseDaOnda.Pico, 1)), pico["atrasoMs"], "o pico do nível 1, um disparo único");
 
         // No fim do uso que a começou, livre e no chão, ele olha pro teto na hora, sem sorteio: a pose da arte, com a cara
         // dela, e o suor da paranoia por cima. Acabado o gesto, parado, a cara paranoica, com o suor.
-        EventoDoLog olhou = EsperarDesde(b, marcaDaQuarta, e => e.Chave == "NUCLEO" && e["de"] == "Idle" && e["para"] == "Idle" && e["regra"].Contains("a paranoia começou", StringComparison.Ordinal),
+        EventoDoLog olhou = EsperarDesde(b, marcaDaBala, e => e.Chave == "NUCLEO" && e["de"] == "Idle" && e["para"] == "Idle" && e["regra"].Contains("a paranoia começou", StringComparison.Ordinal),
             4000, "o olhar pro teto no começo da paranoia");
         Afirmar.Igual(("Tick", "IDLE: a paranoia começou, gesto OlharProTeto"), (olhou["evento"], olhou["regra"]), "o gesto no fim do uso, sem a agenda");
-        EventoDoLog teto = EsperarDesde(b, marcaDaQuarta, e => e.Chave == "SPRITE" && e["pose"] == "olharproteto", 3000, "o quadro do olhar pro teto");
+        EventoDoLog teto = EsperarDesde(b, marcaDaBala, e => e.Chave == "SPRITE" && e["pose"] == "olharproteto", 3000, "o quadro do olhar pro teto");
         Afirmar.Igual(("-", "-", "Suor"), (teto["expressao"], teto["item"], teto["efeito"]), "olhar pro teto: a cara da pose, sem item e com o suor por cima");
-        EventoDoLog parado = EsperarDesde(b, marcaDaQuarta, e => e.Chave == "SPRITE" && e["pose"] == "parado" && e["expressao"] == "paranoico", 5000, "parado com a cara paranoica");
+        EventoDoLog parado = EsperarDesde(b, marcaDaBala, e => e.Chave == "SPRITE" && e["pose"] == "parado" && e["expressao"] == "paranoico", 5000, "parado com a cara paranoica");
         Afirmar.Igual(("Suor", "0"), (parado["efeito"], parado["fase"]), "parado com a cara paranoica e o suor, na fase parada (relógio desligado)");
 
         // A água acalma um passo: o pico do nível 1 vira a queda, que recomeça com a duração dela.
@@ -216,7 +225,58 @@ internal sealed class ItensIntegracaoTestes
         Afirmar.Contem("Beber Agua; alivia Paranoico/Pico/1 -> Paranoico/Queda/1", BuzzyEmTeste.EventosDesde(marcaDoAlivio)[bebeu]["regra"]);
         EventoDoLog queda = EsperarDesde(b, marcaDoAlivio, e => e.Chave == "ONDA" && e["agendada"] == "sim", 3000, "a queda agendada", aPartirDe: bebeu);
         Afirmar.Igual(Ms(paranoia.Duracao(FaseDaOnda.Queda, 1)), queda["atrasoMs"], "a queda, um disparo único com a duração cheia dela");
+        Afirmar.Igual(1, BuzzyEmTeste.EventosDesde(inicio).Count(e => e.Chave == "PARANOIA"), "a água (alívio) não sorteia: o sorteio da bala continua o único");
         Afirmar.Falso(BuzzyEmTeste.EventosDesde(inicio).Any(e => e.Chave == "ERRO"), "sem erro");
+
+        Afirmar.Igual(0, b.FecharPorWmClose());
+    }
+
+    [Teste]
+    public void BaseadoPorContaPropria_FumaSozinho_FicaChapado_SemJanelaDeItem_EOCliqueInterrompe()
+    {
+        // O baseado por conta própria (pedido do usuário de 2026-10-01, 19:10; DEC-028), de desenho animado: com a agenda
+        // ligada e a semente em que a primeira decisão, cedo, é fumar (SementesDoBaseado, pela simulação do núcleo com a
+        // configuração do aplicativo e a topologia desta máquina), ele fuma sozinho, sem nenhum item no mundo: nenhuma janela
+        // de item aparece e nenhuma linha ITEM sai. O quadro é o do fumar, com o baseado na mão e a fumaça do chapado por
+        // cima; a onda do chapado começa na subida, um disparo único. O clique no meio do uso (depois do primeiro trago, no
+        // quadro fumando-3) o interrompe na hora, e a onda continua: depois da reação, parado, ele está chapado, com a fumaça.
+        Topologia topologia = Afirmar.NaoNulo(LeitorDeTopologia.Ler(out string? erro), erro);
+        ConfiguracaoDoNucleo cfg = ConfiguracaoDoNucleo.DoAplicativo(SpriteProvisorio.TamanhoLogico);
+        (ulong semente, TimeSpan primeira) = SementesDoBaseado.PrimeiraEmQueFumaCedo(cfg, topologia, TimeSpan.FromSeconds(12), 5000)
+            ?? throw new InvalidOperationException("Nenhuma semente até 5000 em que a primeira decisão, em até 12 s, é o baseado por conta própria.");
+        Console.WriteLine($"         semente {semente}: a primeira decisão, em {primeira.TotalSeconds:0.0} s, é o baseado por conta própria");
+        DadosDaOnda chapado = TabelaDoTamagotchi.DaOnda(Onda.Chapado);
+        string Ms(TimeSpan t) => ((long)t.TotalMilliseconds).ToString(CultureInfo.InvariantCulture);
+
+        using BuzzyEmTeste b = BuzzyEmTeste.Iniciar(pausado: false, semente: semente);
+        b.Esperar(e => e.Chave == "NUCLEO" && e["semente"] == semente.ToString(CultureInfo.InvariantCulture), 5000, "semente aplicada");
+        PontoPx personagem = Preparar(b);
+        long inicio = BuzzyEmTeste.MarcaDoLog();
+        int iFumou = EsperarIndice(b, inicio, e => e.Chave == "NUCLEO" && e["evento"] == "AutonomyTimer" && e["para"] == "Using",
+            (int)primeira.TotalMilliseconds + 5000, "o baseado por conta própria");
+        EventoDoLog fumou = BuzzyEmTeste.EventosDesde(inicio)[iFumou];
+        Afirmar.Igual(("Idle", "IDLE + AUTONOMY_TIMER: Fumar Baseado por conta própria"), (fumou["de"], fumou["regra"]), "a agenda o fez fumar, sem paranoia");
+        EventoDoLog subida = EsperarDesde(b, inicio, e => e.Chave == "ONDA" && e["agendada"] == "sim", 3000, "a subida do chapado agendada", aPartirDe: iFumou);
+        Afirmar.Igual(Ms(chapado.Duracao(FaseDaOnda.Subida, 2)), subida["atrasoMs"], "a subida do chapado, um disparo único");
+        EventoDoLog quadro = EsperarDesde(b, inicio, e => e.Chave == "SPRITE" && e["pose"].StartsWith("fumando-", StringComparison.Ordinal), 3000, "o quadro do fumar", aPartirDe: iFumou);
+        Afirmar.Igual(("baseado", "-", "Fumaca"), (quadro["item"], quadro["expressao"], quadro["efeito"]), "fumando, com o baseado na mão, a cara da pose e a fumaça do chapado");
+        Afirmar.Falso(b.Eventos().Any(e => e.Chave == "ITEM"), "nenhuma janela de item: nenhuma linha ITEM");
+
+        // O clique no meio do uso, e não no primeiro quadro (revisão do baseado por conta própria, achado 5): depois do primeiro
+        // trago, no quadro fumando-3 (o passo 50 dos 210, 0,8 s depois do começo; o uso dura 3,5 s), o PRESS o segura na hora,
+        // e o uso acaba; a onda continua.
+        int iMeio = EsperarIndice(b, inicio, e => e.Chave == "SPRITE" && e["pose"] == "fumando-3", 3000, "o quadro fumando-3, no meio do uso", aPartirDe: iFumou);
+        b.PostarMouse(NativoTeste.WM_LBUTTONDOWN, NativoTeste.MK_LBUTTON, personagem);
+        int iPress = EsperarIndice(b, inicio, e => e.Chave == "NUCLEO" && e["evento"] == "Press" && e["para"] == "Pressed", 2000, "PRESS no meio do baseado", aPartirDe: iMeio);
+        Afirmar.Igual("Using", BuzzyEmTeste.EventosDesde(inicio)[iPress]["de"], "o clique no meio do uso interrompeu o baseado por conta própria");
+        b.PostarMouse(NativoTeste.WM_LBUTTONUP, 0, personagem);
+        int iClique = EsperarIndice(b, inicio, e => e.Chave == "NUCLEO" && e["evento"] == "Click" && e["para"] == "Reacting", 2000, "o clique vira reação", aPartirDe: iPress);
+        EventoDoLog parado = EsperarDesde(b, inicio, e => e.Chave == "SPRITE" && e["pose"] == "parado" && e["efeito"] == "Fumaca", 5000,
+            "depois da reação, parado e chapado, com a fumaça", aPartirDe: iClique);
+        Afirmar.Igual("0", parado["fase"], "parado, a fumaça na fase parada (relógio desligado)");
+        Afirmar.Falso(b.Eventos().Any(e => e.Chave == "ONDA" && e["cancelada"] == "sim"), "a onda continua: nada cancelado");
+        Afirmar.Falso(b.Eventos().Any(e => e.Chave == "ITEM"), "nenhuma janela de item, do começo ao fim");
+        Afirmar.Falso(b.Eventos().Any(e => e.Chave == "ERRO"), "sem erro");
 
         Afirmar.Igual(0, b.FecharPorWmClose());
     }
@@ -538,6 +598,17 @@ internal sealed class ItensIntegracaoTestes
     }
 
     // ------------------------------------------------------------------ apoio
+
+    /// <summary>
+    /// A primeira semente em que o primeiro sorteio do gerador da paranoia sai, com a chance da configuração do aplicativo
+    /// (1 em 8), pela mesma escolha da verificação de tela (<see cref="SementesDaParanoia"/>).
+    /// </summary>
+    private static ulong SementeEmQueOPrimeiroSorteioDaParanoiaSai()
+    {
+        Chance chance = ConfiguracaoDoNucleo.DoAplicativo(SpriteProvisorio.TamanhoLogico).ChanceDaParanoia;
+        return SementesDaParanoia.PrimeiraEmQueOPrimeiroSorteioSai(chance, 10_000)
+            ?? throw new InvalidOperationException($"Nenhuma semente até 10000 em que o primeiro sorteio da paranoia ({chance}) sai.");
+    }
 
     private static MonitorDoDesktop Principal()
         => Afirmar.NaoNulo(LeitorDeTopologia.Ler(out string? erro), erro).Principal;

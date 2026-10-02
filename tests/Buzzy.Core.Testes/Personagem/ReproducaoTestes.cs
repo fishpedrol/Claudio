@@ -38,6 +38,8 @@ internal static class ReproducaoTestes
         "07-tamagotchi.txt",
         // A paranoia (pedido do usuário de 2026-10-01).
         "08-paranoia.txt",
+        // O baseado por conta própria (pedido do usuário de 2026-10-01, 19:10).
+        "09-baseado-por-conta-propria.txt",
     ];
 
     private const string VariavelDeAtualizacao = "BUZZY_ATUALIZAR_REFERENCIAS";

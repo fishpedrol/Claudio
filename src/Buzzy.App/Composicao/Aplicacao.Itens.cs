@@ -192,6 +192,30 @@ internal static class LigacaoDosItens
                 throw new ArgumentOutOfRangeException(nameof(efeito), efeito, "Efeito do tamagotchi sem adaptador.");
         }
     }
+
+    /// <summary>
+    /// A linha de diagnóstico do sorteio da paranoia (pedidos do usuário de 2026-10-01; DEC-028), só com
+    /// <c>--diagnostico</c>: o núcleo não escreve o sorteio que não sai na regra do soltar, para a linha canônica e as
+    /// reproduções gravadas não mudarem, e a raiz o registra à parte. Houve sorteio no evento se o gerador da paranoia mudou:
+    /// só o sorteio dela o usa, um passo cada, no uso que fecha a mistura com droga sintética, uma vez por episódio; e saiu
+    /// se esse uso começou a paranoia. Devolve os campos da linha <c>PARANOIA</c> (o item do uso, a chance, se saiu e a carga
+    /// do episódio: as substâncias e os itens distintos), ou nulo sem sorteio.
+    /// </summary>
+    internal static (string Campo, object? Valor)[]? SorteioDaParanoia(EstadoDoNucleo antes, EstadoDoNucleo depois, Chance chance)
+    {
+        ArgumentNullException.ThrowIfNull(antes);
+        ArgumentNullException.ThrowIfNull(depois);
+        ArgumentNullException.ThrowIfNull(chance);
+        if (antes.AleatorioDaParanoia == depois.AleatorioDaParanoia) return null;
+        return
+        [
+            ("item", depois.Uso?.Item.ToString() ?? "-"),
+            ("chance", chance.ToString()),
+            ("saiu", depois.Uso?.ComecouAParanoia == true ? "sim" : "nao"),
+            ("substancias", depois.Carga.Substancias),
+            ("distintas", depois.Carga.Distintas.ToString()),
+        ];
+    }
 }
 
 /// <summary>

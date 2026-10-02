@@ -85,19 +85,33 @@ public sealed record ConfiguracaoDoNucleo
     public Func<Onda, DadosDaOnda> TabelaDeOndas { get; init; } = TabelaDoTamagotchi.DaOnda;
 
     /// <summary>
+    /// A chance da paranoia (pedido do usuário de 2026-10-01: "quero que a chance dele ficar paranoico seja de 1 em 8"; e a
+    /// escolha dele às 23:03, "uma vez por mistura"): a do sorteio de cada episódio de mistura com droga sintética, o único
+    /// dele, feito pelo uso que fecha a mistura, sem a paranoia na frente (<see cref="CargaDaParanoia.MisturaComSintetica"/>
+    /// e <see cref="CargaDaParanoia.Sorteada"/>), no gerador próprio da paranoia
+    /// (<see cref="EstadoDoNucleo.AleatorioDaParanoia"/>): é a chance de ele ficar paranoico num episódio, por mais
+    /// substâncias que ele use. É regra de jogo, de desenho animado. Os testes podem trocá-la, por exemplo por 1 em 1, para o
+    /// sorteio sempre sair, ou 0 em 1, para nunca sair.
+    /// </summary>
+    public Chance ChanceDaParanoia { get; init; } = new(1, 8);
+
+    /// <summary>
     /// A configuração que o aplicativo usa hoje. É a fonte única: o app e as simulações dos testes
     /// que escolhem sementes para ele partem daqui, para nunca divergirem.
     /// </summary>
     public static ConfiguracaoDoNucleo DoAplicativo(TamanhoDip tamanho) => new()
     {
         Tamanho = tamanho,
-        // Fase 4 (DEC-022 a DEC-025): física, queda animada, todas as ações, esconderijo no clique duplo.
-        Acoes = AcoesAutonomas.Todas,
+        // Fase 4 (DEC-022 a DEC-025): física, queda animada, todas as ações, esconderijo no clique duplo. E o baseado por
+        // conta própria (pedido do usuário de 2026-10-01, 19:10: ele às vezes fuma um baseado sozinho, quando quer), que
+        // fica fora de Todas e só existe com a chave do tamagotchi ligada.
+        Acoes = AcoesAutonomas.Todas | AcoesAutonomas.FumarBaseado,
         QuedaFisica = true,
         Movimento = true,
         EsconderijoNoCliqueDuplo = true,
         // O tamagotchi adulto (DEC-028), ligado no passo T9, com o app e a arte prontos (D15): itens pelo menu, o uso e a
-        // onda de desenho animado. Sem itens, tudo é como com a chave desligada (invariante 22, ChaveLigadaTestes).
+        // onda de desenho animado. Sem itens e sem o baseado por conta própria, tudo é como com a chave desligada
+        // (invariante 22, ChaveLigadaTestes).
         Tamagotchi = true,
     };
 }
@@ -152,6 +166,16 @@ public sealed record PerfilDeEnergia(
     /// force, DEC-023). É frequência de uma ação; a velocidade do foguete é a mesma em todo nível.
     /// </summary>
     public int ChanceDoFoguete { get; init; } = 30;
+
+    /// <summary>
+    /// O peso de fumar um baseado por conta própria (<see cref="AcoesAutonomas.FumarBaseado"/>; pedido do usuário de
+    /// 2026-10-01, 19:10), o último do sorteio de IDLE. Vale só com a chave do tamagotchi ligada, em IDLE no chão, sem estar
+    /// escondido, e é zero com a onda Chapado ou a paranoia na frente, para ele não emendar um no outro; a onda de um item não
+    /// o muda. O mesmo nos três níveis, calibrado por simulação do núcleo, só com a autonomia, para cerca de um baseado a
+    /// cada 4 minutos de tempo elegível (IDLE no chão, sem Chapado nem paranoia na frente) na energia Média; o nível muda a
+    /// frequência pelos intervalos e pelos outros pesos, como em toda ação. Número de jogo, de desenho animado.
+    /// </summary>
+    public int PesoFumarBaseado { get; init; } = 1;
 
     public static readonly PerfilDeEnergia Baixa = new(
         NivelDeEnergia.Baixa,

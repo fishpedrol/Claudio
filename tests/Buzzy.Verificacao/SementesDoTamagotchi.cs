@@ -1,4 +1,5 @@
 using System.Globalization;
+using Buzzy.App.Testes.Integracao;
 using Buzzy.Core;
 using Buzzy.Core.Personagem;
 using Buzzy.Core.Testes.Movimento;
@@ -16,6 +17,12 @@ internal sealed record Previsao(ulong Semente, TimeSpan PrimeiraDecisao, string 
 
     /// <summary>A onda da frente na caminhada prevista, como na linha do retrato (Tipo/Fase/Nível), ou "-".</summary>
     internal string Onda { get; init; } = "-";
+
+    /// <summary>
+    /// V17 (a paranoia): quando ele começa a agachar no pico, contado do soltar da bala, na simulação; nulo nos outros
+    /// cenários.
+    /// </summary>
+    internal TimeSpan? Agachar { get; init; }
 }
 
 /// <summary>
@@ -25,7 +32,9 @@ internal sealed record Previsao(ulong Semente, TimeSpan PrimeiraDecisao, string 
 /// item, o arraste até ele, o uso e os temporizadores da agenda e da onda, na ordem em que o Buzzy vai recebê-los. A
 /// raiz recebe os eventos do usuário em outros instantes (o menu e as esperas do injetor), mas a ordem relativa aos
 /// temporizadores é a mesma: a primeira decisão vem bem depois do ITEM_PRESS, que a cancela, e nenhuma fase da onda
-/// vira perto da decisão observada. Só aritmética do núcleo: nada aqui abre janela nem injeta input.
+/// vira perto da decisão observada. A paranoia (pedidos do usuário de 2026-10-01) sorteia num gerador próprio, semeado da
+/// semente do núcleo, que o principal não toca: a semente dos casos dela é escolhida pelo primeiro sorteio desse gerador
+/// (V17b) ou pela simulação inteira (V17). Só aritmética do núcleo: nada aqui abre janela nem injeta input.
 /// </summary>
 internal static class SementesDoTamagotchi
 {
@@ -192,7 +201,106 @@ internal static class SementesDoTamagotchi
         return null;
     }
 
+    /// <summary>
+    /// V17 (a paranoia, pedidos do usuário de 2026-10-01; DEC-028), com a agenda ligada: a vodka, a bala e a água invocadas
+    /// antes da primeira decisão (18 s ou mais depois da carga: três menus e três quedas antes do primeiro ITEM_PRESS, que a
+    /// cancela); a vodka solta nele e, durante o uso dela, a bala segurada sobre ele e solta logo que o uso acaba. A bala,
+    /// droga sintética na regra do jogo, fecha a mistura com sintética, e o sorteio de 1 em 8 sai nela (é o primeiro do
+    /// gerador da paranoia desta semente): a paranoia começa. No fim do uso da bala, ele olha pro teto; no pico do nível 1,
+    /// em até 30 s, a agenda o faz agachar, e antes disso ele mostra a cara paranoica (parado, sem gesto, ou andando). Do
+    /// soltar da bala até 2,5 s depois do começo do agachar, ele nunca escala, pula nem descansa; nesses 2,5 s, a janela dele
+    /// não cobre a da água (o botão pressionado nela precisa achá-la) e o pico continua, com 8 s ou mais pela frente no
+    /// começo do agachar. A água solta nele 1 s depois do começo do agachar acalma um passo: o pico vira queda. A previsão
+    /// traz quando ele agacha, contado do soltar da bala.
+    /// </summary>
+    internal static Previsao? ParanoiaNoPico(Topologia topologia)
+    {
+        ConfiguracaoDoNucleo cfg = Configuracao;
+        double duracaoDoPico = cfg.TabelaDeOndas(Onda.Paranoico).Duracao(FaseDaOnda.Pico, 1).TotalMilliseconds;
+        for (ulong semente = 1; semente <= UltimaSemente; semente++)
+        {
+            // Atalho: sem o primeiro sorteio da paranoia saindo, a bala não a começa (a simulação abaixo confere de novo).
+            if (!PrimeiroSorteioDaParanoiaSai(semente)) continue;
+            if (PrimeiraDecisao(topologia, semente) is not { } primeira || primeira < TimeSpan.FromSeconds(18)) continue;
+            var sim = new SimuladorDeTempo(cfg, semente, topologia);
+            sim.Avancar(TimeSpan.FromSeconds(2.5));
+            if (Invocar(sim, Item.Vodka) is not { } vodka || !Assentar(sim)) continue;
+            sim.Avancar(TimeSpan.FromSeconds(1.5));
+            if (Invocar(sim, Item.Bala) is not { } bala || !Assentar(sim)) continue;
+            sim.Avancar(TimeSpan.FromSeconds(1.5));
+            if (Invocar(sim, Item.Agua) is not { } agua || !Assentar(sim) || sim.Estado.Itens.PorId(agua) is not { } itemAgua) continue;
+            RetanguloPx lugarDaAgua = itemAgua.Lugar.Retangulo;
+            sim.Avancar(TimeSpan.FromSeconds(1.5));
+            if (!UsarAgora(sim, vodka)) continue;
+            sim.Avancar(TimeSpan.FromSeconds(0.5));
+            if (sim.Estado.Itens.PorId(bala) is not { } itemBala || sim.Estado.Lugar is null) continue;
+            (PontoPx pressao, PontoPx soltura) = GestoAteEle(sim.Estado, itemBala);
+            Arrastar(sim, bala, pressao, soltura, soltar: false);
+            sim.Avancar(TimeSpan.FromSeconds(5), s => s.Estado != Estado.Using);
+            if (sim.Estado.Estado != Estado.Idle) continue;
+            int antesDaBala = sim.Transicoes.Count;
+            sim.Aplicar(new ItemDragEnd(bala, soltura));
+            if (sim.Estado.Estado != Estado.Using || sim.Estado.Onda is not { Tipo: Onda.Paranoico, Fase: FaseDaOnda.Subida, Nivel: 1 }) continue;
+            double soltou = sim.AgoraMs;
+            double? comecoDoPico = null, agachou = null;
+            bool cara = false, proibido = false;
+            sim.Avancar(TimeSpan.FromSeconds(45), s =>
+            {
+                if (comecoDoPico is null && s.Onda is { Tipo: Onda.Paranoico, Fase: FaseDaOnda.Pico }) comecoDoPico = sim.AgoraMs;
+                proibido |= s.Estado is Estado.Climbing or Estado.Jumping or Estado.Resting;
+                if (s.Gesto == Gesto.Agachar && s.Onda is { Tipo: Onda.Paranoico, Fase: FaseDaOnda.Pico, Nivel: 1 })
+                {
+                    agachou = sim.AgoraMs;
+                    return true;
+                }
+                cara |= s.Expressao == Expressao.Paranoico && (s.Estado == Estado.Walking || (s.Estado == Estado.Idle && s.Gesto == Gesto.Nenhum));
+                return s.Onda is not { Tipo: Onda.Paranoico, Fase: FaseDaOnda.Subida or FaseDaOnda.Pico };
+            });
+            if (agachou is not { } agachar || comecoDoPico is not { } pico || proibido || !cara) continue;
+            if (agachar - pico > 30000 || pico + duracaoDoPico - agachar < 8000) continue;
+            string olhar = $"IDLE: a paranoia começou, gesto {Gesto.OlharProTeto}";
+            if (!sim.Transicoes.Skip(antesDaBala).Any(t => t.Regra == olhar)) continue;
+
+            // Os 2,5 s depois do começo do agachar, numa cópia: a janela dele longe da água, ainda no pico, sem escalar.
+            SimuladorDeTempo copia = sim.Semeado(s => s);
+            bool firme = true;
+            copia.Avancar(TimeSpan.FromSeconds(2.5), s =>
+            {
+                firme &= s.Lugar is { } l && !l.Retangulo.Intersecta(lugarDaAgua) && s.Estado is not (Estado.Climbing or Estado.Jumping or Estado.Resting)
+                    && s.Onda is { Tipo: Onda.Paranoico, Fase: FaseDaOnda.Pico, Nivel: 1 };
+                return !firme;
+            });
+            if (!firme) continue;
+            sim.Avancar(TimeSpan.FromSeconds(1));
+            if (!UsarAgora(sim, agua) || sim.Estado.Onda is not { Tipo: Onda.Paranoico, Fase: FaseDaOnda.Queda, Nivel: 1 }) continue;
+            return new Previsao(semente, primeira, Invariante(
+                $"semente {semente}: a bala fecha a mistura com sintética e o primeiro sorteio da paranoia sai; olha pro teto; o pico começa {(pico - soltou) / 1000:0.0} s e ele agacha {(agachar - soltou) / 1000:0.0} s depois de soltar a bala, sem escalar, pular nem descansar; a água, 1 s depois, leva o pico à queda"))
+            {
+                Agachar = TimeSpan.FromMilliseconds(agachar - soltou),
+            };
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// V17b (pedido do usuário de 2026-10-01, 18:50: "usando álcool e maconha não"): a primeira semente em que o primeiro
+    /// sorteio do gerador da paranoia sai, com a chance da configuração do aplicativo (1 em 8) e o gerador semeado como o
+    /// núcleo o semeia (<see cref="EstadoDoNucleo.Inicial"/>). Pausado, nada mais sorteia nesse gerador: com esta semente, um
+    /// sorteio gasto pela vodka, pelo baseado, pelo cigarro ou pelo cogumelo teria saído, e a paranoia teria começado ali; e a
+    /// bala depois deles, a primeira droga sintética do episódio, faz o primeiro sorteio, que sai. A escolha depende só do
+    /// gerador, não da regra da paranoia do núcleo, que é o que o caso confere na tela; é a mesma do teste de integração da
+    /// paranoia (<see cref="SementesDaParanoia"/>, compilado junto).
+    /// </summary>
+    internal static ulong? SementeEmQueOPrimeiroSorteioDaParanoiaSai()
+        => SementesDaParanoia.PrimeiraEmQueOPrimeiroSorteioSai(Configuracao.ChanceDaParanoia, UltimaSemente);
+
     // ------------------------------------------------------------------ apoio
+
+    /// <summary>
+    /// Se o primeiro sorteio do gerador da paranoia sai com esta semente: o gerador do estado inicial do núcleo e a chance da
+    /// configuração do aplicativo (<see cref="SementesDaParanoia"/>).
+    /// </summary>
+    private static bool PrimeiroSorteioDaParanoiaSai(ulong semente) => SementesDaParanoia.PrimeiroSorteioSai(semente, Configuracao.ChanceDaParanoia);
 
     /// <summary>O atraso da primeira decisão da agenda depois da carga (a carga é a do aplicativo, sem posição salva).</summary>
     private static TimeSpan? PrimeiraDecisao(Topologia topologia, ulong semente)

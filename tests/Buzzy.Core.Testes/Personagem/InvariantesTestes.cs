@@ -31,8 +31,12 @@ namespace Buzzy.Core.Testes.Personagem;
 /// sinal coerente e o PRESS no corpo). Essa execução passa pelas conferências de sempre, com o relógio pelo invariante 29, a
 /// agenda pausada com o usuário segurando um item e o R11 pelo perfil efetivo da onda, e pelas do tamagotchi: os invariantes
 /// 22 a 29 (desenho do núcleo, 4.11), com o alívio e a paranoia, conferidos a cada evento contra regras escritas aqui à
-/// parte do núcleo. Em metade dessas sequências, pela semente, o gerador puxa a paranoia (substâncias seguidas no mesmo
-/// episódio). A execução principal repetida com a chave ligada e sem eventos dele dá o mesmo registro (invariantes 7 e 22).
+/// parte do núcleo. Em metade dessas sequências, pela semente, o gerador puxa a paranoia (misturas de substâncias com droga
+/// sintética no mesmo episódio); em metade, por outro bit da semente, a agenda tem a ação do baseado por conta própria
+/// (pedido do usuário de 2026-10-01, 19:10), com um peso maior que o do aplicativo, e o invariante 23 ajustado confere que ele
+/// só fuma sozinho em IDLE no chão, sem Chapado nem paranoia na frente, sem item no mundo; nelas, o gerador o leva também a
+/// IDLE fora do chão (sem a física, pelo pouso dos sinais) e abre o menu no meio do uso de um baseado. A execução principal
+/// repetida com a chave ligada e sem eventos dele, e sem o baseado por conta própria, dá o mesmo registro (invariantes 7 e 22).
 ///
 /// Cada conferência nova conta quantas vezes a situação dela apareceu (<see cref="CasosExigidos"/>):
 /// uma conferência que o gerador nunca exercita não protege nada. Duas conferências ficam fora da
@@ -125,10 +129,22 @@ internal static class InvariantesTestes
         // sempre.
         "alívio com onda de substância na frente", "alívio baixou o nível", "alívio levou à queda", "alívio acabou a onda",
         "alívio acabou a onda e a de fundo voltou", "item de alívio com onda leve na frente",
-        // A paranoia (outro pedido do mesmo dia): ela começa na 4ª substância do episódio, sobe com mais uma, o alívio a
-        // acalma um passo, e a carga volta a 0 quando não sobra onda de substância; e o uso que a começou, até o fim, no
-        // chão, termina com o olhar pro teto.
+        // A paranoia (outros pedidos do mesmo dia): só o uso que fecha um episódio de mistura com droga sintética sorteia, de 1
+        // em 8, no gerador próprio dela, que às vezes sai e às vezes não; uma mistura sem sintética e uma sintética sozinha,
+        // repetida, não sorteiam, e o episódio que já sorteou não sorteia de novo. Ela sobe com mais uma substância, o alívio a
+        // acalma um passo, e a carga volta a 0 quando não sobra onda de substância; e o uso que a começou, até o fim, no chão,
+        // termina com o olhar pro teto.
+        "sorteio da paranoia saiu", "sorteio da paranoia não saiu", "mistura sem sintética não sorteou", "sintética sozinha repetida não sorteou",
+        "episódio já sorteado não sorteou de novo",
         "paranoia começou", "paranoia subiu de nível", "paranoia acalmada por alívio", "carga zerada", "olhou pro teto no começo da paranoia",
+        // O baseado por conta própria (pedido do usuário de 2026-10-01, 19:10): a agenda o faz fumar, só em IDLE no chão, nunca
+        // com a onda Chapado ou a paranoia na frente; o uso vai até o fim ou o clique o interrompe; num episódio com sintética
+        // que ainda não sorteou, ele fecha a mistura e faz o sorteio do episódio; num episódio já sorteado, não sorteia.
+        "fumou por conta própria", "não fumou chapado nem paranoico", "o clique interrompeu o baseado por conta própria",
+        "baseado por conta própria até o fim", "baseado por conta própria fechou a mistura e sorteou", "baseado por conta própria num episódio já sorteado",
+        // E (revisão do baseado, achado 4): em IDLE fora do chão, sem a física, ele não fuma; e o menu de contexto em USING,
+        // inclusive no baseado por conta própria, não interrompe o uso.
+        "IDLE fora do chão com a ação: não fumou", "menu de contexto em USING", "o menu não interrompeu o baseado por conta própria",
     ];
 
     /// <summary>Situações da execução com o tamagotchi e a emoção dominante (as da emoção, com itens e ondas).</summary>
@@ -186,8 +202,36 @@ internal static class InvariantesTestes
         /// <summary>A carga da paranoia esperada, contada aqui à parte do núcleo: as substâncias usadas desde o último zero.</summary>
         public int Carga { get; set; }
 
+        /// <summary>Se alguma substância do episódio era droga sintética, pela transcrição.</summary>
+        public bool Sintetica { get; set; }
+
+        /// <summary>Os itens de substância distintos do episódio, na ordem do enum.</summary>
+        public SortedSet<Item> Distintas { get; } = [];
+
+        /// <summary>Se o episódio é uma mistura com sintética: uma sintética e pelo menos dois itens distintos.</summary>
+        public bool MisturaComSintetica => Sintetica && Distintas.Count >= 2;
+
+        /// <summary>Se o episódio já fez o sorteio da paranoia, o único dele.</summary>
+        public bool Sorteada { get; set; }
+
         /// <summary>Se o uso em curso começou a paranoia, pela conta daqui.</summary>
         public bool UsoComecouAParanoia { get; set; }
+
+        /// <summary>Se o uso em curso é o do baseado por conta própria, que veio da agenda, sem item.</summary>
+        public bool UsoPorContaPropria { get; set; }
+
+        /// <summary>O episódio acabou: a carga volta toda a zero, junto, com o sorteio feito.</summary>
+        public void ZerarACarga()
+        {
+            Carga = 0;
+            Sintetica = false;
+            Distintas.Clear();
+            Sorteada = false;
+        }
+
+        /// <summary>A carga daqui, para as mensagens.</summary>
+        public string DescreverACarga()
+            => $"carga {Carga}, sintética {(Sintetica ? "sim" : "não")}, distintas [{string.Join(",", Distintas)}], sorteada {(Sorteada ? "sim" : "não")}";
     }
 
     /// <summary>O que as conferências acumulam entre eventos: quantas vezes cada situação apareceu e os atrasos sorteados.</summary>
@@ -249,7 +293,8 @@ internal static class InvariantesTestes
 
             // Invariante 7 (R-d): mesma semente e mesma sequência dão, evento a evento, o mesmo
             // retrato, as mesmas transições e os mesmos efeitos. A segunda execução tem o tamagotchi ligado, sem nenhum
-            // evento dele: o invariante 22 pede exatamente o mesmo registro (sem itens nem onda, nada muda).
+            // evento dele: o invariante 22 pede exatamente o mesmo registro (sem itens nem onda, nada muda). A configuração da
+            // sequência nunca tem a ação do baseado por conta própria (fora de Todas), que mudaria o sorteio da agenda.
             var outro = new Nucleo(seq.Config with { Tamagotchi = true }, seq.SementeDoNucleo);
             int k = 0;
             for (int l = 0; l < seq.Lotes.Count; l++)
@@ -708,9 +753,12 @@ internal static class InvariantesTestes
         ConferirGravacaoAoEsconderOuSair(antes, evento, r, onde, contagens);
         ConferirGravacaoDaPosicao(evento, r, onde, contagens);
 
-        // Com o tamagotchi desligado, não há carga da paranoia (invariante 22).
+        // Com o tamagotchi desligado, não há carga da paranoia nem sorteio dela (invariante 22).
         if (!cfg.Tamagotchi)
-            Verificar(depois.Carga == 0, () => $"invariante 22: {onde()}: carga {depois.Carga} com o tamagotchi desligado");
+        {
+            Verificar(depois.Carga == CargaDaParanoia.Nenhuma, () => $"invariante 22: {onde()}: carga {depois.Carga} com o tamagotchi desligado");
+            Verificar(depois.AleatorioDaParanoia == antes.AleatorioDaParanoia, () => $"invariante 22: {onde()}: o gerador da paranoia mudou com o tamagotchi desligado");
+        }
     }
 
     /// <summary>
@@ -846,7 +894,9 @@ internal static class InvariantesTestes
     /// evento aplicado com a chave ligada, contra regras escritas aqui, à parte do núcleo:
     /// <list type="bullet">
     /// <item>23: um item só nasce por CMD_SUMMON_ITEM, com o próximo Id, nunca repetido; só sai usado (ITEM_DRAG_END sobre
-    /// ele, num estado que aceita), recolhido ou substituído (o sétimo); só se entra em USING assim;</item>
+    /// ele, num estado que aceita), recolhido ou substituído (o sétimo); só se entra em USING assim ou pela ação autônoma do
+    /// baseado por conta própria, só o baseado, só em IDLE no chão, sem Chapado nem paranoia na frente, sem item no mundo
+    /// (<see cref="ConferirOBaseadoPorContaPropria"/>);</item>
     /// <item>24: em USING, PRESS leva a PRESSED no mesmo evento; o uso dura exatamente os passos do item e sai por SETTLING
     /// para o mesmo apoio (o chão ou o esconderijo, sem a física), mantendo o preso e o esconderijo; interrompido, só o uso
     /// acaba, e a onda continua;</item>
@@ -857,11 +907,15 @@ internal static class InvariantesTestes
     /// na frente, nunca sobem o nível, nunca alongam a fase em curso (só o nível caiu: o mesmo disparo pendente; a queda que
     /// começa: a duração cheia dela), nunca tocam a onda de fundo (que só volta, se a da frente acabou), nunca começam a
     /// onda do item e nunca sorteiam (o gerador fica o mesmo);</item>
-    /// <item>a paranoia (outro pedido do mesmo dia): a carga, contada aqui (as substâncias desde o último zero; volta a 0
-    /// no fim de todo evento sem onda de substância), é a do núcleo; na 4ª substância em diante, depois da combinação, a
-    /// paranoia começa na frente (a frente vai para o fundo) ou sobe um nível, sem sorteio; ela só existe com a carga em 4
-    /// ou mais e nunca fica no fundo; e o uso que a começou, até o fim, com ele de volta a IDLE e ela na frente, termina
-    /// com o olhar pro teto de 90 passos, sem sorteio (nenhum outro fim de uso traz gesto);</item>
+    /// <item>a paranoia (outros pedidos do mesmo dia): a carga, contada aqui (as substâncias desde o último zero, se alguma
+    /// era sintética, os itens distintos, pela transcrição, e se o episódio já sorteou; tudo volta a 0 junto no fim de todo
+    /// evento sem onda de substância), é a do núcleo; depois da combinação, com a paranoia na frente, mais uma substância a
+    /// sobe um nível, sem sorteio; sem ela, só o uso que fecha um episódio de mistura com sintética sorteia, uma vez por
+    /// episódio, com um passo do gerador da paranoia, calculado aqui sobre o valor cru dele, e, saindo, ela começa na frente
+    /// (a frente vai para o fundo); fora desse sorteio, o gerador da paranoia nunca muda, e o soltar nunca muda o gerador
+    /// principal; ela só começa assim, só existe num episódio de mistura com sintética que já sorteou e nunca fica no fundo;
+    /// e o uso que a começou, até o fim, com ele de volta a IDLE e ela na frente, termina com o olhar pro teto de 90 passos,
+    /// sem sorteio (nenhum outro fim de uso traz gesto);</item>
     /// <item>26: a física em vigor só muda as três velocidades, entre 50% e 200%;</item>
     /// <item>28: no máximo <see cref="ConfiguracaoDoNucleo.MaximoDeItens"/> itens; fora da mão, o sprite inteiro na área útil
     /// do monitor dele, presente, e os pés no chão quando parado; a janela de cada item (pelos efeitos) aparece se e
@@ -1026,6 +1080,8 @@ internal static class InvariantesTestes
             Verificar(depois.Itens.PorId(arrastado.Id)?.Lugar.Ancora == ancora, () => $"invariante 2 do item: {onde()}: âncora {depois.Itens.PorId(arrastado.Id)?.Lugar.Ancora}, esperado {ancora}");
         }
         bool entrouNoUso = transicoes.Any(t => t.Para == Estado.Using && t.De != Estado.Using);
+        // O baseado por conta própria (pedido do usuário de 2026-10-01, 19:10): o uso que vem da agenda, sem item.
+        bool fumouSozinho = entrouNoUso && evento is AutonomyTimer;
         if (evento is ItemDragEnd fim && naMaoAntes is { Situacao: SituacaoDoItem.Arrastado } solto && solto.Id == fim.Id && antes.Topologia is { } topologia)
         {
             var desejada = new PontoPx(fim.Cursor.X - solto.Pegada.X, fim.Cursor.Y - solto.Pegada.Y);
@@ -1052,8 +1108,11 @@ internal static class InvariantesTestes
             MonitorDoDesktop m = Maquina.MonitorDaAncora(topologiaAoLargar, largado.Lugar.Ancora);
             ConferirSolto(antes, depois, largado, Posicionador.PrenderNaAreaUtil(largado.Lugar.Ancora, cfg.TamanhoDoItem.ParaPixels(m.Dpi), m.AreaUtil), m, onde);
         }
+        // Invariante 23 ajustado: um uso vem do ITEM_DRAG_END do usuário ou da ação autônoma FumarBaseado, só o baseado, só em
+        // IDLE no chão, e nunca cria nem tira item do mundo.
         if (entrouNoUso)
-            Verificar(evento is ItemDragEnd, () => $"invariante 23: {onde()}: entrou em USING por {evento.GetType().Name}");
+            Verificar(evento is ItemDragEnd || fumouSozinho, () => $"invariante 23: {onde()}: entrou em USING por {evento.GetType().Name}");
+        ConferirOBaseadoPorContaPropria(cfg, antes, evento, r, onde, contagens, fumouSozinho, novos.Length + sairam.Length);
 
         // L6: um item que sai da mão sem o gesto dele acabar (esconder, sair, recolher, pegar outro) solta a captura.
         if (naMaoAntes is { } eraDaMao && depois.Itens.NaMao?.Id != eraDaMao.Id)
@@ -1127,11 +1186,23 @@ internal static class InvariantesTestes
         if (antes.Estado == Estado.Using && evento is Press)
         {
             Contar("USING interrompido por PRESS");
+            if (rastro.UsoPorContaPropria) Contar("o clique interrompeu o baseado por conta própria");
             Verificar(depois.Estado == Estado.Pressed && transicoes.Count == 1, () => $"invariante 24: {onde()}: PRESS em USING levou a {depois.Estado} ({Descrever(transicoes)})");
+        }
+        // O menu de contexto em USING abre o menu e não interrompe o uso, nem o do baseado por conta própria (revisão do baseado,
+        // achado 4): nenhuma transição, o mesmo uso e os mesmos passos.
+        if (antes.Estado == Estado.Using && evento is ContextMenu)
+        {
+            Contar("menu de contexto em USING");
+            if (rastro.UsoPorContaPropria) Contar("o menu não interrompeu o baseado por conta própria");
+            Verificar(depois.Estado == Estado.Using && transicoes.Count == 0 && depois.Uso == antes.Uso && depois.PassosRestantes == antes.PassosRestantes
+                    && r.Efeitos.OfType<AbrirMenu>().Count() == 1,
+                () => $"invariante 24: {onde()}: o menu em USING levou a {depois.Estado} ({Descrever(transicoes)}), uso {antes.Uso} → {depois.Uso}, efeitos [{string.Join(", ", r.Efeitos.Select(Gravacao.DescreverEfeito))}]");
         }
         if (entrouNoUso)
         {
             DadosDoItem dados = cfg.TabelaDeItens(depois.Uso!.Item);
+            rastro.UsoPorContaPropria = fumouSozinho;
             rastro.PassosNoUso = 0;
             rastro.PassosEsperados = dados.PassosDoUso;
             rastro.PresoNoUso = depois.PresoPeloUsuario;
@@ -1158,6 +1229,7 @@ internal static class InvariantesTestes
             if (peloFim)
             {
                 Contar("uso até o fim");
+                if (rastro.UsoPorContaPropria) Contar("baseado por conta própria até o fim");
                 Verificar(evento is Tick && rastro.PassosNoUso == rastro.PassosEsperados && transicoes[0].Para == Estado.Settling,
                     () => $"invariante 24: {onde()}: o uso acabou depois de {rastro.PassosNoUso} passos, esperado {rastro.PassosEsperados}");
                 if (rastro.EsconderijoNoUso != LadoDoEsconderijo.Nenhum)
@@ -1205,21 +1277,28 @@ internal static class InvariantesTestes
             DadosDoItem dados = cfg.TabelaDeItens(depois.Uso!.Item);
             (EstadoDaOnda? frente, EstadoDaOnda? fundo, string caso) = OndaDepoisDoUso(antes.Onda, antes.OndaDeFundo, dados, cfg);
             Contar(caso);
-            // A paranoia, depois da combinação: a carga do episódio (as substâncias desde o último zero) e, da 4ª em diante,
-            // a paranoia na frente (começa, ou sobe um nível).
-            bool deSubstancia = !ItensDeAlivio.Contains(dados.Item);
-            if (deSubstancia) rastro.Carga++;
-            (frente, fundo, string? paranoia) = ComAParanoia(frente, fundo, deSubstancia, rastro.Carga);
+            // O soltar nunca sorteia no gerador principal: nem o alívio, nem a combinação, nem a paranoia. O baseado por conta
+            // própria gasta só o sorteio da agenda, um passo, e o resto do caminho é o mesmo.
+            Aleatorio principalEsperado = fumouSozinho ? antes.Aleatorio.Sortear().Proximo : antes.Aleatorio;
+            Verificar(depois.Aleatorio == principalEsperado,
+                () => $"paranoia: {onde()}: o {(fumouSozinho ? "baseado por conta própria" : $"soltar do {dados.Item}")} mudou o gerador principal além do sorteio da agenda");
+            // A paranoia, depois da combinação: a carga do episódio e, com ela na frente, a subida; sem ela, o sorteio, só no uso
+            // que fecha a mistura com sintética, uma vez por episódio, no gerador próprio dela.
+            (frente, fundo, Aleatorio geradorEsperado, string? paranoia) = ComAParanoia(frente, fundo, dados.Item, antes.AleatorioDaParanoia, cfg.ChanceDaParanoia, rastro);
             if (paranoia is not null) Contar(paranoia);
-            rastro.UsoComecouAParanoia = paranoia == "paranoia começou";
+            if (fumouSozinho && paranoia is "sorteio da paranoia saiu" or "sorteio da paranoia não saiu") Contar("baseado por conta própria fechou a mistura e sorteou");
+            if (fumouSozinho && paranoia is "episódio já sorteado não sorteou de novo") Contar("baseado por conta própria num episódio já sorteado");
+            rastro.UsoComecouAParanoia = paranoia == "sorteio da paranoia saiu";
+            if (rastro.UsoComecouAParanoia) Contar("paranoia começou");
+            Verificar(depois.AleatorioDaParanoia == geradorEsperado,
+                () => $"paranoia: {onde()}: {dados.Item} com a onda {antes.Onda} ({rastro.DescreverACarga()}) devia {(geradorEsperado == antes.AleatorioDaParanoia ? "não sortear" : "sortear um passo")} no gerador da paranoia");
             Verificar(depois.Onda == frente && depois.OndaDeFundo == fundo,
-                () => $"4.5: {onde()}: {dados.Item} com a onda {antes.Onda} (fundo {antes.OndaDeFundo}, carga {rastro.Carga}) deu {depois.Onda} (fundo {depois.OndaDeFundo}); esperado {frente} (fundo {fundo})");
+                () => $"4.5: {onde()}: {dados.Item} com a onda {antes.Onda} (fundo {antes.OndaDeFundo}; {rastro.DescreverACarga()}) deu {depois.Onda} (fundo {depois.OndaDeFundo}); esperado {frente} (fundo {fundo})");
             Verificar(depois.Uso.ComecouAParanoia == rastro.UsoComecouAParanoia, () => $"paranoia: {onde()}: o uso devia {(rastro.UsoComecouAParanoia ? "" : "não ")}ter começado a paranoia");
-            if (paranoia is not null)
+            if (paranoia is "sorteio da paranoia saiu" or "paranoia subiu de nível")
             {
-                // Sem sorteio, e com a fase recomeçada: um disparo novo, com a duração cheia da fase da paranoia (a subida,
-                // 1 s; o pico, um nível inteiro).
-                Verificar(depois.Aleatorio == antes.Aleatorio, () => $"paranoia: {onde()}: a paranoia sorteou: o gerador mudou");
+                // A fase recomeçada: um disparo novo, com a duração cheia da fase da paranoia (a subida, 1 s; o pico, um nível
+                // inteiro).
                 AgendarOnda[] daParanoia = [.. r.Efeitos.OfType<AgendarOnda>()];
                 EstadoDaOnda novaParanoia = frente!;
                 Verificar(daParanoia.Length == 1 && daParanoia[0].Atraso == DuracaoCheia(cfg, novaParanoia) && daParanoia[0].Geracao == antes.GeracaoDaOnda + 1,
@@ -1227,6 +1306,11 @@ internal static class InvariantesTestes
             }
             ConferirAlivio(cfg, antes, dados, r, onde, contagens);
             if (Alivia(dados, antes.Onda) && antes.Onda!.Tipo == Onda.Paranoico) Contar("paranoia acalmada por alívio");
+        }
+        else
+        {
+            // Fora de um uso, o gerador da paranoia nunca muda: só o sorteio dela, no soltar, o usa.
+            Verificar(depois.AleatorioDaParanoia == antes.AleatorioDaParanoia, () => $"paranoia: {onde()}: o gerador da paranoia mudou fora de um uso");
         }
         if (evento is ItemEffectTimer disparo)
         {
@@ -1253,18 +1337,25 @@ internal static class InvariantesTestes
             rastro.LimiteDoEpisodio = 2 + nova.Nivel;
         }
 
-        // A carga da paranoia (pedido do usuário de 2026-10-01), escrita aqui à parte: volta a 0 no fim de todo evento em que
-        // nem a onda da frente nem a de fundo é de substância (pela transcrição; a paranoia é de substância). A paranoia só
-        // existe com a carga em 4 ou mais desde o último zero, e nunca no fundo: a precedência dela é a maior.
+        // A carga da paranoia (pedidos do usuário de 2026-10-01), escrita aqui à parte: volta toda a 0, junto (as substâncias, a
+        // sintética, os itens distintos e o sorteio feito), no fim de todo evento em que nem a onda da frente nem a de fundo é
+        // de substância (pela transcrição; a paranoia é de substância). A paranoia só começa num uso de substância de um
+        // episódio de mistura com sintética, e só pelo sorteio; na frente, o episódio é uma mistura com sintética que já
+        // sorteou; e ela nunca fica no fundo: a precedência dela é a maior.
         bool comSubstancia = (depois.Onda is { } daFrente && OndasDeSubstancia.Contains(daFrente.Tipo))
             || (depois.OndaDeFundo is { } doFundo && OndasDeSubstancia.Contains(doFundo.Tipo));
         if (!comSubstancia && rastro.Carga > 0)
         {
             Contar("carga zerada");
-            rastro.Carga = 0;
+            rastro.ZerarACarga();
         }
-        Verificar(depois.Carga == rastro.Carga, () => $"paranoia: {onde()}: carga {depois.Carga}, esperada {rastro.Carga} (onda {depois.Onda}, fundo {depois.OndaDeFundo})");
-        Verificar(depois.Onda?.Tipo != Onda.Paranoico || rastro.Carga >= 4, () => $"paranoia: {onde()}: a paranoia na frente com a carga {rastro.Carga} desde o último zero");
+        Verificar(depois.Carga.Substancias == rastro.Carga && depois.Carga.Sintetica == rastro.Sintetica && depois.Carga.Distintas.Itens.SequenceEqual(rastro.Distintas)
+                && depois.Carga.Sorteada == rastro.Sorteada,
+            () => $"paranoia: {onde()}: a carga do núcleo é {depois.Carga.Substancias}, sintética {depois.Carga.Sintetica}, distintas [{depois.Carga.Distintas}], sorteada {depois.Carga.Sorteada}; a esperada, {rastro.DescreverACarga()} (onda {depois.Onda}, fundo {depois.OndaDeFundo})");
+        if (depois.Onda?.Tipo == Onda.Paranoico && antes.Onda?.Tipo != Onda.Paranoico)
+            Verificar(entrouNoUso && rastro.UsoComecouAParanoia, () => $"paranoia: {onde()}: a paranoia começou fora de um sorteio que saiu ({evento.GetType().Name})");
+        Verificar(depois.Onda?.Tipo != Onda.Paranoico || (rastro.MisturaComSintetica && rastro.Sorteada),
+            () => $"paranoia: {onde()}: a paranoia na frente sem um episódio de mistura com sintética que já sorteou ({rastro.DescreverACarga()})");
         Verificar(depois.OndaDeFundo?.Tipo != Onda.Paranoico, () => $"paranoia: {onde()}: a paranoia no fundo, atrás de {depois.Onda}");
 
         // ------------------------------------------------ 26: a física em vigor
@@ -1273,6 +1364,48 @@ internal static class InvariantesTestes
             () => $"invariante 26: {onde()}: a onda {depois.Onda} mudou mais que as três velocidades");
         foreach ((double efetiva, double base_) in new[] { (f.VelocidadeAndando, cfg.Fisica.VelocidadeAndando), (f.VelocidadeEscalando, cfg.Fisica.VelocidadeEscalando), (f.VelocidadePendurado, cfg.Fisica.VelocidadePendurado) })
             Verificar(efetiva >= base_ * 0.5 - 1e-9 && efetiva <= base_ * 2 + 1e-9, () => $"invariante 26: {onde()}: velocidade {efetiva} com a base {base_}");
+    }
+
+    /// <summary>
+    /// O baseado por conta própria (pedido do usuário de 2026-10-01, 19:10; adendo da DEC-028), escrito aqui à parte do núcleo.
+    /// Só um AUTONOMY_TIMER que vale (a geração agendada, visível, com a autonomia livre e sem item na mão do usuário) o faz
+    /// fumar, e só com a chave ligada e a ação FumarBaseado na configuração, em IDLE, no chão (a âncora na borda de baixo da
+    /// área útil), sem estar escondido e sem a onda Chapado ou a paranoia na frente. O uso é o do baseado, no chão, por uma
+    /// transição só, de IDLE para USING, com a regra "IDLE + AUTONOMY_TIMER: Fumar Baseado por conta própria" (mais o texto da
+    /// paranoia); nenhum item nasce nem sai, nenhum Id é gasto e nenhuma janela de item muda. O resto do uso (a combinação, a
+    /// carga, o sorteio da paranoia, a duração, o fim e o clique) é conferido como o de qualquer item, em
+    /// <see cref="ConferirTamagotchi"/>. Conta também as decisões em IDLE no chão com Chapado ou a paranoia na frente, em que
+    /// ele, com a ação ligada, não fumou.
+    /// </summary>
+    private static void ConferirOBaseadoPorContaPropria(ConfiguracaoDoNucleo cfg, EstadoDoNucleo antes, Evento evento, Resultado r, Func<string> onde, Contagens contagens, bool fumou, int itensQueMudaram)
+    {
+        if (evento is not AutonomyTimer timer) return;
+        EstadoDoNucleo depois = r.Estado;
+        bool vale = antes.DecisaoAgendada && timer.Geracao == antes.Geracao && antes.Estado.Visivel() && !antes.Estado.ControladoPeloUsuario()
+            && !antes.AutonomiaPausada && !antes.PainelAberto && antes.Itens.NaMao is null;
+        bool ligada = cfg.Tamagotchi && (cfg.Acoes & AcoesAutonomas.FumarBaseado) == AcoesAutonomas.FumarBaseado;
+        bool noChao = antes.Estado == Estado.Idle && antes.Esconderijo == LadoDoEsconderijo.Nenhum && antes.Lugar is { } l && l.Ancora.Y == l.Monitor.AreaUtil.Base;
+        bool chapadoOuParanoico = antes.Onda?.Tipo is Onda.Chapado or Onda.Paranoico;
+        if (fumou)
+        {
+            contagens.Contar("fumou por conta própria");
+            Verificar(vale && ligada && noChao && !chapadoOuParanoico,
+                () => $"invariante 23: {onde()}: fumou por conta própria sem poder (decisão que vale {vale}, ação ligada {ligada}, em IDLE no chão {noChao}, onda {antes.Onda})");
+            string regra = $"IDLE + AUTONOMY_TIMER: {cfg.TabelaDeItens(Item.Baseado).Verbo} {Item.Baseado} por conta própria";
+            Verificar(r.Transicoes.Count == 1 && r.Transicoes[0].De == Estado.Idle && r.Transicoes[0].Para == Estado.Using && r.Transicoes[0].Regra.StartsWith(regra, StringComparison.Ordinal),
+                () => $"baseado por conta própria: {onde()}: transições [{string.Join("; ", r.Transicoes)}]");
+            Verificar(depois.Uso is { Item: Item.Baseado, Apoio: ApoioDoUso.Chao }, () => $"baseado por conta própria: {onde()}: o uso foi {depois.Uso}, e não o do baseado no chão");
+            Verificar(itensQueMudaram == 0 && depois.Itens == antes.Itens && depois.ProximoIdDeItem == antes.ProximoIdDeItem,
+                () => $"invariante 23: {onde()}: o baseado por conta própria mexeu nos itens ([{antes.Itens}] → [{depois.Itens}], próximo Id {antes.ProximoIdDeItem} → {depois.ProximoIdDeItem})");
+            Verificar(!r.Efeitos.Any(e => e is MostrarItem or MoverItem or EsconderItem or RemoverItem or LiberarCapturaDoItem),
+                () => $"invariante 23: {onde()}: o baseado por conta própria mexeu numa janela de item");
+            return;
+        }
+        if (vale && ligada && noChao && chapadoOuParanoico) contagens.Contar("não fumou chapado nem paranoico");
+        // Em IDLE fora do chão (sem a física, depois do pouso pelos sinais), sem estar escondido e sem Chapado nem paranoia na
+        // frente, só o chão o impede (revisão do baseado, achado 4): com a ação ligada, a decisão que vale não o fez fumar.
+        bool foraDoChao = antes.Estado == Estado.Idle && antes.Esconderijo == LadoDoEsconderijo.Nenhum && antes.Lugar is { } noAr && noAr.Ancora.Y != noAr.Monitor.AreaUtil.Base;
+        if (vale && ligada && foraDoChao && !chapadoOuParanoico) contagens.Contar("IDLE fora do chão com a ação: não fumou");
     }
 
     /// <summary>O item invocado nasce no monitor dele, entre as laterais, numa das colunas candidatas (4.8), acima do chão.</summary>
@@ -1316,15 +1449,25 @@ internal static class InvariantesTestes
     /// <summary>
     /// A classe do alívio (pedido do usuário de 2026-10-01), lida da transcrição das tabelas do desenho
     /// (<see cref="Tamagotchi.TabelasDoDesenho"/>), à parte do núcleo: os itens de alívio, a comida e a bebida sem álcool (a
-    /// banana, a bala, a água, o café e o energético). Os outros, inclusive o cogumelo, que também se come, são de substância.
+    /// banana, a água, o café e o energético). Os outros, inclusive o cogumelo, que também se come, e a bala, droga
+    /// sintética, são de substância.
     /// </summary>
     private static readonly Item[] ItensDeAlivio = [.. Tamagotchi.TabelasDoDesenho.ItensEsperados().Where(i => i.Alivio).Select(i => i.Item)];
 
     /// <summary>
-    /// Os itens de substância, pela mesma transcrição: os outros oito, que somam 1 à carga da paranoia (pedido do usuário de
+    /// Os itens de substância, pela mesma transcrição: os outros nove, que entram na carga da paranoia (pedidos do usuário de
     /// 2026-10-01).
     /// </summary>
     private static readonly Item[] ItensDeSubstancia = [.. Tamagotchi.TabelasDoDesenho.ItensEsperados().Where(i => !i.Alivio).Select(i => i.Item)];
+
+    /// <summary>
+    /// As drogas sintéticas, pela mesma transcrição (a bala, o MD, a cocaína e o lança-perfume): só um episódio que mistura
+    /// substâncias com uma delas sorteia a paranoia.
+    /// </summary>
+    private static readonly Item[] ItensSinteticos = [.. Tamagotchi.TabelasDoDesenho.ItensEsperados().Where(i => i.Sintetica).Select(i => i.Item)];
+
+    /// <summary>As outras substâncias, pela mesma transcrição (álcool, maconha, cigarro e cogumelo): misturadas só entre si, nunca sorteiam.</summary>
+    private static readonly Item[] OutrasSubstancias = [.. Tamagotchi.TabelasDoDesenho.ItensEsperados().Where(i => !i.Alivio && !i.Sintetica).Select(i => i.Item)];
 
     /// <summary>
     /// As ondas de substância, pela mesma transcrição: as que a comida e a bebida sem álcool acalmam (as leves, só a água),
@@ -1369,21 +1512,44 @@ internal static class InvariantesTestes
     }
 
     /// <summary>
-    /// A paranoia (pedido do usuário de 2026-10-01), escrita aqui à parte, depois da combinação: com um item de substância e
-    /// a carga do episódio em 4 ou mais, sem a paranoia na frente, ela começa na frente, na subida do nível 1, e a frente vai
-    /// para o fundo (a de fundo anterior sai); com ela na frente, sobe um nível (até 3), o pior acompanha, e a queda volta
-    /// ao pico (a subida continua subida). Devolve as ondas e o caso; sem paranoia, as mesmas ondas e nulo.
+    /// A paranoia (pedidos do usuário de 2026-10-01), escrita aqui à parte, depois da combinação (<paramref name="frente"/> e
+    /// <paramref name="fundo"/> são as ondas dela). Um item de substância, pela transcrição, entra na carga do rastro: mais
+    /// um, a sintética se ele for, e ele entre os distintos; um de alívio, não. Com a paranoia na frente, ela sobe um nível
+    /// (até 3), o pior acompanha, e a queda volta ao pico (a subida continua subida), sem sorteio. Sem ela, só o uso que fecha
+    /// um episódio de mistura com sintética (uma sintética e pelo menos dois itens distintos) sorteia, uma vez por episódio
+    /// (o rastro guarda que o episódio sorteou), num passo do gerador da paranoia: o valor cru do passo, num inteiro de 1 a Em
+    /// pelo resto, sai se for até Vezes (escrito aqui à parte de <see cref="Aleatorio.Sortear(Chance)"/>); saindo, ela começa
+    /// na frente, na subida do nível 1, e a frente vai para o fundo (a de fundo anterior sai). Devolve as ondas, o gerador da
+    /// paranoia esperado depois do uso e o caso (nulo sem nada a contar: um item de alívio ou a primeira substância do
+    /// episódio).
     /// </summary>
-    private static (EstadoDaOnda? Frente, EstadoDaOnda? Fundo, string? Caso) ComAParanoia(EstadoDaOnda? frente, EstadoDaOnda? fundo, bool deSubstancia, int carga)
+    private static (EstadoDaOnda? Frente, EstadoDaOnda? Fundo, Aleatorio Gerador, string? Caso) ComAParanoia(
+        EstadoDaOnda? frente, EstadoDaOnda? fundo, Item item, Aleatorio gerador, Chance chance, RastroDoTamagotchi rastro)
     {
-        if (!deSubstancia || carga < 4) return (frente, fundo, null);
+        if (ItensDeAlivio.Contains(item)) return (frente, fundo, gerador, null);
+        rastro.Carga++;
+        rastro.Sintetica |= ItensSinteticos.Contains(item);
+        rastro.Distintas.Add(item);
         if (frente is { Tipo: Onda.Paranoico })
         {
             int nivel = Math.Min(3, frente.Nivel + 1);
             var subiu = new EstadoDaOnda(Onda.Paranoico, frente.Fase == FaseDaOnda.Subida ? FaseDaOnda.Subida : FaseDaOnda.Pico, nivel, Math.Max(frente.Pior, nivel));
-            return (subiu, fundo, "paranoia subiu de nível");
+            return (subiu, fundo, gerador, "paranoia subiu de nível");
         }
-        return (new EstadoDaOnda(Onda.Paranoico, FaseDaOnda.Subida, 1, 1), frente, "paranoia começou");
+        if (!rastro.MisturaComSintetica)
+        {
+            string? semSorteio = rastro.Distintas.Count >= 2 ? "mistura sem sintética não sorteou"
+                : rastro.Sintetica && rastro.Carga >= 2 ? "sintética sozinha repetida não sorteou"
+                : null;
+            return (frente, fundo, gerador, semSorteio);
+        }
+        if (rastro.Sorteada) return (frente, fundo, gerador, "episódio já sorteado não sorteou de novo");
+        rastro.Sorteada = true;
+        (ulong valor, Aleatorio proximo) = gerador.Sortear();
+        bool saiu = 1 + (long)(valor % (ulong)chance.Em) <= chance.Vezes;
+        return saiu
+            ? (new EstadoDaOnda(Onda.Paranoico, FaseDaOnda.Subida, 1, 1), frente, proximo, "sorteio da paranoia saiu")
+            : (frente, fundo, proximo, "sorteio da paranoia não saiu");
     }
 
     /// <summary>
@@ -2015,12 +2181,22 @@ internal static class InvariantesTestes
         // move os itens; a queda com os parâmetros do aplicativo fica em ItensTestes).
         var doTamagotchi = new Random(unchecked(semente * 37 + 11));
         bool usoCurto = doTamagotchi.Next(4) != 0;
-        // A paranoia (pedido do usuário de 2026-10-01) pede quatro substâncias no mesmo episódio, o que o gerador quase nunca
-        // faz sozinho. Em metade das sequências, escolhida pela semente (sem sorteio a mais, para a outra metade continuar
-        // exatamente como antes), ele a puxa: veja ItemAInvocar e PegarUmItem.
+        // A paranoia (pedidos do usuário de 2026-10-01) pede uma mistura de substâncias com droga sintética no mesmo episódio e
+        // um sorteio de 1 em 8 que saia, o que o gerador faz pouco sozinho. Em metade das sequências, escolhida pela semente
+        // (sem sorteio a mais, para a outra metade continuar como é), ele a puxa: veja ItemAInvocar e PegarUmItem.
         bool puxaAParanoia = (uint)semente % 2 == 1;
         ConfiguracaoDoNucleo cfgDoTamagotchi = cfg with { Tamagotchi = true, Fisica = cfg.Fisica with { Gravidade = cfg.Fisica.Gravidade * 4 } };
         if (usoCurto) cfgDoTamagotchi = cfgDoTamagotchi with { TabelaDeItens = ItemDeUsoCurto };
+        // O baseado por conta própria (pedido do usuário de 2026-10-01, 19:10): em metade das sequências, por outro bit da
+        // semente (sem sorteio a mais), a execução com o tamagotchi tem a ação FumarBaseado, como o aplicativo, com o peso 6
+        // em vez de 1, para ele fumar sozinho muitas vezes (e o clique interromper, e o baseado fechar a mistura). A execução
+        // principal e a repetida com a chave ligada continuam sem ela (o invariante 22 é sem o baseado por conta própria).
+        bool fumaSozinho = ((uint)semente >> 1) % 2 == 0;
+        if (fumaSozinho)
+        {
+            Func<NivelDeEnergia, PerfilDeEnergia> perfil = cfgDoTamagotchi.Perfil;
+            cfgDoTamagotchi = cfgDoTamagotchi with { Acoes = cfgDoTamagotchi.Acoes | AcoesAutonomas.FumarBaseado, Perfil = n => perfil(n) with { PesoFumarBaseado = 6 } };
+        }
         var sombraDoTamagotchi = new Nucleo(cfgDoTamagotchi, (ulong)semente);
         var aplicadosDoTamagotchi = new List<(int Lote, EstadoDoNucleo Antes, Evento Evento, Resultado Resultado)>();
         var lotesDoTamagotchiComEmocao = new List<List<Evento>>();
@@ -2113,8 +2289,8 @@ internal static class InvariantesTestes
     /// Um lote de eventos do tamagotchi, ou nulo para parar: rajadas de TICK com um item caindo ou um uso em curso (às vezes
     /// até o fim exato do uso), o gesto sobre o item da mão (arrastar até ele ou para longe, soltar, largar), invocar (às
     /// vezes fora do enum), pegar um item (às vezes um Id que não existe), recolher e disparos da onda (o atual, um velho
-    /// ou sem onda). Escondido ou antes da carga, eventos que devem ser ignorados. Com <paramref name="puxaAParanoia"/>, o
-    /// invocar e o pegar puxam a paranoia (<see cref="ItemAInvocar"/> e <see cref="PegarUmItem"/>).
+    /// ou sem onda). Escondido ou antes da carga, eventos que devem ser ignorados. Com <paramref name="puxaAParanoia"/>, no
+    /// meio de um episódio, às vezes um item vai até ele (<see cref="PuxarAParanoia"/>).
     /// </summary>
     private static List<Evento>? SortearDoTamagotchi(Random rnd, EstadoDoNucleo s, ConfiguracaoDoNucleo cfg, bool puxaAParanoia)
     {
@@ -2130,6 +2306,8 @@ internal static class InvariantesTestes
                 _ => null,
             };
         }
+        if (puxaAParanoia && PuxarAParanoia(rnd, s, cfg) is { } puxada) return puxada;
+        if (PuxarOBaseadoPorContaPropria(rnd, s, cfg) is { } doBaseado) return doBaseado;
         if (s.Estado == Estado.Using && rnd.Next(2) == 0)
             return Ticks(rnd.Next(3) == 0 ? Math.Max(1, s.PassosRestantes) : rnd.Next(1, Math.Max(2, s.PassosRestantes + 2)));
         if (s.Itens.AlgumCaindo && rnd.Next(2) == 0) return Ticks(rnd.Next(1, 40));
@@ -2137,11 +2315,36 @@ internal static class InvariantesTestes
         int sorteio = rnd.Next(100);
         return sorteio switch
         {
-            < 22 => [new CmdSummonItem(ItemAInvocar(rnd, s, puxaAParanoia))],
-            < 50 when s.Itens.Quantidade > 0 => PegarUmItem(rnd, s, cfg, puxaAParanoia),
+            < 22 => [new CmdSummonItem(ItemAInvocar(rnd, s))],
+            < 50 when s.Itens.Quantidade > 0 => PegarUmItem(rnd, s, cfg),
             < 52 => [new CmdClearItems()],
             < 72 when s.Onda is not null => [new ItemEffectTimer(rnd.Next(6) == 0 ? s.GeracaoDaOnda - 1 - rnd.Next(3) : s.GeracaoDaOnda)],
             < 74 => [new ItemEffectTimer(s.GeracaoDaOnda)],
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    /// Nas sequências com o baseado por conta própria (a ação FumarBaseado na configuração; revisão do baseado, achado 4), às
+    /// vezes o gerador leva a duas situações que ele quase nunca alcançava sozinho. Fora do chão: sem a física (os invariantes
+    /// rodam sem ela), com a queda pelos sinais, ele pousa e fica em IDLE onde o pouso acabou, no ar, e ali não pode fumar; mas
+    /// o pouso (12 TICKs) quase nunca terminava sem outro evento no meio, e a decisão que vale em IDLE fora do chão, com a ação
+    /// e sem o Chapado na frente, saía uma vez em mil sequências. No ar, então, o contato com o chão; pousando no ar, o pouso
+    /// até o fim; e, em IDLE fora do chão com a decisão pendente, o disparo dela. E, usando um baseado (o dele ou o solto pelo
+    /// usuário), o menu de contexto, que abre sem interromper o uso. As outras sequências não passam por aqui e seguem como
+    /// eram; nestas, o gerador segue como sempre quando devolve nulo.
+    /// </summary>
+    private static List<Evento>? PuxarOBaseadoPorContaPropria(Random rnd, EstadoDoNucleo s, ConfiguracaoDoNucleo cfg)
+    {
+        if ((cfg.Acoes & AcoesAutonomas.FumarBaseado) != AcoesAutonomas.FumarBaseado || s.Lugar is not { } lugar) return null;
+        if (s.Estado == Estado.Using)
+            return s.Uso?.Item == Item.Baseado && rnd.Next(8) == 0 ? [new ContextMenu(new PontoPx(lugar.Ancora.X, lugar.Ancora.Y - 20))] : null;
+        if (lugar.Ancora.Y == lugar.Monitor.AreaUtil.Base) return null;
+        return s.Estado switch
+        {
+            Estado.Falling or Estado.Jumping when rnd.Next(3) == 0 => [new MovementSignal(SinalDeMovimento.ContatoComOChao)],
+            Estado.Landing when rnd.Next(2) == 0 => Ticks(Math.Max(1, s.PassosRestantes)),
+            Estado.Idle when s.DecisaoAgendada && rnd.Next(4) == 0 => [new AutonomyTimer(s.Geracao)],
             _ => null,
         };
     }
@@ -2154,15 +2357,32 @@ internal static class InvariantesTestes
     /// <summary>
     /// O item a invocar: com uma onda de fundo, metade das vezes um item de alívio (a comida e a bebida sem álcool), para o
     /// alívio que acaba a onda da frente e traz a de fundo de volta acontecer muitas vezes, e não por sorte; senão,
-    /// qualquer um (<see cref="ItemAleatorio"/>). Puxando a paranoia (pedido do usuário de 2026-10-01), no meio de um
-    /// episódio (com carga), dois terços das vezes uma substância ou, com a paranoia na frente, metade delas um item de
-    /// alívio, para ela subir de nível e ser acalmada; sem carga, ou sem puxar, nenhum sorteio a mais.
+    /// qualquer um (<see cref="ItemAleatorio"/>).
     /// </summary>
-    private static Item ItemAInvocar(Random rnd, EstadoDoNucleo s, bool puxaAParanoia)
+    private static Item ItemAInvocar(Random rnd, EstadoDoNucleo s)
+        => s.OndaDeFundo is not null && rnd.Next(2) == 0 ? ItensDeAlivio[rnd.Next(ItensDeAlivio.Length)] : ItemAleatorio(rnd);
+
+    /// <summary>
+    /// Puxando a paranoia (pedidos do usuário de 2026-10-01), no meio de um episódio (com carga) e com ele fora do uso e sem
+    /// item na mão, metade das vezes um item vai até ele. Com a paranoia na frente, metade das vezes um de alívio, para ela
+    /// ser acalmada, e metade uma substância, para ela subir de nível antes de os disparos a acabarem. Sem ela e sem droga
+    /// sintética no episódio, dois terços das vezes uma sintética, para a mistura acontecer, e um terço outra substância (a
+    /// mistura sem sintética, que não sorteia); com sintética, uma vez em quatro, um item de substância já usado no episódio
+    /// (a sintética sozinha, repetida), e nas outras, qualquer substância: a que fecha a mistura faz o sorteio do episódio, e,
+    /// depois dele, as outras não sorteiam mais (um sorteio por episódio, a escolha do usuário às 23:03). O item é um dessa
+    /// classe já no mundo, com o gesto inteiro até ele, ou um novo, invocado, que vai até ele num lote seguinte. Sem isso, a
+    /// mistura com sintética quase nunca se completava num episódio, e a subida de nível não acontecia. Nulo na outra metade:
+    /// o gerador segue como sempre.
+    /// </summary>
+    private static List<Evento>? PuxarAParanoia(Random rnd, EstadoDoNucleo s, ConfiguracaoDoNucleo cfg)
     {
-        if (puxaAParanoia && s.Carga > 0 && rnd.Next(3) != 0)
-            return s.Onda?.Tipo == Onda.Paranoico && rnd.Next(2) == 0 ? ItensDeAlivio[rnd.Next(ItensDeAlivio.Length)] : ItensDeSubstancia[rnd.Next(ItensDeSubstancia.Length)];
-        return s.OndaDeFundo is not null && rnd.Next(2) == 0 ? ItensDeAlivio[rnd.Next(ItensDeAlivio.Length)] : ItemAleatorio(rnd);
+        if (s.Carga.Substancias == 0 || s.Estado == Estado.Using || s.Itens.NaMao is not null || rnd.Next(2) == 0) return null;
+        Item[] classe;
+        if (s.Onda?.Tipo == Onda.Paranoico) classe = rnd.Next(2) == 0 ? ItensDeAlivio : ItensDeSubstancia;
+        else if (!s.Carga.Sintetica) classe = rnd.Next(3) == 0 ? OutrasSubstancias : ItensSinteticos;
+        else classe = rnd.Next(4) == 0 ? [.. s.Carga.Distintas.Itens] : ItensDeSubstancia;
+        ItemNoMundo[] noMundo = [.. s.Itens.Todos.Where(i => classe.Contains(i.Item))];
+        return noMundo.Length > 0 ? GestoAteEle(rnd, s, cfg, noMundo[rnd.Next(noMundo.Length)]) : [new CmdSummonItem(classe[rnd.Next(classe.Length)])];
     }
 
     /// <summary>
@@ -2170,16 +2390,9 @@ internal static class InvariantesTestes
     /// meio; ou clica nele (pega e larga); ou o gesto inteiro, até ele ou para longe. Com uma onda de fundo e um item de
     /// alívio no mundo, o gesto inteiro de um deles até ele: um passo do alívio por vez, até a onda da frente acabar e a de
     /// fundo voltar (o alívio, pedido do usuário de 2026-10-01; sem isso, o caso saía por sorte, de nenhuma a três vezes).
-    /// Puxando a paranoia, no meio de um episódio (com carga), metade das vezes antes disso o gesto inteiro de uma
-    /// substância até ele (com a paranoia na frente, de qualquer item): sem isso, a 4ª substância do episódio saía de
-    /// nenhuma a duas vezes.
     /// </summary>
-    private static List<Evento> PegarUmItem(Random rnd, EstadoDoNucleo s, ConfiguracaoDoNucleo cfg, bool puxaAParanoia)
+    private static List<Evento> PegarUmItem(Random rnd, EstadoDoNucleo s, ConfiguracaoDoNucleo cfg)
     {
-        bool paranoica = s.Onda?.Tipo == Onda.Paranoico;
-        if (puxaAParanoia && s.Carga > 0 && s.Itens.Todos.Where(i => paranoica || !ItensDeAlivio.Contains(i.Item)).ToArray() is { Length: > 0 } paraUsar
-            && rnd.Next(2) == 0)
-            return GestoAteEle(rnd, s, cfg, paraUsar[rnd.Next(paraUsar.Length)]);
         if (s.OndaDeFundo is not null && s.Itens.Todos.Where(i => ItensDeAlivio.Contains(i.Item)).ToArray() is { Length: > 0 } deAlivio)
             return GestoAteEle(rnd, s, cfg, deAlivio[rnd.Next(deAlivio.Length)]);
         ItemNoMundo item = s.Itens.Todos[rnd.Next(s.Itens.Quantidade)];
