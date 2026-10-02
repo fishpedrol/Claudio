@@ -123,10 +123,8 @@ escondido, **Itens** fica indisponível; a emoção pode ser escolhida e aparece
 A divisão dos itens é só regra do jogo, de desenho animado, e não diz nada sobre o mundo real.
 
 **Cópia na Área de Trabalho:** o Buzzy da pasta `net10.0-windows` na sua Área de Trabalho foi
-compilado às 18:32 de 2026-10-01, antes dessas regras, e ainda dá a paranoia na 4ª substância, trata
-a bala como alívio e não fuma sozinho. Para ver as regras novas, abra o `Buzzy.exe` da pasta do
-projeto (seção 3), depois de compilar de novo (seção 2), ou troque essa cópia por um build novo com
-o Buzzy fechado.
+atualizado em 2026-10-02 e já tem essas regras: a paranoia por mistura, a bala sintética e o
+baseado por conta própria.
 
 Ao abrir de novo, o Buzzy lembra:
 

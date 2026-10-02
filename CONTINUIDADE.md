@@ -1,20 +1,15 @@
 # Continuidade compartilhada — Buzzy
 
-> Registro único de handoff e backup para Claude e Codex. Atualizado em 2026-10-02 por Claude, na passagem para o Codex.
+> Registro único de handoff e backup para Claude e Codex. Atualizado em 2026-10-02 por Claude.
 > As fontes canônicas em `docs/`, o código e as instruções atuais do usuário prevalecem. Este arquivo registra o estado de trabalho entre sessões; confirme tudo no checkout antes de agir.
 
 ## Retomada atual
 
-**Quem assume agora: o Codex.** Na mensagem das 19:10 de 2026-10-01, o usuário pediu: "acabando esse workflow pare de produzir o projeto, atualize o arquivo de continuidade para o codex assumir, antes queria que adicionasse também uma funcionalidade que o macaco fume maconha à vontade quando ele quiser". Claude concluiu esse trabalho em 2026-10-02, às 02:20, e parou. A autorização contínua de implementação segue em DEC-015 e [prompt_usuario.md](prompt_usuario.md).
+**Papéis (DEC-015, atualização de 2026-10-02):** Claude é o desenvolvedor principal; o Codex é o segundo desenvolvedor e o revisor, quando o usuário pedir. A diretiva de cada um está em [prompt_usuario.md](prompt_usuario.md), e o trabalho a dois na mesma árvore segue o protocolo de [AGENTS.md](AGENTS.md), com o quadro "Em andamento" abaixo. Isso substituiu a passagem do projeto ao Codex que o usuário tinha pedido às 19:10 de 2026-10-01. Claude concluiu às 02:20 a leva daquele pedido (o baseado por conta própria). **Nesta semana:** depois do teste de tela, o usuário passa a continuidade ao Codex, que segue as próximas ações abaixo no modo desenvolvedor do `prompt_usuario.md`; Claude volta na semana seguinte, quando o limite semanal de uso renovar, e retoma como principal.
 
 **Estado em 2026-10-02 (Claude):**
 
-- **Git:** o último commit é `7fe929e` (18:51 de 2026-10-01), feito pelo usuário. Todo o trabalho desta leva está na árvore, **sem commit**: 40 arquivos modificados (contando este) e 4 novos. Os 4 novos são exigidos pelo build e pelos testes:
-  - `tests/Buzzy.App.Testes/Integracao/SementesDaParanoia.cs`;
-  - `tests/Buzzy.App.Testes/Integracao/SementesDoBaseado.cs`;
-  - `tests/Buzzy.Core.Testes/Tamagotchi/BaseadoPorContaPropriaTestes.cs`;
-  - `tests/Buzzy.Core.Testes/Referencias/09-baseado-por-conta-propria.txt`.
-  - Os commits são feitos pelo usuário; não faça commit automático.
+- **Git:** o último commit é `d9fac5a` (10:00 de 2026-10-02), feito pelo usuário, com todo o trabalho da leva do alívio, da paranoia e do baseado. Fora dele, só a documentação dos papéis e das escolhas do usuário de 2026-10-02. Os commits são feitos pelo usuário; não faça commit automático.
 - **Fases:** o estado canônico de cada uma está em [docs/PROJECT_CONTEXT.md](docs/PROJECT_CONTEXT.md) e [docs/TODO.md](docs/TODO.md). Em resumo:
   - Fase 2 VERIFIED;
   - Fases 1, 3 e 4 implementadas, com pendências [MANUAL] ou [HW];
@@ -27,20 +22,26 @@
 - **Evidência (Claude, 2026-10-02, 02:17–02:20):** `tools\testar.ps1 -Integracao`, código 0, "Tudo verde".
   - Build sem avisos nem erros; portão de APIs APROVADO; auditoria com 0 pacotes vulneráveis.
   - Núcleo 492/492; Portão 74/74; App 364/364, com os 32 de integração; arquivos reais do usuário intocados.
-  - Nada disso é verificação de tela com input sintético nem gesto humano.
+  - A verificação de tela da fase do tamagotchi, com input SINTÉTICO, passou em 2026-10-02, das 10:22 às 10:29: 56 OK, 0 falhas (`resultados/verificacao-tamagotchi.log`). Nada disso é gesto humano.
+
+### Em andamento
+
+Quadro de quem mexe em quê, pelo protocolo de [AGENTS.md](AGENTS.md). Uma linha por tarefa: agente — tarefa — arquivos ou áreas — início. Tire a linha ao terminar.
+
+- Nenhuma tarefa em andamento (2026-10-02, Claude).
 
 ### Próximas ações em ordem
 
-1. **Perguntar ao usuário as duas escolhas do baseado por conta própria** (DEC-028, itens 39 e 41; [MANUAL] no TODO):
-   - **frequência:** só com a autonomia, na energia Média, ele fuma cerca de 1 baseado a cada 14,6 min e fica chapado cerca de 39% do tempo (20% na Baixa, 55% na Alta). O peso já é o menor inteiro; reduzir pede regra nova, como um intervalo mínimo depois do chapado ou a calibração pelo tempo total;
-   - **bala dada sozinha:** com ele chapado do baseado dele, uma bala fecha a mistura e pode deixá-lo paranoico. Na simulação, isso acontece com cerca de 6,6% das balas dadas sozinhas (1 em 12 a 15). A alternativa é o baseado dele não contar como item distinto da mistura.
-2. **Verificação de tela com input SINTÉTICO.** Ela move o cursor: avise o usuário antes e confirme que não há Buzzy aberto.
-   - Tamagotchi, V16 a V19, de 7 a 13 min: depois de `tools\testar.ps1`, rode `tests\Buzzy.Verificacao\bin\Release\net10.0-windows\Buzzy.Verificacao.exe --injetar-input-na-tela --fase tamagotchi`. O V17 pode sair INCONCLUSIVO se a agenda real sair da simulação.
+Conduzidas por Claude, o desenvolvedor principal. O Codex pega uma delas quando o usuário pedir, registrando-a em "Em andamento".
+
+1. **Verificação de tela com input SINTÉTICO, só com o ok do usuário.** Ela move o cursor: o usuário dá o ok quando puder deixar o PC livre, e não pode haver nenhum Buzzy aberto, nem o da Área de Trabalho.
+   - **Tamagotchi (V16 a V19): feito em 2026-10-02, das 10:22 às 10:29**: 56 OK, 0 falhas (`resultados/verificacao-tamagotchi.log`).
    - Bloco B da Fase 5: `--fase 1`, `3` e `4` e as medições de 10 minutos ([docs/TODO.md](docs/TODO.md)).
-3. **Build novo para a cópia da Área de Trabalho** (`C:\Users\Cliente\Desktop\net10.0-windows`, compilada às 18:32 de 2026-10-01). Ela ainda tem a regra antiga, com a paranoia na 4ª substância e a bala de alívio, e não fuma sozinha. Atualize só com o Buzzy dele fechado e com o ok do usuário.
-4. **Revisão visual e de tom pelo usuário** [MANUAL]: a paranoia, o alívio, a bala (desenhada como doce, agora com os corações do eufórico) e o baseado por conta própria.
-5. **Seguir a Fase 5 pelo passo P10** (sessão, energia e minimização), com a ordem e as resoluções em [docs/TODO.md](docs/TODO.md).
-6. Toda verificação de tela avisa o usuário antes. Nada de commit automático.
+2. **Revisão visual e de tom pelo usuário** [MANUAL]: a paranoia, o alívio, a bala (desenhada como doce, agora com os corações do eufórico) e o baseado por conta própria.
+3. **Seguir a Fase 5 pelo passo P10** (sessão, energia e minimização), com a ordem e as resoluções em [docs/TODO.md](docs/TODO.md).
+4. Toda verificação de tela avisa o usuário antes. Nada de commit automático.
+
+**Feito em 2026-10-02:** as duas escolhas do baseado (o usuário confirmou: a frequência e a bala dada sozinha ficam como estão; DEC-028, itens 39 e 41) a verificação de tela do tamagotchi (56 OK, 0 falhas) e o build novo na Área de Trabalho (SHA-256 igual ao Release das 10:15, com o backup da versão de 18:32 no scratchpad da sessão `b1e376a9`, em `retomadaackup-desktop-20261001-1832`).
 
 ## Estado e evidência que orientam o handoff
 
@@ -484,3 +485,25 @@ Mantenha aqui um resumo do estado atual e acrescente uma entrada curta por marco
   - **Bateria final de Claude** (02:17–02:20): `tools\testar.ps1 -Integracao`, código 0. Núcleo 492/492, Portão 74/74, App 364/364 com 32 de integração; portão de APIs APROVADO; 0 vulneráveis; arquivos reais intocados. Nenhum Buzzy aberto depois.
   - **Não feito:** commit; verificação de tela (V16 a V19 e as fases do bloco B); build da Área de Trabalho; revisão do usuário.
   - **Claude parou aqui, como pedido às 19:10.** Próximo passo: "Próximas ações em ordem", no topo deste arquivo.
+- **2026-10-02 10:09 — Claude:** **papéis redefinidos pelo usuário:** "a função do codex agora é de 2º desenvolvedor e revisor (quando eu pedir), você continua sendo o principal".
+  - Claude continua o desenvolvedor principal (DEC-015); o Codex é o segundo desenvolvedor e o revisor, quando o usuário pedir. Isso substitui a passagem ao Codex pedida às 19:10 de 2026-10-01 e as entradas acima que falam dela.
+  - **Arquivos:**
+    - `AGENTS.md`: os papéis e a seção nova "Trabalho a dois na mesma árvore"; saíram duas frases vencidas sobre o P3 e a autorização da Fase 1;
+    - `prompt_usuario.md`, reescrito: a diretiva de Claude e o prompt do Codex, nos modos desenvolvedor e revisor. Saiu a "Retomada imediata — Fase 2", vencida;
+    - `docs/DECISIONS.md`: a atualização de 2026-10-02 na DEC-015 e uma nota na DEC-028;
+    - `docs/PROMPT_MESTRE_BUZZY.md`, `docs/PROJECT_CONTEXT.md` e `docs/DEVELOPMENT_LOG.md`: os papéis;
+    - este arquivo: os papéis na "Retomada atual" e o quadro "Em andamento".
+  - Só documentação: nenhum teste rodou nesta mudança. A bateria das 02:17–02:20 continua valendo para o código.
+  - **Próximo passo:** as "Próximas ações em ordem", no topo.
+- **2026-10-02 10:19 — Claude:** **escolhas do usuário e build da Área de Trabalho** ("concordo com os 3 pontos pode começar").
+  - **Escolhas do baseado:** a frequência e a bala dada sozinha ficam como estão. Registrado na DEC-028 (itens 39 e 41), no TODO, no PROJECT_CONTEXT e no PRODUCT_SPEC.
+  - **Build:** a cópia `C:UsersClienteDesktop
+et10.0-windows` foi substituída pelo Release das 10:15, com SHA-256 igual e o Buzzy fechado; agora tem a paranoia por mistura e o baseado por conta própria. O `testar.ps1` das 10:15–10:16 deu código 0 (Núcleo 492, Portão 74, App 332, sem os 32 de integração, que passaram às 02:17–02:20).
+  - **Teste de tela:** a tentativa das 10:16 foi parada antes de injetar qualquer coisa, a pedido do usuário, que precisou usar o PC; ele dá o ok para rodar de novo. Nenhum processo ficou aberto.
+  - **Commit do usuário:** `d9fac5a` (10:00), com todo o trabalho da leva.
+  - **Próximo passo:** o teste de tela, com o ok do usuário. Depois, a continuidade passa ao Codex nesta semana.
+- **2026-10-02 10:32 — Claude:** **verificação de tela do tamagotchi, com o ok do usuário ("comece").**
+  - `Buzzy.Verificacao --injetar-input-na-tela --fase tamagotchi`, das 10:22 às 10:29: código 0, **56 OK, 0 N/A, 0 SIMULADO e 0 falhas**, inclusive a V16, a V17, a V17b, a V18 e a V19 (`resultados/verificacao-tamagotchi.log`). Processos de teste encerrados sem força e cursor restaurado.
+  - Documentos atualizados com a evidência: TODO (T10 a T12 e a tabela da verificação), PROJECT_CONTEXT, DECISIONS (DEC-028), ARCHITECTURE, DEVELOPMENT_LOG, README e COMO_INICIAR.
+  - **Pendente:** as fases 1, 3 e 4 depois do bloco B da Fase 5, as medições de 10 minutos e a revisão de tom pelo usuário.
+  - **Próximo passo:** nesta semana, o usuário passa a continuidade ao Codex (modo desenvolvedor do `prompt_usuario.md`), a partir das "Próximas ações em ordem". Claude volta na semana seguinte, como principal.

@@ -4,7 +4,7 @@ Este arquivo contém apenas regras estáveis. A diretiva executável e o estado 
 
 ## Papéis e autorização
 
-Claude planeja, implementa, testa, corrige e documenta o MVP conforme a diretiva atual e as fontes canônicas. O usuário autorizou a criação da identidade visual original e a execução contínua das fases, sem aprovação rotineira entre planos ou fases; veja DEC-015. Codex faz revisão independente quando o usuário pedir, sem ser gate obrigatório de execução.
+Claude é o desenvolvedor principal: planeja, implementa, testa, corrige e documenta o MVP conforme a diretiva atual e as fontes canônicas. O usuário autorizou a criação da identidade visual original e a execução contínua das fases, sem aprovação rotineira entre planos ou fases; veja DEC-015. Codex é o segundo desenvolvedor e o revisor independente, nos dois casos quando o usuário pedir, sem ser gate obrigatório de execução. O trabalho a dois na mesma árvore segue o protocolo de AGENTS.md.
 
 ## Precedência e fontes
 

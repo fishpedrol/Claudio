@@ -10,13 +10,25 @@ PRODUCT_SPEC.md define a intenção estável. PROJECT_CONTEXT.md define o estado
 
 ## Papéis e ciclo de trabalho
 
-O usuário concedeu a Claude autorização contínua para criar a identidade visual original e executar o projeto fase a fase, conforme DEC-015 e o prompt atual em prompt_usuario.md. Claude planeja, implementa, testa, corrige e sincroniza a documentação sem pedir aprovação de plano ou confirmação entre fases. Pode tomar decisões técnicas dentro dos limites de produto e segurança já registrados; registre escolhas materiais em DECISIONS.md.
+**Claude é o desenvolvedor principal.** O usuário concedeu a Claude autorização contínua para criar a identidade visual original e executar o projeto fase a fase, conforme DEC-015 e a diretiva em prompt_usuario.md. Claude planeja, implementa, testa, corrige e sincroniza a documentação sem pedir aprovação de plano ou confirmação entre fases. Pode tomar decisões técnicas dentro dos limites de produto e segurança já registrados; registre escolhas materiais em DECISIONS.md.
 
-Codex revisa planos ou código quando o usuário pedir; essa revisão não é gate obrigatório para Claude avançar sob esta autorização. Conclua os critérios de cada fase antes de declarar seu status. Se um teste [HW] não puder ser feito no equipamento disponível, registre-o como pendente e continue o trabalho que não dependa dessa verificação; retorne aos itens pendentes na integração final. Nunca declare VERIFIED nem fase concluída sem a evidência exigida.
+**Codex é o segundo desenvolvedor e o revisor, quando o usuário pedir** (DEC-015, atualização de 2026-10-02). Como desenvolvedor, faz as tarefas que o usuário lhe der, com as mesmas regras, gates e documentação deste arquivo. Como revisor, segue docs/PLAN_REVIEW.md e entrega um relatório, deixando a árvore como a encontrou. A revisão não é gate para Claude avançar.
+
+Conclua os critérios de cada fase antes de declarar seu status. Se um teste [HW] não puder ser feito no equipamento disponível, registre-o como pendente e continue o trabalho que não dependa dessa verificação; retorne aos itens pendentes na integração final. Nunca declare VERIFIED nem fase concluída sem a evidência exigida.
 
 Peça ajuda ao usuário apenas quando houver um bloqueio que realmente exija uma ação dele, uma decisão de produto fora da especificação ou uma permissão externa não concedida. Antes disso, procure uma alternativa segura e isolada; agrupe qualquer solicitação indispensável e continue o trabalho independente. Não leia conteúdo de outros aplicativos, não encerre processos do usuário e não altere configurações globais do Windows para simular testes.
 
-Durante execução, implemente as fases na ordem de TODO.md, atualizando o status e a documentação ao fechar cada gate e avançando sem aguardar confirmação. P3 continua um gate técnico para a Fase 0: Claude deve fechá-lo autonomamente com um receptor controlado pelo spike, sem depender do Bloco de Notas. A autorização da Fase 1 já foi dada; não peça autorização novamente quando a Fase 0 estiver tecnicamente fechada. Não introduza IA integrada ao MVP.
+Durante execução, implemente as fases na ordem de TODO.md, atualizando o status e a documentação ao fechar cada gate e avançando sem aguardar confirmação. Não introduza IA integrada ao MVP.
+
+## Trabalho a dois na mesma árvore
+
+Claude e Codex trabalham no mesmo checkout, às vezes ao mesmo tempo. A seção "Em andamento" do CONTINUIDADE.md é o quadro de quem mexe em quê.
+
+1. Antes da primeira edição, leia "Em andamento" e o `git status`. Mudanças que você não fez são trabalho do outro agente ou do usuário: preserve-as.
+2. Registre a sua tarefa em "Em andamento" (agente, tarefa, arquivos ou áreas, início) e edite só fora das áreas que o outro registrou. Se precisar de uma delas, combine pelo usuário.
+3. Um Buzzy por vez: antes do `-Integracao` ou de uma verificação de tela, confirme que nenhum Buzzy está aberto; se houver, espere ou avise o usuário.
+4. Ao terminar, tire a tarefa de "Em andamento" e registre o marco no log do CONTINUIDADE.md.
+5. Os commits são do usuário.
 
 ## Documentação viva
 
