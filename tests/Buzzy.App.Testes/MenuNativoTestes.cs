@@ -36,8 +36,8 @@ internal sealed class MenuNativoTestes
     private static ModeloDoMenu Modelo(bool visivel = true, bool pausado = false, Expressao? emocao = null, bool altoContraste = false)
         => new(visivel, pausado, emocao, altoContraste, Tamagotchi: false);
 
-    private static ModeloDoMenu ModeloComItens(bool visivel = true, int itensNaTela = 0, bool altoContraste = false, bool pausado = false)
-        => new(visivel, pausado, null, altoContraste, Tamagotchi: true, ItensNaTela: itensNaTela);
+    private static ModeloDoMenu ModeloComItens(bool visivel = true, int itensNaTela = 0, bool altoContraste = false, bool pausado = false, bool adulto = true)
+        => new(visivel, pausado, null, altoContraste, Tamagotchi: true, ItensNaTela: itensNaTela, ConteudoAdulto: adulto);
 
     private static EntradaDoMenu SubmenuDosItens(IReadOnlyList<EntradaDoMenu> menu)
         => menu.Single(e => e.Tipo == TipoDeEntrada.Submenu && e.Rotulo == "&Itens");
@@ -181,10 +181,11 @@ internal sealed class MenuNativoTestes
                 (TipoDeEntrada.Separador, "", 0),
                 (TipoDeEntrada.Submenu, "Emoção &dominante", 0),
                 (TipoDeEntrada.Submenu, "&Itens", 0),
+                (TipoDeEntrada.Comando, "Conteúdo &adulto", 7),
                 (TipoDeEntrada.Separador, "", 0),
                 (TipoDeEntrada.Comando, "&Sair", 2),
             ],
-            menu.Select(e => (e.Tipo, e.Rotulo, e.Id)), "o submenu \"Itens\" vem logo depois do da emoção dominante");
+            menu.Select(e => (e.Tipo, e.Rotulo, e.Id)), "o submenu \"Itens\" vem logo depois do da emoção dominante, e a chave do conteúdo adulto depois dele");
         Afirmar.Igual(16, Afirmar.NaoNulo(SubmenuDaEmocaoNaChaveLigada(menu).Filhas).Count, "o submenu da emoção continua igual");
 
         EntradaDoMenu submenu = SubmenuDosItens(menu);
@@ -256,7 +257,7 @@ internal sealed class MenuNativoTestes
 
         // Com a chave ligada, todo id da lista volta a uma escolha, sem repetição.
         int[] ids = [.. Todas(MenuNativo.Entradas(ModeloComItens(itensNaTela: 1))).Where(e => e.Tipo == TipoDeEntrada.Comando).Select(e => e.Id)];
-        Afirmar.Igual(3 + 15 + 14, ids.Length, "Esconder, Pausar, Sair, 15 opções de emoção e 14 do submenu dos itens");
+        Afirmar.Igual(4 + 15 + 14, ids.Length, "Esconder, Pausar, Conteúdo adulto, Sair, 15 opções de emoção e 14 do submenu dos itens");
         Afirmar.Igual(ids.Length, ids.Distinct().Count(), "ids sem repetição");
         Afirmar.Verdadeiro(ids.All(id => MenuNativo.Escolha(id) != EscolhaDoMenu.Nenhuma), "todo id da lista volta a uma escolha");
     }
@@ -269,6 +270,36 @@ internal sealed class MenuNativoTestes
     private static readonly MonitorDoDesktop Principal96 = new("m1", new RetanguloPx(0, 0, 1920, 1080), new RetanguloPx(0, 0, 1920, 1040), 96, true);
     private static readonly MonitorDoDesktop Direita192 = new("m2", new RetanguloPx(1920, 0, 4480, 1440), new RetanguloPx(1920, 0, 4480, 1400), 192, false);
     private static readonly MonitorDoDesktop Acima288 = new("m3", new RetanguloPx(0, -2160, 3840, 0), new RetanguloPx(0, -2160, 3840, -40), 288, false);
+
+    // ------------------------------------------------------------------ conteúdo adulto (DEC-033)
+
+    // "Conteúdo adulto" é um comando com a marca de seleção (não de rádio), marcada quando ligado; só existe com a chave do
+    // tamagotchi; o id 7 volta ao comando.
+    [Teste]
+    public void ConteudoAdulto_ComandoComMarca_SoComOTamagotchi()
+    {
+        EntradaDoMenu ligado = MenuNativo.Entradas(ModeloComItens()).Single(e => e.Id == 7);
+        Afirmar.Igual((TipoDeEntrada.Comando, "Conteúdo &adulto", true, false, false), (ligado.Tipo, ligado.Rotulo, ligado.Marcada, ligado.Radio, ligado.Desabilitada), "ligado: marcado");
+        EntradaDoMenu desligado = MenuNativo.Entradas(ModeloComItens(adulto: false)).Single(e => e.Id == 7);
+        Afirmar.Falso(desligado.Marcada, "desligado: sem marca");
+        Afirmar.Verdadeiro(MenuNativo.Entradas(ModeloComItens(visivel: false)).Single(e => e.Id == 7) is { Desabilitada: false }, "também com o Buzzy escondido");
+        Afirmar.Falso(Todas(MenuNativo.Entradas(Modelo())).Any(e => e.Id == 7), "sem a chave do tamagotchi, não aparece");
+        Afirmar.Igual(new EscolhaDoMenu(ComandoDoMenu.ConteudoAdulto), MenuNativo.Escolha(7), "o id volta ao comando");
+    }
+
+    // Desligado, o submenu "Itens" só tem os quatro de alívio (a banana, a água, o café e o energético), com os mesmos ids de
+    // sempre, o separador e "Recolher itens"; os nove adultos somem.
+    [Teste]
+    public void ConteudoAdultoDesligado_ItensSoComOsQuatroLivres_MesmosIds()
+    {
+        IReadOnlyList<EntradaDoMenu> filhas = Afirmar.NaoNulo(SubmenuDosItens(MenuNativo.Entradas(ModeloComItens(adulto: false, itensNaTela: 1))).Filhas);
+        Afirmar.Sequencia(
+            [("&Banana", 2000), ("Á&gua", 2001), ("Ca&fé", 2009), ("E&nergético", 2010), ("", 0), ("&Recolher itens", 2999)],
+            filhas.Select(e => (e.Rotulo, e.Id)), "os quatro livres, o separador e recolher");
+        foreach (EntradaDoMenu e in filhas.Where(e => e.Id is >= 2000 and < 2999))
+            Afirmar.Falso(TabelaDoTamagotchi.Adulto(Afirmar.NaoNulo(MenuNativo.Escolha(e.Id).Item, e.Rotulo)), $"{e.Rotulo}: não é adulto");
+        Afirmar.Igual(15, Afirmar.NaoNulo(SubmenuDosItens(MenuNativo.Entradas(ModeloComItens())).Filhas).Count, "ligado: os 13 de sempre");
+    }
 
     [Teste]
     public void ModeloAoAbrir_EmocaoItensPausaEChave_SaemDoEstadoDoNucleo()
@@ -295,6 +326,11 @@ internal sealed class MenuNativoTestes
         Afirmar.Igual(0, MenuNativo.ModeloAoAbrir(nucleo, true, false).ItensNaTela, "recolhidos: \"Recolher itens\" volta a ficar desabilitado");
         Afirmar.Verdadeiro(MenuNativo.Entradas(MenuNativo.ModeloAoAbrir(nucleo, true, false)).Single(e => e.Rotulo == "&Itens").Filhas![14].Desabilitada,
             "na lista do menu, \"Recolher itens\" desabilitado sem itens");
+
+        Afirmar.Verdadeiro(MenuNativo.ModeloAoAbrir(nucleo, true, false).ConteudoAdulto, "o conteúdo adulto ligado vem do núcleo");
+        nucleo.Enfileirar(new CmdSetAdultContent(false));
+        nucleo.Processar();
+        Afirmar.Falso(MenuNativo.ModeloAoAbrir(nucleo, true, false).ConteudoAdulto, "o conteúdo adulto desligado vem do núcleo");
 
         var desligada = new Nucleo(ConfiguracaoDoNucleo.DoAplicativo(new TamanhoDip(128, 128)) with { Tamagotchi = false }, 7);
         Afirmar.Falso(MenuNativo.ModeloAoAbrir(desligada, true, false).Tamagotchi, "a chave vem da configuração do núcleo");

@@ -67,11 +67,11 @@ internal static class BaseadoPorContaPropriaTestes
     [Teste]
     public static void AcaoNova_NoFimDoEnum_ForaDeTodas_LigadaNoAplicativo()
     {
-        Afirmar.Sequencia([0, 1, 2, 4, 8, 16, 32, 63, 64], Enum.GetValues<AcoesAutonomas>().Select(a => (int)a), "os valores de sempre, e a nova no fim");
+        Afirmar.Sequencia([0, 1, 2, 4, 8, 16, 32, 63, 64, 128], Enum.GetValues<AcoesAutonomas>().Select(a => (int)a), "os valores de sempre, a nova e, depois dela, a de ir ao outro monitor (Fase 5, passo P13)");
         Afirmar.Igual(64, (int)AcoesAutonomas.FumarBaseado, "FumarBaseado no bit seguinte");
         Afirmar.Igual(63, (int)AcoesAutonomas.Todas, "Todas continua as seis ações de sempre");
         ConfiguracaoDoNucleo app = ConfiguracaoDoNucleo.DoAplicativo(Sprite);
-        Afirmar.Igual(AcoesAutonomas.Todas | AcoesAutonomas.FumarBaseado, app.Acoes, "o aplicativo liga a ação nova");
+        Afirmar.Igual(AcoesAutonomas.Todas | AcoesAutonomas.FumarBaseado | AcoesAutonomas.IrAoOutroMonitor, app.Acoes, "o aplicativo liga a ação nova (e a de ir ao outro monitor, do passo P13)");
         Afirmar.Verdadeiro(app.Tamagotchi, "com a chave do tamagotchi");
         Afirmar.Igual(AcoesAutonomas.Todas, new ConfiguracaoDoNucleo().Acoes, "a configuração padrão do núcleo continua com as de sempre");
         foreach (NivelDeEnergia nivel in Enum.GetValues<NivelDeEnergia>())

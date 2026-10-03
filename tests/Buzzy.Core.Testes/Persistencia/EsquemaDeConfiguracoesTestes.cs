@@ -10,51 +10,73 @@ using static Buzzy.Core.Testes.TopologiasDeExemplo;
 namespace Buzzy.Core.Testes.Persistencia;
 
 /// <summary>
-/// Esquema v3 do settings.json (Fase 5; ARCHITECTURE.md 2.12; SECURITY.md 7; DEC-027 e DEC-029, item 11): o formato
+/// Esquema v4 do settings.json (Fase 5; ARCHITECTURE.md 2.12; SECURITY.md 7; DEC-027 e DEC-029, item 11): o formato
 /// escrito, byte a byte, a leitura tolerante campo a campo e os casos ilegíveis. A v2 acrescentou a emoção dominante
 /// (<c>preferencias.emocaoDominante</c>); a v3, a postura gravada com a posição: a borda do esconderijo
 /// (<c>posicao.esconderijo</c>, DEC-025) e a marca "preso pelo usuário" (<c>posicao.presoPeloUsuario</c>, DEC-024).
-/// Arquivos v1 e v2, sem esses campos, continuam lidos sem aviso. As amostras de referência
-/// (<c>Amostras/settings-v3.json</c>, <c>settings-v2.json</c> e <c>settings-v1.json</c>) são lidas da pasta-fonte,
+/// A v4 acrescentou o conteúdo adulto (<c>preferencias.conteudoAdulto</c>, DEC-033). Arquivos v1 a v3, sem esses campos, continuam lidos sem aviso. As amostras de referência
+/// (<c>Amostras/settings-v4.json</c>, <c>settings-v3.json</c>, <c>settings-v2.json</c> e <c>settings-v1.json</c>) são lidas da pasta-fonte,
 /// como as reproduções gravadas.
 /// </summary>
 internal static class EsquemaDeConfiguracoesTestes
 {
     private static readonly TamanhoDip Sprite = new(128, 128);
 
-    private const string AmostraV1 = "settings-v1.json", AmostraV2 = "settings-v2.json", AmostraV3 = "settings-v3.json";
+    private const string AmostraV1 = "settings-v1.json", AmostraV2 = "settings-v2.json", AmostraV3 = "settings-v3.json", AmostraV4 = "settings-v4.json";
 
     // ---------------------------------------------------------------- as amostras v3, v2 e v1
 
     // A posição S2 (secundário à esquerda, 25% da área útil, no chão) com as preferências padrão
-    // escreve exatamente a amostra v3, com a emoção "automatica", sem esconderijo e sem estar preso: um formato
+    // escreve exatamente a amostra v4, com a emoção "automatica", sem esconderijo, sem estar preso e com o conteúdo adulto
+    // ligado: um formato
     // alterado por acidente falha aqui. Como nas referências, só o fim de linha é normalizado (o Git pode trocar LF
     // por CRLF na amostra).
     [Teste]
-    public static void Escrever_ExemploS2_IgualAAmostraV3()
+    public static void Escrever_ExemploS2_IgualAAmostraV4()
     {
         byte[] escrito = EsquemaDeConfiguracoes.Escrever(new ConfiguracoesSalvas(PosicaoS2(), Preferencias.Padrao));
 
-        Afirmar.Igual(Amostra(AmostraV3), Encoding.UTF8.GetString(escrito), "texto escrito");
+        Afirmar.Igual(Amostra(AmostraV4), Encoding.UTF8.GetString(escrito), "texto escrito");
         Afirmar.Falso(escrito.AsSpan().StartsWith((ReadOnlySpan<byte>)[0xEF, 0xBB, 0xBF]), "sem BOM");
         Afirmar.Falso(escrito.Contains((byte)'\r'), "fim de linha \\n, sem \\r");
         Afirmar.Igual((byte)'\n', escrito[^1], "termina com \\n");
-        Afirmar.Igual(3, EsquemaDeConfiguracoes.VersaoAtual, "versão atual");
+        Afirmar.Igual(4, EsquemaDeConfiguracoes.VersaoAtual, "versão atual");
 
         // A emoção escolhida sai com o nome da cara em minúsculas, no mesmo lugar.
         string comEmocao = Encoding.UTF8.GetString(EsquemaDeConfiguracoes.Escrever(new ConfiguracoesSalvas(PosicaoS2(), Preferencias.Padrao with { EmocaoDominante = Expressao.Feliz })));
-        Afirmar.Igual(Amostra(AmostraV3).Replace("\"emocaoDominante\": \"automatica\"", "\"emocaoDominante\": \"feliz\"", StringComparison.Ordinal), comEmocao, "com a emoção Feliz");
+        Afirmar.Igual(Amostra(AmostraV4).Replace("\"emocaoDominante\": \"automatica\"", "\"emocaoDominante\": \"feliz\"", StringComparison.Ordinal), comEmocao, "com a emoção Feliz");
 
         // A postura sai sempre, na posição, depois da âncora: a borda em minúsculas e a marca como booleano.
         foreach ((LadoDoEsconderijo lado, string nome) in new[] { (LadoDoEsconderijo.Baixo, "baixo"), (LadoDoEsconderijo.Esquerda, "esquerda"), (LadoDoEsconderijo.Direita, "direita") })
         {
             string comPostura = Encoding.UTF8.GetString(EsquemaDeConfiguracoes.Escrever(new ConfiguracoesSalvas(PosicaoS2(), Preferencias.Padrao) { Esconderijo = lado, PresoPeloUsuario = true }));
-            Afirmar.Igual(Amostra(AmostraV3).Replace("\"esconderijo\": \"nenhum\"", $"\"esconderijo\": \"{nome}\"", StringComparison.Ordinal)
+            Afirmar.Igual(Amostra(AmostraV4).Replace("\"esconderijo\": \"nenhum\"", $"\"esconderijo\": \"{nome}\"", StringComparison.Ordinal)
                 .Replace("\"presoPeloUsuario\": false", "\"presoPeloUsuario\": true", StringComparison.Ordinal), comPostura, $"escondido na borda {nome} e preso");
         }
+
+        // O conteúdo adulto desligado (DEC-033) sai como booleano, no fim das preferências.
+        string semAdulto = Encoding.UTF8.GetString(EsquemaDeConfiguracoes.Escrever(new ConfiguracoesSalvas(PosicaoS2(), Preferencias.Padrao with { ConteudoAdulto = false })));
+        Afirmar.Igual(Amostra(AmostraV4).Replace("\"conteudoAdulto\": true", "\"conteudoAdulto\": false", StringComparison.Ordinal), semAdulto, "com o conteúdo adulto desligado");
     }
 
-    // A amostra v3, lida do disco como está, volta com os valores exatos: a emoção automática, sem esconderijo, solto.
+    // A amostra v4, lida do disco como está, volta com os valores exatos; com o conteúdo adulto desligado, também, sem aviso.
+    [Teste]
+    public static void Ler_AmostraV4_DevolveOsValores()
+    {
+        LeituraDasConfiguracoes lida = EsquemaDeConfiguracoes.Ler(File.ReadAllBytes(CaminhoDaAmostra(AmostraV4)));
+        Afirmar.Igual((SituacaoDaLeitura.Valida, (int?)4), (lida.Situacao, lida.Versao), "situação e versão");
+        Afirmar.Sequencia([], lida.Avisos, "avisos");
+        Afirmar.Igual(new ConfiguracoesSalvas(PosicaoS2(), Preferencias.Padrao), lida.Configuracoes, "configurações");
+
+        LeituraDasConfiguracoes desligado = Ler(Amostra(AmostraV4).Replace("\"conteudoAdulto\": true", "\"conteudoAdulto\": false", StringComparison.Ordinal));
+        Afirmar.Sequencia([], desligado.Avisos, "avisos, desligado");
+        Afirmar.Falso(desligado.Configuracoes.Preferencias.ConteudoAdulto, "desligado");
+        LeituraDasConfiguracoes invalido = Ler(Amostra(AmostraV4).Replace("\"conteudoAdulto\": true", "\"conteudoAdulto\": \"nao\"", StringComparison.Ordinal));
+        Afirmar.Verdadeiro(invalido.Configuracoes.Preferencias.ConteudoAdulto && invalido.Avisos.Count == 1, "inválido vale o padrão, ligado, com aviso");
+    }
+
+    // A amostra v3, lida do disco como está, volta com os valores exatos: a emoção automática, sem esconderijo, solto e,
+    // sem o campo da v4, com o conteúdo adulto ligado, sem aviso.
     [Teste]
     public static void Ler_AmostraV3_DevolveOsValores()
     {
@@ -602,30 +624,31 @@ internal static class EsquemaDeConfiguracoesTestes
     }
 
     // Versão futura (a Fase 8 amplia o esquema e incrementa a versão): os campos conhecidos são lidos pelas
-    // regras da v3, os novos são ignorados, e a situação avisa a raiz para não gravar por cima. A v3 é a atual, e a v2
-    // e a v1, as anteriores: as três são válidas.
+    // regras da v4, os novos são ignorados, e a situação avisa a raiz para não gravar por cima. A v4 é a atual, e a v3,
+    // a v2 e a v1, as anteriores: as quatro são válidas.
     [Teste]
     public static void Ler_VersaoFutura_LeOQueConhece()
     {
         LeituraDasConfiguracoes lida = Ler("""
-            {"schemaVersion": 4, "posicao": {"chaveMonitor": "a", "fracaoX": 0.25, "fracaoY": 1, "monitorPreferido": "b", "esconderijo": "esquerda", "presoPeloUsuario": true},
-             "preferencias": {"energia": "baixa", "volume": 7, "emocaoDominante": "travesso"}, "janelaDeConfiguracoes": {"largura": 400}}
+            {"schemaVersion": 5, "posicao": {"chaveMonitor": "a", "fracaoX": 0.25, "fracaoY": 1, "monitorPreferido": "b", "esconderijo": "esquerda", "presoPeloUsuario": true},
+             "preferencias": {"energia": "baixa", "volume": 7, "emocaoDominante": "travesso", "conteudoAdulto": false}, "janelaDeConfiguracoes": {"largura": 400}}
             """);
         Afirmar.Igual(SituacaoDaLeitura.VersaoFutura, lida.Situacao, "situação");
-        Afirmar.Igual(4, lida.Versao, "versão");
+        Afirmar.Igual(5, lida.Versao, "versão");
         Afirmar.Nulo(lida.MotivoIlegivel, "motivo");
-        Afirmar.Igual(new ConfiguracoesSalvas(new PosicaoDoPersonagem("a", 0.25, 1, default), new Preferencias(NivelDeEnergia.Baixa, true, true) { EmocaoDominante = Expressao.Travesso })
+        Afirmar.Igual(new ConfiguracoesSalvas(new PosicaoDoPersonagem("a", 0.25, 1, default), new Preferencias(NivelDeEnergia.Baixa, true, true) { EmocaoDominante = Expressao.Travesso, ConteudoAdulto = false })
             {
                 Esconderijo = LadoDoEsconderijo.Esquerda,
                 PresoPeloUsuario = true,
             },
-            lida.Configuracoes, "valores da v3");
+            lida.Configuracoes, "valores da v4");
 
         Afirmar.Igual(SituacaoDaLeitura.VersaoFutura, Ler("""{"schemaVersion": 2147483647}""").Situacao, "a maior versão possível");
-        Afirmar.Igual(SituacaoDaLeitura.Valida, Ler("""{"schemaVersion": 3}""").Situacao, "a versão atual");
+        Afirmar.Igual(SituacaoDaLeitura.Valida, Ler("""{"schemaVersion": 4}""").Situacao, "a versão atual");
+        Afirmar.Igual(SituacaoDaLeitura.Valida, Ler("""{"schemaVersion": 3}""").Situacao, "a versão anterior, sem o conteúdo adulto");
         Afirmar.Igual(SituacaoDaLeitura.Valida, Ler("""{"schemaVersion": 2}""").Situacao, "a versão anterior, sem a postura");
         Afirmar.Igual(SituacaoDaLeitura.Valida, Ler("""{"schemaVersion": 1}""").Situacao, "a primeira, sem a emoção");
-        Afirmar.Igual(3, EsquemaDeConfiguracoes.VersaoAtual, "versão atual");
+        Afirmar.Igual(4, EsquemaDeConfiguracoes.VersaoAtual, "versão atual");
     }
 
     // Arquivos v1 e v2 (sem a postura) são lidos sem migração e sem aviso: sem esconderijo e solto. Com os campos nulos,
@@ -834,7 +857,7 @@ internal static class EsquemaDeConfiguracoesTestes
             new Press(default), new Click(), new DoubleClick(), new DragStart(), new DragMove(default), new DragEnd(default), new DragCancel(),
             new ContextMenu(default), new EnergyPanelOpen(), new EnergySelected(NivelDeEnergia.Alta), new EnergyPanelClose(),
             new CmdHide(), new CmdShow(), new CmdPauseAutonomy(), new CmdResumeAutonomy(), new CmdOpenSettings(), new CmdResetPosition(), new CmdExit(),
-            new CmdSetDominantEmotion(Expressao.Feliz), new Loaded(UmMonitor, null, Preferencias.Padrao), new TopologyChanged(UmMonitor), new SessionLocked(), new SessionUnlocked(),
+            new CmdSetDominantEmotion(Expressao.Feliz), new CmdSetAdultContent(false), new Loaded(UmMonitor, null, Preferencias.Padrao), new TopologyChanged(UmMonitor), new SessionLocked(), new SessionUnlocked(),
             new Suspending(), new Resumed(), new SessionEnding(), new FullscreenTargetsChanged(MonitoresOcupados.Nenhum),
             new SettingsChanged(Preferencias.Padrao), new Tick(), new MovementSignal(default), new AutonomyTimer(1), new ExpressionChange(default),
             new ItemEffectTimer(1),

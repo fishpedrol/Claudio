@@ -73,6 +73,8 @@ public static partial class Maquina
         private void InvocarItem(Item item)
         {
             if (!Enum.IsDefined(item) || !_s.Carregado || !_s.Estado.Visivel() || _s.Topologia is null || _s.Lugar is null || _cfg.MaximoDeItens < 1) return;
+            // Com o conteúdo adulto desligado (DEC-033), um item adulto não nasce.
+            if (!_s.Preferencias.ConteudoAdulto && ItemAdulto(item)) return;
             while (_s.Itens.Quantidade >= _cfg.MaximoDeItens)
             {
                 if (_s.Itens.Todos.FirstOrDefault(i => !i.NaMao) is not { } maisAntigo) return;
@@ -183,7 +185,8 @@ public static partial class Maquina
             bool acordou = false;
             switch (_s.Estado)
             {
-                case Estado.Walking:
+                // Atravessando (passo P13), espera a travessia acabar, como a pausa: o fim dela o para.
+                case Estado.Walking when _s.Movimento.Travessia is not { Tipo: TipoDeTravessia.Andando }:
                     IrPara(Estado.Idle, "ITEM_PRESS: para e olha o item");
                     break;
                 case Estado.Resting:
@@ -221,12 +224,12 @@ public static partial class Maquina
         /// <summary>
         /// Se ele pode fumar um baseado por conta própria agora (<see cref="AcoesAutonomas.FumarBaseado"/>; pedido do usuário
         /// de 2026-10-01, 19:10): só com a chave do tamagotchi ligada, em IDLE, no chão (a âncora na borda de baixo da área
-        /// útil do monitor dele), sem estar escondido, com a autonomia livre, sem item na mão do usuário e sem a onda Chapado
+        /// útil do monitor dele), com o conteúdo adulto ligado (DEC-033), sem estar escondido, com a autonomia livre, sem item na mão do usuário e sem a onda Chapado
         /// ou a paranoia na frente, para ele não emendar. A agenda só decide visível, com a autonomia livre e sem item na mão;
         /// a regra repete as três condições para valer sozinha.
         /// </summary>
         private bool PodeFumarPorContaPropria
-            => _cfg.Tamagotchi && _s.Estado == Estado.Idle && _s.Esconderijo == LadoDoEsconderijo.Nenhum
+            => _cfg.Tamagotchi && _s.Preferencias.ConteudoAdulto && _s.Estado == Estado.Idle && _s.Esconderijo == LadoDoEsconderijo.Nenhum
                 && !_s.AutonomiaPausada && !_s.PainelAberto && !AtentoAoItem
                 && _s.Lugar is { } lugar && lugar.Ancora.Y == lugar.Monitor.AreaUtil.Base
                 && !(ComOnda && _s.Onda!.Tipo is Onda.Chapado or Onda.Paranoico);
@@ -286,12 +289,12 @@ public static partial class Maquina
         /// cipó, agarrado, preso se já estava (DEC-024); no esconderijo, espiando na mesma borda (DEC-025). Se o uso começou
         /// a paranoia, ele olha pro teto, se ficou livre para isso (<see cref="OlharProTetoNoComecoDaParanoia"/>).
         /// </summary>
-        private void FimDoUso()
+        private void FimDoUso(string? regra = null)
         {
             Uso? uso = _s.Uso;
             VoltarACaraDeBase();
             if (_s.Lugar is not { } lugar) return;
-            Acomodar(lugar.Ancora, $"USING: fim do uso de {uso?.Item}", apoio: uso?.Apoio);
+            Acomodar(lugar.Ancora, regra ?? $"USING: fim do uso de {uso?.Item}", apoio: uso?.Apoio);
             if (uso is { ComecouAParanoia: true }) OlharProTetoNoComecoDaParanoia();
         }
 

@@ -61,6 +61,9 @@ public static partial class Maquina
             PesoDescansar = Peso(perfil.PesoDescansar, p.Descansar),
             PesoGesto = Peso(perfil.PesoGesto, p.Gesticular),
             PesoTrocarExpressao = Peso(perfil.PesoTrocarExpressao, p.TrocarCara),
+            // Atravessar é andar até o outro monitor (passo P13): o percentual de andar da fase vale para ele.
+            PesoAtravessar = Peso(perfil.PesoAtravessar, p.Andar),
+            PesoIrAoOutroMonitor = Peso(perfil.PesoIrAoOutroMonitor, p.Andar),
             AlturaDoPuloMinima = Dip(perfil.AlturaDoPuloMinima, p.AlturaDoPulo),
             AlturaDoPuloMaxima = Dip(perfil.AlturaDoPuloMaxima, p.AlturaDoPulo),
             ChanceDoFoguete = p.ChanceDoFoguete ?? perfil.ChanceDoFoguete,

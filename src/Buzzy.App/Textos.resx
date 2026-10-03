@@ -101,6 +101,10 @@
     <value>&amp;Recolher itens</value>
     <comment>Tira todos os itens da tela. As 14 linhas do submenu dos itens têm teclas de acesso diferentes.</comment>
   </data>
+  <data name="MenuConteudoAdulto" xml:space="preserve">
+    <value>Conteúdo &amp;adulto</value>
+    <comment>Liga ou desliga o conteúdo adulto do tamagotchi (DEC-033), com a marca quando ligado. No menu principal, A é só dele.</comment>
+  </data>
   <data name="ItemBanana" xml:space="preserve">
     <value>&amp;Banana</value>
     <comment>Itens do submenu, na ordem do enum Item: só o nome de cada um, sem descrição (DEC-028, tom de desenho animado).</comment>

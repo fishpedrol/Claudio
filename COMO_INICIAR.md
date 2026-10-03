@@ -1,49 +1,34 @@
 # Como iniciar o Buzzy
 
-> **Estado atual:** o Buzzy aparece como o macaquinho em pixel art com o chapéu de palha
-> (`docs/IDENTIDADE_VISUAL.md`). Pode ser arrastado com o mouse e, sozinho, anda pelo chão, escala as
-> laterais da tela (inclusive a que encosta no outro monitor), pendura-se num cipó na borda de cima,
-> pula, quica como borracha e descansa. Pelo menu, você escolhe a emoção dominante dele e invoca itens
-> do "tamagotchi adulto", que ele usa quando você os arrasta até ele (seção 5). Essa parte já passou
-> por testes automáticos e por uma verificação na tela, com cliques e teclas injetados por uma
-> ferramenta de teste, não por uma pessoa; falta você conferir os desenhos, as animações e o tom.
-> Ao abrir de novo, ele volta onde estava quando você o fechou, escondido ou preso do mesmo jeito e
-> com a mesma emoção dominante (seção 5). Isso passou por testes automáticos, que abrem o Buzzy de
-> verdade com um perfil de teste, mas ainda não pela verificação na tela nem por você. Desde
-> 2026-10-01, comer ou beber algo sem álcool acalma o efeito de um item aos poucos, e misturar uma
-> droga sintética do jogo com outra substância pode deixá-lo paranoico, de desenho animado; desde
-> 2026-10-02, de vez em quando ele fuma um baseado por conta própria, parado no chão (seção 5). Isso
-> passou por testes automáticos, inclusive os que abrem o Buzzy, mas ainda não pela verificação na
-> tela nem por você. Sozinho, ele ainda fica no monitor em que está: atravessar para o outro monitor
-> chega com a Fase 5, em andamento. As poses ainda são quadros fixos por estado; as animações
-> completas chegam na Fase 6.
+> **Estado atual:** o Buzzy é o macaquinho em pixel art com o chapéu de palha. Dá para arrastá-lo com o
+> mouse, e sozinho ele anda pelo chão, escala as laterais da tela (inclusive a que encosta no outro
+> monitor), pendura-se num cipó na borda de cima, pula, quica como borracha e descansa. Pelo menu, você
+> escolhe a emoção dominante dele e invoca itens do "tamagotchi adulto", que ele usa quando você os
+> arrasta até ele (seção 5). Ao abrir de novo, ele volta onde estava. Tudo isso passou por testes
+> automáticos e por verificações na tela feitas por uma ferramenta, com cliques e teclas injetados, não
+> por uma pessoa: falta você conferir os desenhos, as animações e o tom. Ele também passa sozinho de
+> um monitor para o outro: andando, num pulo ou subindo pela parede. As poses ainda são quadros fixos (as
+> animações chegam na Fase 6). O estado detalhado está em `docs/PROJECT_CONTEXT.md`.
 
 ## 1. Antes da primeira vez
 
 - **Windows 11.**
-- **SDK do .NET 10.** O projeto fixa a versão 10.0.401 (arquivo `global.json`). Para conferir, abra o
-  PowerShell e rode:
-
-  ```powershell
-  dotnet --list-sdks
-  ```
-
-  A lista precisa ter uma linha começando com `10.0.`. Se não tiver, instale o SDK do .NET 10 pelo site
-  oficial da Microsoft (dotnet.microsoft.com).
+- **SDK do .NET 10.** O projeto fixa a versão 10.0.401 (arquivo `global.json`). Para conferir, rode no
+  PowerShell `dotnet --list-sdks`: a lista precisa ter uma linha começando com `10.0.`. Se não tiver,
+  instale o SDK do .NET 10 pelo site oficial da Microsoft (dotnet.microsoft.com).
 
 ## 2. Compilar
 
 No PowerShell, dentro da pasta do projeto:
+
 ```powershell
 cd C:\Users\Cliente\Documents\claudio
 dotnet build src\Buzzy.App\Buzzy.App.csproj -c Release
 ```
 
-Deu certo quando o fim da saída mostra `0 Erro(s)` e `Resumo: APROVADO`. Esse resumo vem do portão
-de segurança, que roda sozinho depois de cada build.
-
-Só é preciso compilar de novo quando o código mudar. Feche o Buzzy antes de recompilar; com ele aberto,
-o build falha porque o arquivo está em uso.
+Deu certo quando o fim da saída mostra `0 Erro(s)` e `Resumo: APROVADO` (o portão de segurança, que
+roda sozinho depois de cada build). Só é preciso compilar de novo quando o código mudar. Feche o Buzzy
+antes: com ele aberto, o build falha porque o arquivo está em uso.
 
 ## 3. Abrir o mascote
 
@@ -51,21 +36,21 @@ o build falha porque o arquivo está em uso.
 .\src\Buzzy.App\bin\Release\net10.0-windows\Buzzy.exe
 ```
 
-Outro jeito é dar dois cliques em `Buzzy.exe` nessa pasta pelo Explorador de Arquivos. Para ter um
-atalho na área de trabalho, clique com o botão direito em `Buzzy.exe` → **Mostrar mais opções** →
-**Enviar para** → **Área de trabalho (criar atalho)**.
+Ou dê dois cliques em `Buzzy.exe` nessa pasta. Para um atalho na área de trabalho: botão direito em
+`Buzzy.exe` → **Mostrar mais opções** → **Enviar para** → **Área de trabalho (criar atalho)**. Não use
+"Executar como administrador": o Buzzy recusa rodar assim e mostra um aviso.
 
-Não use "Executar como administrador": o Buzzy recusa rodar assim e mostra um aviso.
+A cópia da pasta `net10.0-windows` na sua Área de Trabalho foi atualizada em 2026-10-02.
 
 ## 4. O que você vai ver
 
 - Na primeira vez, o personagem aparece no canto inferior direito do monitor principal, com os pés
-  logo acima da barra de tarefas. Nas outras, aparece onde estava quando você o fechou (seção 5).
+  logo acima da barra de tarefas; nas outras, onde estava quando você o fechou.
 - Ele fica sempre por cima das outras janelas e não aparece na barra de tarefas nem no Alt+Tab.
-- Clicar nele não tira o foco do programa que você está usando. Clicar nas partes transparentes em
+- Clicar nele não tira o foco do programa que você está usando, e clicar nas partes transparentes em
   volta dele atinge o que está embaixo.
 - Um ícone do Buzzy vai para a bandeja, perto do relógio. No Windows 11, ícones novos ficam escondidos
-  na setinha **^**. Para deixá-lo sempre visível: **Configurações** → **Personalização** → **Barra de
+  na setinha **^**; para deixá-lo sempre visível: **Configurações** → **Personalização** → **Barra de
   tarefas** → **Outros ícones da bandeja do sistema** → ative **Buzzy**.
 
 ## 5. Como usar
@@ -75,82 +60,58 @@ Não use "Executar como administrador": o Buzzy recusa rodar assim e mostra um a
 | Mudar o Buzzy de lugar | Clique nele e arraste; solto no meio do ar, ele cai até o chão (e quica, se cair de alto) |
 | Pendurar no cipó | Arraste até perto da borda de cima e solte: ele agarra um cipó e fica lá até você tirá-lo |
 | Grudar numa parede | Arraste até perto de uma lateral da tela e solte: ele gruda na parede e fica lá até você tirá-lo |
-| Esconder o Buzzy na borda | Dois cliques nele: ele se esconde atrás da barra de tarefas (ou da lateral, se estiver numa parede), só com a cabeça e as mãos para fora. Dois cliques de novo tiram ele de lá |
+| Esconder o Buzzy na borda | Dois cliques nele: ele se esconde atrás da barra de tarefas (ou da lateral, se estiver numa parede), só com a cabeça e as mãos para fora. Dois cliques de novo o tiram de lá |
 | Ver uma reação | Clique nele uma vez |
-| Fazer ele ficar quieto | Menu → **Pausar movimento**. Para voltar a circular: menu → **Retomar movimento** |
+| Fazer ele ficar quieto | Menu → **Pausar movimento**; para voltar a circular, **Retomar movimento** |
 | Abrir o menu | Botão direito no personagem, num item ou no ícone da bandeja |
-| Escolher a emoção dominante | Menu → **Emoção dominante** → uma das caras, com o rosto ao lado do nome. Ela vira a cara de base e a mais frequente. **Automática** volta ao jeito de sempre. A opção atual fica marcada |
-| Invocar um item | Menu → **Itens** → o item. Ele aparece ao lado do Buzzy, cai no chão e fica esperando. Cabem até 6; o sétimo tira o mais antigo |
-| Dar um item a ele | Arraste o item com o mouse até o Buzzy e solte em cima dele: ele usa o item, com a animação do item e um efeito de desenho animado que passa sozinho. Clicar no item ou soltá-lo longe não faz ele usar: o item fica onde está ou cai de onde foi solto |
-| Interromper o uso | Clique no Buzzy ou arraste-o, também quando ele fuma sozinho. O efeito continua até passar sozinho |
-| Acalmar o efeito aos poucos | Dê a ele comida ou bebida sem álcool: **banana**, **água**, **café** ou **energético**. Cada um acalma um passo o efeito de uma substância, sem trazer o efeito dele; a água acalma qualquer efeito. Vários seguidos levam o efeito até o fim |
+| Escolher a emoção dominante | Menu → **Emoção dominante** → uma das caras, com o rosto ao lado do nome: ela vira a cara de base e a mais frequente. **Automática** volta ao jeito de sempre |
+| Invocar um item | Menu → **Itens** → o item. Ele aparece ao lado do Buzzy, cai no chão e espera. Cabem até 6; o sétimo tira o mais antigo |
+| Dar um item a ele | Arraste o item até o Buzzy e solte em cima dele: ele usa o item, com a animação dele e um efeito de desenho animado que passa sozinho. Clicar no item ou soltá-lo longe não faz ele usar |
+| Interromper o uso | Clique no Buzzy ou arraste-o, também quando ele fuma sozinho. O efeito continua até passar |
+| Acalmar o efeito aos poucos | Dê comida ou bebida sem álcool: **banana**, **água**, **café** ou **energético**. Cada um acalma um passo o efeito de uma substância; a água acalma qualquer efeito |
 | Tirar os itens da tela | Menu → **Itens** → **Recolher itens** |
+| Ligar ou desligar o conteúdo adulto | Menu → **Conteúdo adulto** (marcado quando ligado, o padrão). Desligado, **Itens** só tem banana, água, café e energético; os outros itens saem da tela, os efeitos de substância acabam e ele não fuma sozinho. A escolha é lembrada ao reabrir |
 | Esconder o Buzzy | Menu → **Esconder Buzzy** |
 | Mostrar de novo | Clique no ícone da bandeja, ou menu da bandeja → **Mostrar Buzzy**, ou abra o `Buzzy.exe` outra vez |
 | Fechar | Menu → **Sair** |
 
-Com o menu aberto, dá para usar o teclado: cada opção tem uma letra, a sublinhada quando o Windows
-mostra os sublinhados. Por exemplo, **D** e depois **F** escolhem a emoção **Feliz**, e **I** e
-depois **B** invocam a **Banana**. Com o Buzzy
-escondido, **Itens** fica indisponível; a emoção pode ser escolhida e aparece quando ele voltar.
+Com o menu aberto, cada opção tem uma letra (a sublinhada): por exemplo, **D** e depois **F** escolhem
+a emoção **Feliz**, **I** e depois **B** invocam a **Banana**, e **A** liga ou desliga o conteúdo adulto. Com o Buzzy escondido, **Itens** fica
+indisponível; a emoção pode ser escolhida e aparece quando ele voltar.
 
-**Os efeitos são de desenho animado** e passam sozinhos. Desde 2026-10-01:
+**Os efeitos são de desenho animado** e passam sozinhos:
 
-- **Comida e bebida sem álcool acalmam aos poucos:** a banana, o café e o energético acalmam um passo
-  o efeito de uma substância; a água, qualquer efeito. Sem efeito nenhum, ou com um efeito leve, como
-  o da própria banana ou o do café, a banana, o café e o energético fazem o de sempre, e a água sem
-  efeito nenhum não faz nada. O tabaco, a cerveja, a vodka e as outras substâncias continuam como
-  antes.
 - **Paranoia:** se ele misturar uma droga sintética do jogo (bala, MD, cocaína ou lança-perfume) com
-  outra substância, pode ficar paranoico, "como o meme 'os cara tá no teto'": sua, treme, olha e
-  aponta pro teto e se agacha segurando o chapéu. A chance é de 1 em 8, sorteada uma vez por mistura:
-  usar mais coisas na mesma leva não aumenta a chance, e só uma leva nova, depois que os efeitos
-  passam por completo, tem a sua. Álcool e maconha, sozinhos ou juntos, nunca o deixam paranoico, nem
-  uma sintética sozinha, repetida. Comida e bebida sem álcool também acalmam a paranoia aos poucos.
-- **A bala** é droga sintética nessa regra do jogo: agora ela dá o efeito eufórico, com corações em
-  volta da cabeça, e pode entrar numa mistura. O desenho dela não mudou.
-- **Baseado por conta própria** (desde 2026-10-02): de vez em quando, parado no chão e sem estar
-  chapado, ele fuma um baseado sozinho, tirado do chapéu: nenhum item aparece na tela, e o efeito é o
-  mesmo do baseado do menu. Na energia Média, é mais ou menos um a cada 4 minutos em que ele fica
-  parado no chão, ou um a cada 14 ou 15 minutos no total; sem você dar nada a ele, ele fica chapado
-  cerca de 39% do tempo (20% na Baixa e 55% na Alta). Ele não acende outro já chapado ou paranoico,
-  nem fuma escondido, no ar ou enquanto você segura um item. Um clique nele interrompe, como em todo
-  uso, e com **Pausar movimento** ele não fuma. Enquanto ele fuma (3,5 s), um item solto nele não é
-  usado: cai, como em todo uso. O baseado não é droga sintética, mas conta na mistura: uma droga
-  sintética dada a ele chapado do baseado dele, ou ele fumando depois dela, pode deixá-lo paranoico
-  (1 em 8 por leva).
+  outra substância, pode ficar paranoico, "como o meme 'os cara tá no teto'": sua, treme, olha e aponta
+  pro teto e se agacha segurando o chapéu. A chance é de 1 em 8, sorteada uma vez por mistura; só uma
+  leva nova, depois que os efeitos passam, tem outra chance. Álcool e maconha nunca o deixam paranoico,
+  nem uma sintética sozinha, repetida. Comida e bebida sem álcool também a acalmam aos poucos.
+- **A bala** é droga sintética nessa regra do jogo: dá o efeito eufórico, com corações em volta da
+  cabeça, e pode entrar numa mistura. O desenho dela continua o de um doce.
+- **Baseado por conta própria:** de vez em quando, parado no chão, ele fuma um baseado tirado do
+  chapéu, sem item na tela, com o mesmo efeito do baseado do menu — na energia Média, mais ou menos um a
+  cada 14 ou 15 minutos, e chapado cerca de 39% do tempo se ninguém der nada a ele. Não acende outro já
+  chapado ou paranoico, nem fuma escondido, no ar, pausado ou enquanto você segura um item; um clique o
+  interrompe. Enquanto ele fuma (3,5 s), um item solto nele cai. O baseado conta na mistura: uma
+  sintética dada com ele chapado do baseado dele pode deixá-lo paranoico (1 em 8 por leva).
 
 A divisão dos itens é só regra do jogo, de desenho animado, e não diz nada sobre o mundo real.
 
-**Cópia na Área de Trabalho:** o Buzzy da pasta `net10.0-windows` na sua Área de Trabalho foi
-atualizado em 2026-10-02 e já tem essas regras: a paranoia por mistura, a bala sintética e o
-baseado por conta própria.
+**Ao abrir de novo**, o Buzzy lembra o lugar onde estava, no mesmo monitor (se aquele monitor não
+estiver ligado, a mesma posição relativa de um monitor no mesmo lugar e do mesmo tamanho ou, sem
+nenhum, do principal); se estava escondido na borda, volta escondido no mesmo lado; se você o deixou
+preso na parede ou no cipó, continua preso; e a emoção dominante. Os itens somem quando você o fecha,
+de propósito, e escondido pelo menu ele reaparece ao abrir. Ele guarda isso sozinho, pouco depois de
+você soltá-lo, escondê-lo ou escolher uma emoção, e na hora ao sair ou quando o Windows encerra a
+sessão; fechado à força, vale o que já estava guardado. Abrir o `Buzzy.exe` com ele aberto só traz de
+volta o que já está rodando.
 
-Ao abrir de novo, o Buzzy lembra:
-
-- o lugar onde estava, no mesmo monitor. Se aquele monitor não estiver ligado, ele aparece na mesma
-  posição relativa de um monitor no mesmo lugar e com o mesmo tamanho ou, sem nenhum, do principal;
-- se estava escondido na borda, volta escondido no mesmo lado; se você o deixou preso na parede ou no
-  cipó, continua preso lá;
-- a emoção dominante escolhida.
-
-Os itens somem quando você fecha o Buzzy, de propósito. Escondido pelo menu (**Esconder Buzzy**), ele
-reaparece ao abrir de novo.
-
-Ele guarda isso sozinho, pouco depois de você soltá-lo, escondê-lo ou escolher uma emoção, e na hora
-ao sair ou quando o Windows encerra a sessão. Se o programa for fechado à força, vale o que já estava
-guardado.
-
-Abrir o `Buzzy.exe` com ele já aberto não cria um segundo Buzzy: só traz de volta o que já está
-rodando.
-
-O Buzzy não usa a internet e não lê outros programas. Ele guarda a posição, o esconderijo, o "preso"
-e as preferências em `%LOCALAPPDATA%\Buzzy\settings.json`, com a versão anterior do arquivo em
-`settings.json.bak`. Para abrir essa pasta, digite `%LOCALAPPDATA%\Buzzy` na barra de endereços do
-Explorador de Arquivos. Se o `settings.json` estiver estragado, ele usa a cópia `.bak` ou, sem ela,
-começa do jeito padrão; na próxima vez que gravar, guarda o arquivo estragado como
-`settings.corrupt.json`. Fora isso, só grava o log de diagnóstico, com a opção `--diagnostico`
-(abaixo).
+O Buzzy não usa a internet e não lê outros programas. Guarda a posição, o esconderijo, o "preso" e as
+preferências em `%LOCALAPPDATA%\Buzzy\settings.json` (digite `%LOCALAPPDATA%\Buzzy` na barra de
+endereços do Explorador de Arquivos), com a versão anterior em `settings.json.bak`. Se o
+`settings.json` estiver estragado, ele usa a cópia `.bak` ou, sem ela, começa do jeito padrão, e na
+próxima gravação guarda o estragado como `settings.corrupt.json`. Fora isso, só grava o log de
+diagnóstico, com a opção `--diagnostico`.
 
 ## 6. Se algo der errado
 
@@ -159,31 +120,26 @@ começa do jeito padrão; na próxima vez que gravar, guarda o arquivo estragado
 | Aviso "O Buzzy não roda como administrador" | Abra de novo normalmente, sem "Executar como administrador" |
 | O Windows pede para baixar o .NET | Falta o .NET 10: instale o SDK (item 1) |
 | O personagem sumiu | Clique no ícone da bandeja ou abra o `Buzzy.exe` de novo |
-| Nada aparece, ou para relatar um problema | Abra com `Buzzy.exe --diagnostico`. Ele registra só eventos do próprio Buzzy em `%LOCALAPPDATA%\Buzzy\diagnostico.log` (até 1 MB) |
+| Nada aparece, ou para relatar um problema | Abra com `Buzzy.exe --diagnostico`: ele registra só eventos do próprio Buzzy em `%LOCALAPPDATA%\Buzzy\diagnostico.log` (até 1 MB) |
 | O build falha com o arquivo em uso | Feche o Buzzy (menu → **Sair**) e compile de novo |
-| Ele volta sempre a um lugar ruim e você quer a posição inicial | Feche o Buzzy (menu → **Sair**) e só então apague `settings.json` e `settings.json.bak` em `%LOCALAPPDATA%\Buzzy`. Apague os dois: sem o primeiro, ele usaria a cópia `.bak`. Com o Buzzy aberto não adianta, porque ele grava de novo ao sair. Ele volta ao canto inferior direito do principal e à emoção automática |
+| Ele volta sempre a um lugar ruim e você quer a posição inicial | Feche o Buzzy (menu → **Sair**) e só então apague `settings.json` e `settings.json.bak` em `%LOCALAPPDATA%\Buzzy` — os dois, porque sem o primeiro ele usaria a cópia `.bak`; com ele aberto não adianta, porque grava de novo ao sair. Ele volta ao canto inferior direito do principal e à emoção automática |
 
 ## 7. Para quem desenvolve
 
-- Testes sem abrir janelas: `powershell -NoProfile -File tools\testar.ps1`.
-- Testes que abrem janelas ou movem o cursor, e a medição de desempenho: consulte os comandos e limites em
-  `docs/PROJECT_CONTEXT.md`. Avise quem estiver usando o computador antes de rodá-los.
-- Com `--diagnostico`, cada sorteio da paranoia, saindo ou não, vira uma linha `PARANOIA` no log, com o
-  item, a chance, se saiu e as contagens da mistura, por exemplo
-  `PARANOIA|item=Bala|chance=1 em 8|saiu=sim|substancias=2|distintas=Vodka,Bala`. O sorteio que não
-  sai só aparece nessa linha; o contrato das linhas está em `docs/ARCHITECTURE.md`, seção 2.13.4.
-- Com `--diagnostico`, quando ele fuma sozinho, a linha `NUCLEO` da transição traz a regra, por
-  exemplo
-  `NUCLEO|evento=AutonomyTimer|motivo=agenda autônoma geração 1|de=Idle|para=Using|regra=IDLE + AUTONOMY_TIMER: Fumar Baseado por conta própria`.
-  Não há linha `ITEM`, porque nenhum item aparece; os quadros do fumar saem nas linhas `SPRITE`, com
-  `item=baseado`.
-- Sem opção nenhuma, o Buzzy lê e grava as suas configurações reais, em `%LOCALAPPDATA%\Buzzy`.
-- Para testar sem mexer nas suas configurações, abra o Buzzy com `--perfil-de-teste NOME`, por exemplo
-  `Buzzy.exe --perfil-de-teste meu-teste`. Os dados dele ficam em `%LOCALAPPDATA%\Buzzy\testes\NOME`.
-  O nome tem até 32 caracteres: letras minúsculas sem acento, algarismos e hífen, que não pode vir no
-  começo. Escreva a opção exatamente assim, separada do nome por um espaço: com outra grafia
-  (`--perfil-de-teste=NOME`, maiúsculas, `/perfil-de-teste`) ou com um nome inválido, o Buzzy não lê
-  nem guarda configuração nenhuma naquela vez. Os testes e as ferramentas do projeto já fazem isso
-  sozinhos e conferem, antes e depois, que os seus arquivos reais não mudaram, olhando só a existência,
-  o tamanho e as datas, nunca o conteúdo. Se você abrir o seu Buzzy enquanto eles rodam, essa
-  conferência pode falhar.
+- Testes sem abrir janelas: `powershell -NoProfile -File tools\testar.ps1`. Testes que abrem janelas ou
+  movem o cursor e a medição de desempenho: comandos e limites em `docs/PROJECT_CONTEXT.md`. Avise quem
+  estiver usando o computador antes de rodá-los.
+- Sem opção nenhuma, o Buzzy lê e grava as suas configurações reais. Para testar sem mexer nelas, abra
+  com `--perfil-de-teste NOME` (por exemplo, `Buzzy.exe --perfil-de-teste meu-teste`): os dados ficam
+  em `%LOCALAPPDATA%\Buzzy\testes\NOME`. O nome tem até 32 caracteres — letras minúsculas sem acento,
+  algarismos e hífen, que não pode vir no começo —, e a opção precisa ser escrita exatamente assim,
+  separada do nome por um espaço; com outra grafia (`--perfil-de-teste=NOME`, maiúsculas,
+  `/perfil-de-teste`) ou um nome inválido, o Buzzy não lê nem guarda configuração nenhuma naquela vez.
+  Os testes e as ferramentas do projeto já fazem isso e conferem, antes e depois, que os seus arquivos
+  reais não mudaram (só existência, tamanho e datas, nunca o conteúdo); com o seu Buzzy aberto enquanto
+  eles rodam, essa conferência pode falhar.
+- Com `--diagnostico`, cada sorteio da paranoia, saindo ou não, vira uma linha `PARANOIA` no log (por
+  exemplo `PARANOIA|item=Bala|chance=1 em 8|saiu=sim|substancias=2|distintas=Vodka,Bala`), e o baseado
+  por conta própria aparece na linha `NUCLEO` da transição, com a regra
+  `IDLE + AUTONOMY_TIMER: Fumar Baseado por conta própria`, sem linha `ITEM`. O contrato das linhas
+  está em `docs/ARCHITECTURE.md`, seção 2.13.4.

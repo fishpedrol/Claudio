@@ -403,7 +403,7 @@ internal sealed class AgendaDeGravacaoTestes : IDisposable
         string pasta = NovaPasta();
         Directory.CreateDirectory(pasta);
         string principal = Path.Combine(pasta, ArquivoDeConfiguracoes.NomePrincipal);
-        byte[] futura = """{"schemaVersion": 4, "preferencias": {"energia": "alta"}}"""u8.ToArray();
+        byte[] futura = """{"schemaVersion": 5, "preferencias": {"energia": "alta"}}"""u8.ToArray();
         File.WriteAllBytes(principal, futura);
         AgendaDeGravacao agenda = Nova(new ArquivoDeConfiguracoes(pasta));
         Afirmar.Falso(agenda.Ligada, "bloqueada");

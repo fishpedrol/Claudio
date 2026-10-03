@@ -32,10 +32,10 @@ internal sealed class ArquivoDeConfiguracoesTestes : IDisposable
 
     private static readonly byte[] Lixo = "{ lixo"u8.ToArray();
 
-    /// <summary>Versão futura (a 4, depois da v3 atual) com campos que a v3 não conhece, na raiz, na posição e nas preferências.</summary>
+    /// <summary>Versão futura (a 5, depois da v4 atual) com campos que a v4 não conhece, na raiz, na posição e nas preferências.</summary>
     private static readonly byte[] Futura = """
         {
-          "schemaVersion": 4,
+          "schemaVersion": 5,
           "posicao": { "chaveMonitor": "\\\\.\\DISPLAY2", "fracaoX": 0.25, "fracaoY": 1, "campoNovo": [1, 2] },
           "preferencias": { "energia": "alta", "preferenciaNova": "x" },
           "secaoNova": { "a": 1 }
@@ -302,7 +302,7 @@ internal sealed class ArquivoDeConfiguracoesTestes : IDisposable
         Afirmar.Igual(OrigemDasConfiguracoes.Principal, lida.Origem);
         Afirmar.Igual(EstadoDoArquivo.VersaoFutura, lida.Principal);
         Afirmar.Nulo(lida.Reserva, "a reserva nem é consultada");
-        Afirmar.Igual<int?>(4, lida.Versao);
+        Afirmar.Igual<int?>(5, lida.Versao);
         Afirmar.Verdadeiro(lida.GravacaoBloqueada);
         PosicaoDoPersonagem posicao = Afirmar.NaoNulo(lida.Configuracoes.Posicao);
         Afirmar.Igual(@"\\.\DISPLAY2", posicao.ChaveMonitor);

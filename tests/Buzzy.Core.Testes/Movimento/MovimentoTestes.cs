@@ -47,7 +47,12 @@ internal static class MovimentoTestes
         // os pés ficam no chão e ele fica centralizado (Posicionador.PrenderNaAreaUtil).
         RetanguloPx area = l.Monitor.AreaUtil;
         bool cabe = l.Tamanho.Largura <= area.Largura && l.Tamanho.Altura <= area.Altura;
-        if (cabe && s.Estado.Grupo() is GrupoDoEstado.Autonomo or GrupoDoEstado.Fisico)
+        // No meio de uma travessia em curso (Fase 5, passo P13: andando, ou no voo do salto de degrau), o sprite fica montado
+        // entre dois monitores, inteiro na união das áreas úteis (invariante 21).
+        bool emTravessia = s.Movimento.Travessia is { } tr && (s.Estado == Estado.Jumping || (s.Estado == Estado.Walking && tr.Tipo == TipoDeTravessia.Andando));
+        if (emTravessia)
+            Afirmar.Verdadeiro(Passagens.NaUniaoDasAreasUteis(s.Topologia, l.Retangulo), $"{onde}: {s.Estado} atravessando com o sprite {l.Retangulo} na união das áreas úteis");
+        else if (cabe && s.Estado.Grupo() is GrupoDoEstado.Autonomo or GrupoDoEstado.Fisico)
             Afirmar.Verdadeiro(area.Contem(l.Retangulo), $"{onde}: {s.Estado} com o sprite {l.Retangulo} inteiro na área útil {area}");
     }
 

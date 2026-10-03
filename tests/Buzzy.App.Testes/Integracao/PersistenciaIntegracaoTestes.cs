@@ -172,7 +172,7 @@ internal sealed class PersistenciaIntegracaoTestes
             }
 
             LeituraDasConfiguracoes lida = LerDoPerfil();
-            Afirmar.Igual((SituacaoDaLeitura.Valida, (int?)3, 0), (lida.Situacao, lida.Versao, lida.Avisos.Count), "o arquivo do perfil é a v3, sem aviso");
+            Afirmar.Igual((SituacaoDaLeitura.Valida, (int?)4, 0), (lida.Situacao, lida.Versao, lida.Avisos.Count), "o arquivo do perfil é a v4, sem aviso");
             PosicaoDoPersonagem salva = Afirmar.NaoNulo(lida.Configuracoes.Posicao, "posição salva");
             Afirmar.Igual((alvo.Chave, (RetanguloPx?)alvo.Tela), (salva.ChaveMonitor, salva.TelaDoMonitor), "a chave estável e a tela do monitor");
             Afirmar.Igual((LadoDoEsconderijo.Nenhum, false), (lida.Configuracoes.Esconderijo, lida.Configuracoes.PresoPeloUsuario), "no chão, sem esconderijo e solto");
@@ -238,6 +238,50 @@ internal sealed class PersistenciaIntegracaoTestes
 
                 List<EventoDoLog> saida = FecharEGravar(b);
                 Afirmar.Sequencia(["sem mudanca/CmdExit"], saida.Select(e => $"{e["gravado"]}/{e["motivo"]}"), "a saída não regrava o que o fim do gesto gravou");
+            }
+
+            PosicaoDoPersonagem salva = Afirmar.NaoNulo(LerDoPerfil().Configuracoes.Posicao, "posição salva");
+            Afirmar.Igual(destino, salva.AncoraAbsoluta, "o arquivo do perfil tem o lugar do soltar");
+        });
+    }
+
+    // A descarga na suspensão (Fase 5, passo P11; DEC-031): soltar pede a gravação com atraso, e minimizar esconde o
+    // personagem, com o pedido ainda pendente. Escondido pelo usuário, a SUSPENDING não muda o estado nem pede gravação ao
+    // núcleo; mesmo assim, o tratador da suspensão descarrega o pendente na hora, sem esperar o atraso de 2 s, que, com a
+    // máquina dormindo, só cairia depois de acordar (ou nunca, se a bateria acabar). A mensagem vai ao HWND de serviço deste
+    // Buzzy de teste por envio síncrono, como o Windows faz.
+    [Teste]
+    public void Suspensao_ComOPersonagemEscondido_DescarregaAGravacaoPendenteNaHora()
+    {
+        SemTocarNosArquivosReais(() =>
+        {
+            PontoPx destino;
+            using (BuzzyEmTeste b = BuzzyEmTeste.Iniciar(perfil: Perfil))
+            {
+                b.Esperar(e => e.Chave == "NUCLEO" && e["evento"] == "Loaded" && e["para"] == "Idle", 5000, "núcleo carregado");
+                RetanguloPx inicio = b.RetanguloDaJanela();
+                destino = new PontoPx(Ancora(inicio).X - 300, Ancora(inicio).Y);
+
+                (long marca, _) = Arrastar(b, destino, inicio.Tamanho);
+                Nucleo(b, marca, "DragEnd", "Settling", "Idle", 3000, "no chão, 300 px à esquerda");
+                EsperarDesde(b, marca, e => e.Chave == "CONFIG" && e["pedido"] == "posicao" && e["evento"] == "DragEnd" && e["imediata"] == "nao", 3000, "o pedido com atraso");
+
+                b.MinimizarPorFora(b.Janela, "SW_SHOWMINNOACTIVE");
+                EsperarDesde(b, marca, e => e.Chave == "VISIVEL" && e["visivel"] == "nao", 3000, "escondido ao ser minimizado");
+
+                long marcaDaSuspensao = BuzzyEmTeste.MarcaDoLog();
+                Afirmar.Verdadeiro(BuzzyEmTeste.EventosDesde(marca).All(e => !(e.Chave == "CONFIG" && e.Campos.ContainsKey("gravado"))), "nada gravado antes da suspensão: o pedido continua pendente");
+                Afirmar.Verdadeiro(b.Enviar(b.Servico, NativoTeste.WM_POWERBROADCAST, NativoTeste.PBT_APMSUSPEND, 0, "PBT_APMSUSPEND") != 0, "suspensão entregue à janela de serviço deste Buzzy");
+                EventoDoLog mensagem = EsperarDesde(b, marcaDaSuspensao, e => e.Chave == "MENSAGEM" && e["tipo"].EndsWith("PBT_APMSUSPEND", StringComparison.Ordinal), 1000, "a mensagem da suspensão");
+                EventoDoLog gravado = EsperarDesde(b, marcaDaSuspensao, e => e.Chave == "CONFIG" && e.Campos.ContainsKey("gravado"), 3000, "a gravação depois da suspensão");
+                Afirmar.Igual(("sim", "Suspending"), (gravado["gravado"], gravado["motivo"]), "o pendente gravado pela suspensão, não pelo atraso");
+                double ms = (gravado.Instante - mensagem.Instante).TotalMilliseconds;
+                Afirmar.Verdadeiro(ms < 500, $"na hora, no tratamento da mensagem: {ms:0} ms");
+
+                // Nada sobra agendado: o atraso foi cancelado pela descarga.
+                Thread.Sleep(2500);
+                Afirmar.Igual(1, BuzzyEmTeste.EventosDesde(marcaDaSuspensao).Count(e => e.Chave == "CONFIG" && e["gravado"] == "sim"), "uma gravação só: o disparo com atraso foi cancelado");
+                Afirmar.Igual(0, b.FecharPorWmClose(), "código de saída");
             }
 
             PosicaoDoPersonagem salva = Afirmar.NaoNulo(LerDoPerfil().Configuracoes.Posicao, "posição salva");

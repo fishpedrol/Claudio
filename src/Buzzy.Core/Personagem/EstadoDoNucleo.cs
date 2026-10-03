@@ -191,6 +191,7 @@ public sealed record EstadoDoNucleo
         Sinal)
     {
         EmocaoDominante = Preferencias.EmocaoDominante,
+        ConteudoAdulto = Preferencias.ConteudoAdulto,
         Onda = Onda,
         OndaDeFundo = OndaDeFundo,
         Carga = Carga.Substancias,
@@ -223,6 +224,9 @@ public sealed record Retrato(
     /// <summary>A emoção dominante escolhida (DEC-027), para a marca no menu; nula, "Automática".</summary>
     public Expressao? EmocaoDominante { get; init; }
 
+    /// <summary>A chave do conteúdo adulto (DEC-033), para a marca no menu; ligada por padrão.</summary>
+    public bool ConteudoAdulto { get; init; } = true;
+
     /// <summary>A onda do item em curso (DEC-028): tipo, fase e nível, para as sobreposições da apresentação; nula sem onda.</summary>
     public EstadoDaOnda? Onda { get; init; }
 
@@ -247,7 +251,7 @@ public sealed record Retrato(
     /// <summary>
     /// Linha canônica, na cultura invariante, usada nas reproduções gravadas. A onda de um item (<c>onda=Tipo/Fase/Nível</c>),
     /// a de fundo (<c>fundo=</c>), a carga da paranoia (<c>carga=</c>, só acima de 0), o uso
-    /// (<c>uso=Item/Verbo/PassodeDuração/Apoio</c>), a emoção dominante (<c>emocao=</c>) e os itens
+    /// (<c>uso=Item/Verbo/PassodeDuração/Apoio</c>), a emoção dominante (<c>emocao=</c>), o conteúdo adulto desligado (<c>adulto=nao</c>, DEC-033) e os itens
     /// (<c>itens=[Id:Item:Situação:(x,y);…]</c>) só aparecem quando há: sem eles, a linha é a de antes (referências
     /// gravadas 01 a 05).
     /// </summary>
@@ -259,9 +263,10 @@ public sealed record Retrato(
         string carga = Carga > 0 ? string.Create(CultureInfo.InvariantCulture, $" carga={Carga}") : "";
         string uso = Uso is { } u ? string.Create(CultureInfo.InvariantCulture, $" uso={u.Item}/{u.Verbo}/{PassoDoUso}de{u.Passos}/{u.Apoio}") : "";
         string emocao = EmocaoDominante is { } e ? $" emocao={e}" : "";
+        string adulto = ConteudoAdulto ? "" : " adulto=nao";
         string itens = Itens.Quantidade > 0 ? $" itens=[{Itens}]" : "";
         return string.Create(CultureInfo.InvariantCulture,
-            $"{estado} ancora=({Ancora.X},{Ancora.Y}) monitor={ChaveMonitor} tamanho={Tamanho.Largura}x{Tamanho.Altura} direcao={Direcao} expressao={Expressao} gesto={Gesto} pausada={SimNao(AutonomiaPausada)} painel={SimNao(PainelAberto)} energia={Energia} relogio={SimNao(RelogioAtivo)} sinal={Sinal}{onda}{fundo}{carga}{uso}{emocao}{itens}");
+            $"{estado} ancora=({Ancora.X},{Ancora.Y}) monitor={ChaveMonitor} tamanho={Tamanho.Largura}x{Tamanho.Altura} direcao={Direcao} expressao={Expressao} gesto={Gesto} pausada={SimNao(AutonomiaPausada)} painel={SimNao(PainelAberto)} energia={Energia} relogio={SimNao(RelogioAtivo)} sinal={Sinal}{onda}{fundo}{carga}{uso}{emocao}{adulto}{itens}");
     }
 
     private static string SimNao(bool valor) => valor ? "sim" : "nao";

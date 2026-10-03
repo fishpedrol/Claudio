@@ -149,6 +149,15 @@ public sealed record CmdSetDominantEmotion(Expressao? Emocao) : Evento
 }
 
 /// <summary>
+/// <c>CMD_SET_ADULT_CONTENT</c> (DEC-033): "Conteúdo adulto" no menu, ligado ou desligado. Desligar tira do mundo os itens
+/// adultos, acaba as ondas de substância e o uso de um item adulto; ligar só grava a escolha.
+/// </summary>
+public sealed record CmdSetAdultContent(bool Ligado) : Evento
+{
+    public override Origem Origem => Origem.ComandoDoUsuario;
+}
+
+/// <summary>
 /// <c>CMD_SUMMON_ITEM</c> (DEC-028): o usuário invocou um item pelo menu. Ele aparece ao lado do personagem, acima do
 /// chão, e cai. Escondido, antes da carga, fora do enum ou com o tamagotchi desligado, é ignorado.
 /// </summary>
@@ -380,4 +389,11 @@ public sealed record Preferencias(NivelDeEnergia Energia, bool ModoTelaCheia, bo
     /// ações, os pesos da agenda nem a física. Fica fora do construtor posicional, e o padrão é a automática.
     /// </summary>
     public Expressao? EmocaoDominante { get; init; }
+
+    /// <summary>
+    /// O conteúdo adulto do tamagotchi (DEC-033, pedido do usuário de 2026-10-02): os itens que não são de alívio, as ondas
+    /// de substância, a paranoia e o baseado por conta própria. Ligado por padrão; desligado, nada disso aparece nem
+    /// acontece, e o menu esconde os itens adultos. Fica fora do construtor posicional.
+    /// </summary>
+    public bool ConteudoAdulto { get; init; } = true;
 }

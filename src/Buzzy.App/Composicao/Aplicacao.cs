@@ -71,6 +71,9 @@ internal sealed partial class Aplicacao
     private readonly InstanciaUnica _instancia;
     private readonly OpcoesDaAplicacao _opcoes;
 
+    /// <summary>Ordena eventos de sessão com a releitura da topologia (Fase 5, passo P10).</summary>
+    private readonly ArbitroDeEventosDoSistema _eventosDoSistema;
+
     /// <summary>
     /// A releitura da topologia depois das mensagens do Windows (Fase 5, passo P9; crítica, C11): o agrupamento com teto, as
     /// novas tentativas e a conferência tardia, em disparos únicos na prioridade normal do Dispatcher.
@@ -140,6 +143,7 @@ internal sealed partial class Aplicacao
         _app = app;
         _instancia = instancia;
         _opcoes = opcoes ?? OpcoesDaAplicacao.Padrao;
+        _eventosDoSistema = new(evento => Enviar(evento, $"evento do sistema {evento.GetType().Name}"));
         _releitura = new AgendaDaReleitura(
             () => Stopwatch.GetElapsedTime(_origemDoRelogio),
             (espera, acao) => DisparoUnico.NoDispatcher(espera, acao, DispatcherPriority.Normal),
@@ -191,12 +195,13 @@ internal sealed partial class Aplicacao
         _servico.BandejaAcionada += AoAcionarBandeja;
         _servico.BarraDeTarefasRecriada += AoRecriarBarra;
         _servico.TopologiaPodeTerMudado += AoPossivelMudancaDeTopologia;
+        _servico.EventoDoSistema += AoEventoDoSistema;
         Diagnostico.Evento("SERVICO", ("hwnd", _servico.Hwnd));
 
         _personagem = new JanelaPersonagem();
         _personagem.Ponteiro += AoPonteiro;
         _personagem.DpiMudou += dpi => AoPossivelMudancaDeTopologia($"WM_DPICHANGED {dpi}");
-        _personagem.Minimizada += () => Adiar(() => Enviar(new CmdHide(), "minimizado pelo Windows"));
+        _personagem.Minimizada += () => Adiar(AoMinimizarPersonagem);
         _personagem.Closing += (_, e) =>
         {
             if (_encerrando) return;
@@ -331,7 +336,25 @@ internal sealed partial class Aplicacao
     {
         if (_encerrando) return;
         Diagnostico.Evento("MENSAGEM", ("tipo", motivo));
-        _releitura.Agendar(motivo);
+        TimeSpan esperaMinima = _eventosDoSistema.SinalizarMudancaDeTopologia();
+        _releitura.Agendar(motivo, esperaMinima);
+    }
+
+    /// <summary>
+    /// O adaptador da janela de serviço mapeia WTS e energia para eventos do núcleo. Registra a mensagem primeiro; o árbitro
+    /// entrega bloqueio/suspensão imediatamente e segura desbloqueio/retomada até uma topologia coerente ser publicada.
+    /// Depois de a SUSPENDING entrar no núcleo, o pendente vai ao disco na hora (passo P11): escondido pelo usuário ou pela
+    /// sessão, o núcleo não pede gravação, e o atraso de 2 s só cairia depois de acordar, ou nunca.
+    /// </summary>
+    private void AoEventoDoSistema(string motivo, Evento evento)
+    {
+        if (_encerrando) return;
+        Diagnostico.Evento("MENSAGEM", ("tipo", motivo));
+        TimeSpan esperaMinima = _eventosDoSistema.Sinalizar(evento);
+        if (evento is Suspending)
+            _gravacao?.Descarregar(nameof(Suspending));
+        if (evento is SessionUnlocked or Resumed)
+            _releitura.Agendar(motivo, esperaMinima);
     }
 
     /// <summary>
@@ -351,6 +374,7 @@ internal sealed partial class Aplicacao
         if (leitura is null)
         {
             Diagnostico.Evento("TOPOLOGIA", ("motivo", motivos), ("erro", erro), ("mantida", "anterior"), ("novaTentativa", pedido.NovaTentativaSeFalhar));
+            _eventosDoSistema.TopologiaRelida(publicada: false);
             return false;
         }
 
@@ -369,7 +393,78 @@ internal sealed partial class Aplicacao
 
         Diagnostico.Evento("TOPOLOGIA",
             [("motivo", motivos), ("mudou", mudou ? "sim" : "nao"), ("visivel", _visivel), ("impressao", nova.ImpressaoDigital), .. CamposDasChaves(leitura)]);
+        _eventosDoSistema.TopologiaRelida(publicada: true);
         return true;
+    }
+
+    /// <summary>
+    /// A janela do personagem foi minimizada, e ela mesma já voltou ao normal (Fase 5, passo P12; DEC-031, adendo). Já
+    /// escondido, por qualquer motivo, nunca vira CMD_HIDE: pela precedência, trocaria a ocultação da sessão ou da suspensão
+    /// pela do usuário, e o desbloqueio não o mostraria mais; a janela só volta a ficar fora da vista. À vista, do usuário
+    /// (<see cref="MinimizadaPeloSistema"/> falso), esconde, como sempre (Q-03). Do sistema, numa troca de monitores, não
+    /// esconde: a releitura pendente reafirma o lugar do personagem e dos itens; sem ela (o monitor saiu antes de a mensagem
+    /// chegar), a minimização pede uma, como uma mensagem de topologia.
+    /// </summary>
+    private void AoMinimizarPersonagem()
+    {
+        if (_encerrando || _personagem is null) return;
+        bool pendente = _releitura.ReleituraPendente;
+        if (!_visivel)
+        {
+            Diagnostico.Evento("MINIMIZADO", ("janela", "personagem"), ("escondido", "sim"), ("releituraPendente", pendente ? "sim" : "nao"));
+            // Mostrada minimizada por fora, a janela voltou ao normal à vista, mas o WPF ainda a tem por escondida, e um Hide()
+            // sozinho não faria nada: Show() e Hide() no mesmo tratamento a escondem de novo, com o WPF em dia.
+            _personagem.Show();
+            _personagem.Hide();
+            return;
+        }
+        Topologia? agora = pendente ? _topologia : LeitorDeTopologia.LerDetalhado(out _)?.Topologia;
+        bool peloSistema = MinimizadaPeloSistema(pendente, _topologia, agora);
+        Diagnostico.Evento("MINIMIZADO", ("janela", "personagem"), ("escondido", "nao"), ("pelo", peloSistema ? "sistema" : "usuario"), ("releituraPendente", pendente ? "sim" : "nao"));
+        if (!peloSistema)
+        {
+            Enviar(new CmdHide(), "minimizado pelo Windows");
+            return;
+        }
+        if (!pendente) AoPossivelMudancaDeTopologia("WM_SIZE SIZE_MINIMIZED");
+    }
+
+    /// <summary>
+    /// Se a minimização da janela do personagem foi do sistema, e não do usuário (Fase 5, passo P12; DEC-031, adendo): com
+    /// "Minimizar janelas quando um monitor for desconectado", o Windows minimiza as janelas do monitor que sai. É do sistema
+    /// com uma releitura da topologia pendente na agenda, com a leitura de agora diferente da publicada ou incoerente (nula:
+    /// a troca de modo em andamento). Só sem nada disso a minimização é do usuário e esconde (Q-03). Função pura.
+    /// </summary>
+    internal static bool MinimizadaPeloSistema(bool releituraPendente, Topologia publicada, Topologia? lidaAgora)
+    {
+        ArgumentNullException.ThrowIfNull(publicada);
+        return releituraPendente || lidaAgora is null || !lidaAgora.MesmaConfiguracao(publicada);
+    }
+
+    /// <summary>
+    /// A releitura imediata do mostrar (passo P11): o núcleo usa a topologia que conhece, então uma mudança ocorrida com o
+    /// personagem escondido é validada antes de a janela reaparecer. Ao contrário da agrupada (<see cref="RelerAgrupada"/>),
+    /// não passa pela agenda: não arma a conferência tardia nem reafirma o lugar, que o CMD_SHOW aplica em seguida, e não
+    /// libera o desbloqueio ou a retomada retidos pelo árbitro, que esperam a releitura das mensagens do Windows (DEC-031).
+    /// Incoerente, a topologia anterior continua valendo, sem nova tentativa: a mensagem que vier relê pela agenda.
+    /// </summary>
+    private void RelerAntesDeMostrar(string motivo)
+    {
+        string motivos = $"revalidar antes de mostrar: {motivo}";
+        LeituraDaTopologia? leitura = LeitorDeTopologia.LerDetalhado(out string? erro);
+        if (leitura is null)
+        {
+            Diagnostico.Evento("TOPOLOGIA", ("motivo", motivos), ("imediata", "sim"), ("erro", erro), ("mantida", "anterior"));
+            return;
+        }
+
+        Topologia nova = leitura.Topologia;
+        bool mudou = !nova.MesmaConfiguracao(_topologia);
+        _leitura = leitura;
+        _topologia = nova;
+        Enviar(new TopologyChanged(nova), motivos);
+        Diagnostico.Evento("TOPOLOGIA",
+            [("motivo", motivos), ("imediata", "sim"), ("mudou", mudou ? "sim" : "nao"), ("visivel", _visivel), ("impressao", nova.ImpressaoDigital), .. CamposDasChaves(leitura)]);
     }
 
     /// <summary>
@@ -505,16 +600,7 @@ internal sealed partial class Aplicacao
     {
         if (_encerrando || _personagem is null) return;
         bool jaEstavaVisivel = _visivel;
-
-        // O núcleo usa a topologia que conhece. Atualize-a antes de CMD_SHOW para que uma
-        // mudança ocorrida enquanto estava escondido seja validada antes de a janela reaparecer.
-        if (LeitorDeTopologia.LerDetalhado(out _) is { } atual)
-        {
-            _leitura = atual;
-            _topologia = atual.Topologia;
-            Enviar(new TopologyChanged(atual.Topologia), $"revalidar antes de mostrar: {motivo}");
-        }
-
+        RelerAntesDeMostrar(motivo);
         Enviar(new CmdShow(), motivo);
         if (_encerrando || !_visivel) return;
 
@@ -568,6 +654,11 @@ internal sealed partial class Aplicacao
                 break;
             case ComandoDoMenu.RecolherItens:
                 Enviar(new CmdClearItems(), "menu");
+                break;
+            case ComandoDoMenu.ConteudoAdulto:
+                // Inverte o que o usuário leu ao abrir (DEC-033): desligar tira o que é adulto da tela; a escolha vai para o
+                // settings.json com atraso, como a emoção.
+                Enviar(new CmdSetAdultContent(!modelo.ConteudoAdulto), "menu");
                 break;
             case ComandoDoMenu.Nenhum when peloTeclado:
                 // Quem abriu o menu da bandeja pelo teclado e o cancelou volta para a área de
@@ -950,6 +1041,7 @@ internal sealed partial class Aplicacao
         if (_encerrando) return;
         _encerrando = true;
         Diagnostico.Evento("ENCERRANDO", ("motivo", motivo));
+        _eventosDoSistema.Parar();
 
         // O pendente vai ao disco antes de desmontar qualquer coisa, e a agenda para (crítica, C18): nenhum disparo da
         // gravação sobra depois do encerramento.

@@ -40,6 +40,13 @@ public static class TabelaDoTamagotchi
             ? DadosDosItens[(int)item]
             : throw new ArgumentOutOfRangeException(nameof(item), item, "Item desconhecido.");
 
+    /// <summary>
+    /// Se o item é conteúdo adulto (DEC-033): todo item que não é de alívio, ou seja, as substâncias e as drogas sintéticas.
+    /// A banana, a água, o café e o energético não são. Com a chave desligada, o menu esconde os adultos e o núcleo os
+    /// recusa. Fora do enum, lança.
+    /// </summary>
+    public static bool Adulto(Item item) => !DoItem(item).Alivio;
+
     /// <summary>O que a tabela diz da onda (4.2 a 4.4). Fora do enum, lança.</summary>
     public static DadosDaOnda DaOnda(Onda onda)
         => (uint)onda < (uint)DadosDasOndas.Length

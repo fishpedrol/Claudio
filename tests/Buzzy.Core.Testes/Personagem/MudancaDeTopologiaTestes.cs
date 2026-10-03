@@ -636,7 +636,9 @@ internal static class MudancaDeTopologiaTestes
             MonitorDoDesktop m = lugar.Monitor;
             MonitorDoDesktop? n = nova.PorChave(m.Chave) ?? nova.Monitores.FirstOrDefault(x => x.Tela == m.Tela && velha.PorChave(x.Chave) is null);
             int dx = n is null ? 0 : n.Tela.Esquerda - m.Tela.Esquerda, dy = n is null ? 0 : n.Tela.Topo - m.Tela.Topo;
-            if (n is not null && n.Tela == m.Tela.Deslocado(dx, dy) && n.AreaUtil == m.AreaUtil.Deslocado(dx, dy) && n.Dpi == m.Dpi)
+            // A travessia em curso (Fase 5, passo P13; C15 da crítica) fica fora do "continua": ela se desfaz e vai a SETTLING.
+            bool emTravessia = antes.Movimento.Travessia is { } tr && (antes.Estado == Estado.Jumping || (antes.Estado == Estado.Walking && tr.Tipo == TipoDeTravessia.Andando));
+            if (!emTravessia && n is not null && n.Tela == m.Tela.Deslocado(dx, dy) && n.AreaUtil == m.AreaUtil.Deslocado(dx, dy) && n.Dpi == m.Dpi)
             {
                 Afirmar.Sequencia([$"{antes.Estado}->{antes.Estado}"], transicoes.Select(x => $"{x.De}->{x.Para}"), $"invariante 19: {onde}: continua");
                 Afirmar.Igual(new PontoPx(lugar.Ancora.X + dx, lugar.Ancora.Y + dy), depois.Lugar!.Ancora, $"invariante 19: {onde}: a âncora anda ({dx},{dy})");

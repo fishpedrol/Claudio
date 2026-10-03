@@ -1,23 +1,8 @@
 # IDENTIDADE_VISUAL.md — Identidade visual do Buzzy
 
-> Fonte canônica da aparência do Buzzy: conceito, proporções, paleta, estilo, expressões, poses e
-> regras técnicas dos assets. O produto está em [PRODUCT_SPEC.md](PRODUCT_SPEC.md) (seção Visão); a
-> direção atual está em DEC-018 (pixel art) e DEC-019 (semelhança intencional com o Luffy).
+> Fonte canônica da aparência do Buzzy: conceito, proporções, paleta, estilo, expressões, poses, itens, efeitos e regras técnicas dos assets. As seções numeradas são citadas pelo código: não renumere. O produto está em [PRODUCT_SPEC.md](PRODUCT_SPEC.md) (Visão); a direção, em DEC-018 (pixel art) e DEC-019 (semelhança intencional com o Luffy); a arte da emoção dominante e do tamagotchi, em DEC-027 e DEC-028. Os valores numéricos são a referência do gerador em `src/Buzzy.Visual/Pixel/`; mudanças de direção vão para a DEC correspondente. O histórico até 2026-10-02 está em [arquivo/identidade-visual-historico.md](arquivo/identidade-visual-historico.md).
 >
-> **Formato:** cada seção descreve uma regra estável; mudanças de direção entram no histórico ao
-> final, com data. Os valores numéricos são a referência para o gerador em
-> `src/Buzzy.Visual/Pixel/`.
->
-> STATUS: PLANNED — direção em pixel art criada em 2026-09-29, a pedido do usuário, fiel às pranchas
-> de `assets/references/`. Folha nativa e prévias em `assets/identidade/pixel/`. A Fase 1 ainda
-> mostra o sprite provisório de `src/Buzzy.App/Apresentacao/SpriteProvisorio.cs`; a integração
-> animada é da Fase 6. A arte da emoção dominante e do tamagotchi adulto (DEC-027 e DEC-028:
-> itens, caras novas, poses de uso, sobreposições e ícones do menu) está no gerador e nas prévias,
-> conferida por testes automatizados; o app a mostra desde os passos T2, T7 e T8 de TODO.md, no menu,
-> no personagem e nas janelas dos itens. A arte da paranoia (adicional de 2026-10-01 da DEC-028: a
-> cara `paranoico`, os gestos `olharproteto` e `agachar` e a sobreposição de suor) também está no
-> gerador e nas prévias, conferida por testes, e o app a mostra; a bala continua desenhada como um
-> doce embrulhado. A revisão visual e de tom pelo usuário está pendente.
+> STATUS: PLANNED. A pixel art fiel às pranchas de `assets/references/` existe desde 2026-09-29, com a folha nativa e as prévias em `assets/identidade/pixel/`. O app mostra o quadro parado, as poses provisórias por estado e a arte do tamagotchi (no menu, no personagem e nas janelas dos itens), conferidas por testes automatizados; as animações completas são da Fase 6. A revisão visual e de tom pelo usuário está pendente.
 
 ## 1. Conceito
 
@@ -171,7 +156,7 @@ As 14 caras acima são as de humor. Ficam em `previa/expressoes.png`, nesta orde
 ícone da opção no menu (seção 7b).
 
 **Caras de efeito (DEC-028).** Só a onda as mostra; a chave é o nome do valor no fim do
-enum `Expressao`, em minúsculas (`eletrico`, não `acelerado`). A `paranoico` (2026-10-01) é a da onda
+enum `Expressao`, em minúsculas (`eletrico`, não `acelerado`). A `paranoico` é a da onda
 da paranoia, que nenhum item começa. Aparecem em `previa/rostos-efeito.png`, de frente e de perfil.
 
 | Expressão | Olhos | Sobrancelhas | Boca | Tufo e bochechas |
@@ -264,13 +249,13 @@ duração do uso no núcleo:
   virado para a parede, `cipo-2` e `escondido`, girada nas laterais), com a cara do uso e a
   sobreposição, sem o objeto. No esconderijo, a boca fica fora do quadro, e só os olhos mostram a cara.
   Poses de uso por apoio ficam para depois.
-- O baseado que ele fuma por conta própria (adendo de 2026-10-02 da DEC-028) não tem arte nova: usa
+- O baseado que ele fuma por conta própria (DEC-028, itens 36 a 42) não tem arte nova: usa
   os mesmos quadros `fumando-1` a `fumando-5`, com o baseado na mão, a cara da pose e a fumaça do
   chapado por cima, sempre no chão.
 
 **Poses dos gestos da onda (DEC-028), em `PosesPixel.DosGestos`.** Os oito gestos que só a onda
 sorteia têm os nomes do enum `Gesto` em minúsculas e ficam fora de `Todas`. Os seis primeiros não
-têm desenho próprio ainda e usam as poses existentes; os dois da paranoia (2026-10-01), no fim da
+têm desenho próprio ainda e usam as poses existentes; os dois da paranoia, no fim da
 lista, têm desenho próprio, com a cara `paranoico`:
 
 | Pose | Feita de |
@@ -427,14 +412,4 @@ valem, desde que o gerador seja atualizado junto ou a folha passe a ser a fonte,
 
 ## 10. Histórico
 
-| Data | Mudança |
-|---|---|
-| 2026-09-29 | Primeira direção (vetorial): sagui-acrobata violeta-índigo, topete de três tufos, cauda com ponta menta. Registrada em DEC-017. |
-| 2026-09-29 | O usuário não gostou da direção vetorial e pediu algo mais fiel às pranchas, em pixel art. Nova direção (DEC-018): macaquinho azul-marinho em pixel art 64 × 64, paleta tirada da prancha, sem o chapéu. A vetorial foi arquivada em `assets/identidade/arquivo-vetorial/`. |
-| 2026-09-29 | O usuário pediu o chapéu de palha e a personalidade do Luffy ("a ideia central do projeto é essa"). O chapéu entrou na pixel art e reage às emoções; o esqueleto encolheu cerca de um pixel para caber no quadro; o ícone da bandeja ganhou o chapéu (DEC-019). |
-| 2026-09-30 | Toon force: achatar e esticar a pixel art nas poses provisórias (DEC-023). |
-| 2026-09-30 | A pedido do usuário: cipó na borda de cima (`cipo-1` a `cipo-3`, verdes novos na paleta; DEC-024) e esconderijo atrás da barra ou das laterais (`escondido`, girada nas laterais; DEC-025). |
-| 2026-09-30 | Pedidos do usuário de emoção dominante e tamagotchi adulto (DEC-027 e DEC-028), numa cópia isolada da árvore: 35 cores no fim da paleta; os 13 itens em 24 × 24, redesenhados olhando as prévias a 8×, 2× e 1×, porque vários carimbos do desenho, nunca renderizados, não se liam (a vodka sem letra, a água mais gorda, o baseado com cone e piteira, o café sem vapor, o cigarro engordado para 8 pixels de altura); as 7 caras de efeito e as 7 passageiras, o chapéu torto e o rubor maior; as poses de uso no chão, com a ponta do item levada à boca ou ao nariz por cinemática inversa; as sobreposições, os modificadores e os ícones do menu. |
-| 2026-10-01 | Depois de uma revisão adversarial: o espelhinho numa mão só (com as duas, na barriga, parecia roupa) e com moldura dourada; cotovelos para fora na tragada e no inalar; fumaça e bolhas saindo da boca, e não da orelha, com a máscara dos traços do rosto no lugar do retângulo; nada cobrindo o cipó e a mão que o segura; poses provisórias dos gestos da onda; a copa do chapéu eriçado 1 pixel mais baixa em `escalando-2`, com a exceção documentada do contorno na linha 0 (seção 5); baseado aceso, lenço em triângulo, bala sem o papel na boca e energético verde-neon (escuro, tinha as cores do pelo). A arte foi mesclada na árvore principal, e a folha nativa e as prévias de poses, desatualizadas desde antes do cipó e do esconderijo, foram regeneradas. A revisão visual e de tom pelo usuário continua pendente. |
-| 2026-10-01 | O app passou a mostrar a arte do tamagotchi (passos T2, T7 e T8): os rostos e os itens como ícones do menu, ampliados pelo DPI do monitor; os quadros de uso no chão, de frente e sem espelho; nos outros apoios, a pose do apoio com a cara do uso; a tremedeira alternando com o `parado` a cada 4 passos; a sobreposição só da onda da frente, em qualquer pose, com a fase trocada a cada 12 passos com o relógio ligado; o item numa janela de 48 × 48 DIP. Nenhum desenho mudou. A revisão visual e de tom pelo usuário continua pendente. |
-| 2026-10-01 | A pedido do usuário, a paranoia, de desenho animado (DEC-028), numa cópia isolada, depois mesclada: a cara `paranoico`, com a gota de suor na têmpora (`Rosto.Gota`); a `Mao.Apontando`; os gestos `olharproteto` e `agachar`, com desenho próprio; e a sobreposição de suor, com o tremidinho. Depois de uma revisão adversarial: o dedo reto para cima, saindo do meio do punho (parecia um joinha); a gota da fase 2 sobre a ponta da aba, longe do dedo; o pescoço esticado 1 pixel no lugar da cabeça inclinada; as gotas no cipó espelhadas do outro lado da cabeça; e testes da forma dos olhos, das sobrancelhas, da boca e das gotas. Os desenhos antigos ficaram idênticos, conferidos por impressão digital, e `expressoes.png` não mudou. No mesmo dia, a bala virou droga sintética na regra do jogo, com o desenho de doce de sempre. A revisão visual e de tom pelo usuário continua pendente. |
+As mudanças de direção de 2026-09-29 a 2026-10-01 — a direção vetorial (DEC-017), a pixel art (DEC-018), o chapéu e a personalidade do Luffy (DEC-019), a toon force (DEC-023), o cipó e o esconderijo (DEC-024, DEC-025), a arte do tamagotchi e da paranoia e as correções das revisões adversariais (DEC-027, DEC-028) — estão na tabela do arquivo morto citado no topo. Daqui em diante, cada mudança de direção entra na DEC que a decide.

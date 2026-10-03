@@ -37,6 +37,13 @@ public sealed record ConfiguracaoDoNucleo
     /// </summary>
     public bool Movimento { get; init; }
 
+    /// <summary>
+    /// Se o personagem pode atravessar de um monitor para outro pelas portas planas (Fase 5, passo P13; DEC-032): a
+    /// capacidade, como <see cref="Movimento"/> na Fase 4; a escolha do usuário é <see cref="Preferencias.AtravessarMonitores"/>.
+    /// Desligada por padrão; o aplicativo a liga.
+    /// </summary>
+    public bool Travessia { get; init; }
+
     /// <summary>Velocidades e gravidade do movimento (iguais em todos os níveis de energia).</summary>
     public ParametrosDeMovimento Fisica { get; init; } = new();
 
@@ -105,7 +112,7 @@ public sealed record ConfiguracaoDoNucleo
         // Fase 4 (DEC-022 a DEC-025): física, queda animada, todas as ações, esconderijo no clique duplo. E o baseado por
         // conta própria (pedido do usuário de 2026-10-01, 19:10: ele às vezes fuma um baseado sozinho, quando quer), que
         // fica fora de Todas e só existe com a chave do tamagotchi ligada.
-        Acoes = AcoesAutonomas.Todas | AcoesAutonomas.FumarBaseado,
+        Acoes = AcoesAutonomas.Todas | AcoesAutonomas.FumarBaseado | AcoesAutonomas.IrAoOutroMonitor,
         QuedaFisica = true,
         Movimento = true,
         EsconderijoNoCliqueDuplo = true,
@@ -113,6 +120,8 @@ public sealed record ConfiguracaoDoNucleo
         // onda de desenho animado. Sem itens e sem o baseado por conta própria, tudo é como com a chave desligada
         // (invariante 22, ChaveLigadaTestes).
         Tamagotchi = true,
+        // A travessia entre monitores (Fase 5, passo P13; DEC-032), pelas portas planas.
+        Travessia = true,
     };
 }
 
@@ -177,6 +186,19 @@ public sealed record PerfilDeEnergia(
     /// </summary>
     public int PesoFumarBaseado { get; init; } = 1;
 
+    /// <summary>
+    /// O peso de atravessar para o monitor vizinho ao chegar a uma porta plana andando (Fase 5, passo P13; DEC-032), contra o
+    /// caminho de sempre da parede (parar, escalar ou virar; DEC-023). Frequência, nunca física (invariante 12). Valores
+    /// iniciais, a calibrar na verificação de tela.
+    /// </summary>
+    public int PesoAtravessar { get; init; } = 5;
+
+    /// <summary>
+    /// O peso de ir ao outro monitor (<see cref="AcoesAutonomas.IrAoOutroMonitor"/>; Fase 5, passo P13) no sorteio de IDLE:
+    /// andar até a porta plana e atravessar. Frequência, nunca física (invariante 12). Valores iniciais, a calibrar.
+    /// </summary>
+    public int PesoIrAoOutroMonitor { get; init; } = 2;
+
     public static readonly PerfilDeEnergia Baixa = new(
         NivelDeEnergia.Baixa,
         TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(45),
@@ -195,6 +217,8 @@ public sealed record PerfilDeEnergia(
         TempoPenduradoMinimo = TimeSpan.FromSeconds(2),
         TempoPenduradoMaximo = TimeSpan.FromSeconds(5),
         ChanceDoFoguete = 10,
+        PesoAtravessar = 3,
+        PesoIrAoOutroMonitor = 1,
     };
 
     public static readonly PerfilDeEnergia Media = new(
@@ -222,6 +246,8 @@ public sealed record PerfilDeEnergia(
         TempoPenduradoMinimo = TimeSpan.FromSeconds(5),
         TempoPenduradoMaximo = TimeSpan.FromSeconds(12),
         ChanceDoFoguete = 50,
+        PesoAtravessar = 7,
+        PesoIrAoOutroMonitor = 3,
     };
 
     public static PerfilDeEnergia Padrao(NivelDeEnergia nivel) => nivel switch

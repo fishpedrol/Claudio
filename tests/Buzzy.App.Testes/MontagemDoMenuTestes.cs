@@ -123,8 +123,10 @@ internal sealed class MontagemDoMenuTestes
         {
             menuLido = menu;
             Afirmar.Igual(14 + 13, icones, "14 rostos e 13 itens, já anexados quando o menu é exibido");
-            Afirmar.Igual(7, NativoTeste.GetMenuItemCount(menu), "itens do menu principal");
-            NativoTeste.ItemDoMenuLido[] principal = [.. Enumerable.Range(0, 7).Select(i => NativoTeste.LerItemDoMenu(menu, (uint)i))];
+            Afirmar.Igual(8, NativoTeste.GetMenuItemCount(menu), "itens do menu principal");
+            NativoTeste.ItemDoMenuLido[] principal = [.. Enumerable.Range(0, 8).Select(i => NativoTeste.LerItemDoMenu(menu, (uint)i))];
+            // "Conteúdo adulto" (DEC-033), depois de "Itens": a marca de seleção, ligada por padrão, e não a de rádio.
+            Afirmar.Igual((7u, MFS_CHECKED, 0u), (principal[5].Id, principal[5].Estado & MFS_CHECKED, principal[5].Tipo & MFT_RADIOCHECK), "Conteúdo adulto, marcado");
             Afirmar.Sequencia(entradas.Select(e => e.Rotulo), principal.Select(i => i.Texto), "textos do menu principal");
             Afirmar.Diferente((nint)0, principal[3].Submenu, "o submenu da emoção está anexado");
             nint submenu = principal[4].Submenu;

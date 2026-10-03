@@ -597,6 +597,61 @@ internal sealed class ItensIntegracaoTestes
         Afirmar.Falso(NativoTeste.IsWindow(banana.Hwnd) || NativoTeste.IsWindow(cafe.Hwnd) || NativoTeste.IsWindow(b.Janela), "nenhuma janela do Buzzy fica viva");
     }
 
+    // A chave "Conteúdo adulto" (DEC-033) pelo menu de verdade. Com a banana e a vodka na tela, A desliga: a janela da vodka
+    // sai como recolhida, a da banana fica; o menu seguinte mostra a chave desmarcada e o submenu "Itens" só com os quatro de
+    // alívio (14 rostos e 4 itens como ícones), e V lá não acha nada. A escolha vai ao settings.json do perfil de teste, com
+    // atraso, e volta ao reabrir; A religa. Tudo por mensagens postadas às janelas do próprio Buzzy.
+    [Teste]
+    public void ConteudoAdulto_PeloMenu_TiraAVodka_EscondeOsAdultos_EVoltaAoReabrir()
+    {
+        string icones = System.Windows.SystemParameters.HighContrast ? "0" : "18";
+        using (BuzzyEmTeste b = BuzzyEmTeste.Iniciar())
+        {
+            PontoPx personagem = Preparar(b);
+            long inicio = BuzzyEmTeste.MarcaDoLog();
+            ItemNaTela banana = Invocar(b, () => AbrirPeloPersonagem(b, personagem), 'b', "Banana");
+            ItemNaTela vodka = Invocar(b, () => AbrirPeloPersonagem(b, personagem), 'v', "Vodka");
+            EsperarParado(b, inicio, banana);
+            EsperarParado(b, inicio, vodka);
+
+            long marca = BuzzyEmTeste.MarcaDoLog();
+            EventoDoLog desligou = Menu(b, () => AbrirPeloPersonagem(b, personagem), "desligar o conteúdo adulto", 'a');
+            Afirmar.Igual("ConteudoAdulto", desligou["fechado"], "o menu escolheu \"Conteúdo adulto\"");
+            EventoDoLog nucleo = EsperarDesde(b, marca, e => e.Chave == "NUCLEO" && e["evento"] == "CmdSetAdultContent", 3000, "CMD_SET_ADULT_CONTENT no núcleo");
+            Afirmar.Igual(("menu", "CMD_SET_ADULT_CONTENT: desligado"), (nucleo["motivo"], nucleo["regra"]), "desligado pelo menu");
+            EsperarDesde(b, marca, e => e.Chave == "ITEM" && e["removido"] == vodka.IdNoLog && e["motivo"] == "Recolhido", 3000, "a vodka recolhida");
+            Thread.Sleep(200);
+            Afirmar.Falso(NativoTeste.IsWindow(vodka.Hwnd), "a janela da vodka fechou");
+            Afirmar.Verdadeiro(NativoTeste.IsWindowVisible(banana.Hwnd), "a banana continua na tela");
+            Afirmar.Falso(BuzzyEmTeste.EventosDesde(marca).Any(e => e.Chave == "ITEM" && e["removido"] == banana.IdNoLog), "a banana não saiu");
+
+            long marcaDoMenu = BuzzyEmTeste.MarcaDoLog();
+            EventoDoLog semVodka = MenuSemEscolhaObrigatoria(b, () => AbrirPeloPersonagem(b, personagem), "V com o conteúdo adulto desligado", 'i', 'v');
+            EventoDoLog exibindo = EsperarDesde(b, marcaDoMenu, e => e.Chave == "MENU" && e["exibindo"] == "sim", 1000, "o menu desligado");
+            Afirmar.Igual(("nao", icones), (exibindo["conteudoAdulto"], exibindo["icones"]), "a chave desmarcada; 14 rostos e 4 itens");
+            Afirmar.Igual("Nenhum", semVodka["fechado"], "V não acha a vodka");
+            Afirmar.Falso(BuzzyEmTeste.EventosDesde(marcaDoMenu).Any(e => e.Chave == "ITEM" && e.Campos.ContainsKey("mostrado")), "nenhum item novo");
+
+            EsperarDesde(b, marca, e => e.Chave == "CONFIG" && e["pedido"] == "preferencias" && e["evento"] == "CmdSetAdultContent", 3000, "o pedido de gravação");
+            EsperarDesde(b, marca, e => e.Chave == "CONFIG" && e["gravado"] == "sim" && e["motivo"] == "atraso", 8000, "a escolha gravada com atraso");
+            Afirmar.Igual(0, b.FecharPorWmClose());
+        }
+
+        using (BuzzyEmTeste b = BuzzyEmTeste.Iniciar(limpar: false))
+        {
+            PontoPx personagem = Preparar(b);
+            long marca = BuzzyEmTeste.MarcaDoLog();
+            EventoDoLog religou = Menu(b, () => AbrirPeloPersonagem(b, personagem), "religar o conteúdo adulto", 'a');
+            EventoDoLog exibindo = EsperarDesde(b, marca, e => e.Chave == "MENU" && e["exibindo"] == "sim", 1000, "o menu ao reabrir");
+            Afirmar.Igual("nao", exibindo["conteudoAdulto"], "reaberto, continua desligado");
+            Afirmar.Igual("ConteudoAdulto", religou["fechado"], "o menu escolheu \"Conteúdo adulto\"");
+            EventoDoLog nucleo = EsperarDesde(b, marca, e => e.Chave == "NUCLEO" && e["evento"] == "CmdSetAdultContent", 3000, "CMD_SET_ADULT_CONTENT no núcleo");
+            Afirmar.Igual("CMD_SET_ADULT_CONTENT: ligado", nucleo["regra"], "religado pelo menu");
+            Invocar(b, () => AbrirPeloPersonagem(b, personagem), 'v', "Vodka");
+            Afirmar.Igual(0, b.FecharPorWmClose());
+        }
+    }
+
     // ------------------------------------------------------------------ apoio
 
     /// <summary>

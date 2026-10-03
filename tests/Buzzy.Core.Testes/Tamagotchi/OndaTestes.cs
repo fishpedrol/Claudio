@@ -424,6 +424,9 @@ internal static class OndaTestes
             PesoDescansar = Peso(e.PesoDescansar, p.Descansar),
             PesoGesto = Peso(e.PesoGesto, p.Gesticular),
             PesoTrocarExpressao = Peso(e.PesoTrocarExpressao, p.TrocarCara),
+            // Atravessar é andar até o outro monitor (Fase 5, passo P13): o percentual de andar da fase.
+            PesoAtravessar = Peso(e.PesoAtravessar, p.Andar),
+            PesoIrAoOutroMonitor = Peso(e.PesoIrAoOutroMonitor, p.Andar),
             AlturaDoPuloMinima = Dip(e.AlturaDoPuloMinima, p.AlturaDoPulo),
             AlturaDoPuloMaxima = Dip(e.AlturaDoPuloMaxima, p.AlturaDoPulo),
             ChanceDoFoguete = p.ChanceDoFoguete ?? e.ChanceDoFoguete,

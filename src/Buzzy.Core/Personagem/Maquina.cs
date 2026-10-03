@@ -93,6 +93,7 @@ public static partial class Maquina
                 case CmdResetPosition: RedefinirPosicao(); break;
                 case CmdExit: Sair("CMD_EXIT"); break;
                 case CmdSetDominantEmotion e: EscolherEmocao(e.Emocao); break;
+                case CmdSetAdultContent e: EscolherConteudoAdulto(e.Ligado); break;
                 case CmdSummonItem e: InvocarItem(e.Item); break;
                 case CmdClearItems: RecolherItens(); break;
                 case ItemPress e: PegarItem(e.Id, e.Cursor); break;
@@ -208,6 +209,21 @@ public static partial class Maquina
             GrupoDoEstado grupo = _s.Estado.Grupo();
             bool revalida = grupo is GrupoDoEstado.Autonomo or GrupoDoEstado.Fisico || _s.Estado is Estado.Reacting or Estado.Using;
             if (!revalida || _s.Posicao is null || _s.Lugar is not { } lugar) return;
+
+            // A travessia em curso (andando, ou no voo do salto) guarda chaves e coordenadas absolutas: numa mudança de
+            // configuração, ela se desfaz e ele se acomoda pela posição relativa (passo P13; C15 da crítica), mesmo se só o outro
+            // monitor mudou. A caminhada até a partida de um salto ainda não é travessia: só o plano cai, e ela para no passo
+            // seguinte, pela regra de sempre.
+            if (_s.Movimento.Travessia is { } travessia)
+            {
+                if (_s.Estado == Estado.Jumping || (_s.Estado == Estado.Walking && travessia.Tipo == TipoDeTravessia.Andando))
+                {
+                    (Posicionamento ra, PosicaoDoPersonagem pa) = Posicionador.Reacomodar(nova, _s.Posicao, _cfg.Tamanho);
+                    Acomodar(ra.Ancora, "TOPOLOGY_CHANGED: travessia interrompida", pa);
+                    return;
+                }
+                _s = _s with { Movimento = _s.Movimento with { Travessia = null, Restante = 0 } };
+            }
 
             MonitorDoDesktop? correspondente = Posicionador.MonitorCorrespondente(antiga, nova, lugar.Monitor.Chave, lugar.Monitor.Tela);
             if (correspondente is not null && Posicionador.SoTranslacao(lugar.Monitor, correspondente, out int dx, out int dy))
@@ -616,7 +632,8 @@ public static partial class Maquina
             if (!pausar) _reagendar = true;
             // Fase 4 (DEC-022): pausar para a caminhada na hora; na parede ele desce e pendurado se
             // solta nos passos seguintes (PassoEscalando, PassoPendurado).
-            if (pausar && _cfg.Movimento && _s.Estado == Estado.Walking) IrPara(Estado.Idle, "CMD_PAUSE_AUTONOMY: para de andar");
+            // A travessia em curso é atômica (passo P13; D7): ela termina, e o fim dela o para.
+            if (pausar && _cfg.Movimento && _s.Estado == Estado.Walking && _s.Movimento.Travessia is not { Tipo: TipoDeTravessia.Andando }) IrPara(Estado.Idle, "CMD_PAUSE_AUTONOMY: para de andar");
         }
 
         private void AbrirConfiguracoes()
@@ -820,6 +837,8 @@ public static partial class Maquina
             // precedência (DEC-028); antes da carga, quem decide a cara de partida é a carga.
             if (_s.Carregado && novas.EmocaoDominante is { } emocao && emocao != antes.EmocaoDominante && !ComOnda && CaraLivre(_s.Estado))
                 _s = _s with { Expressao = emocao };
+            // Desligar o conteúdo adulto pelas preferências faz o mesmo que pelo menu (DEC-033).
+            if (_s.Carregado && antes.ConteudoAdulto && !novas.ConteudoAdulto) TirarOConteudoAdulto();
             if (!antes.ModoTelaCheia || novas.ModoTelaCheia) return;
 
             // Desligar o modo desfaz o efeito temporário dele (Q-09): a posição temporária nunca vira
@@ -1042,6 +1061,9 @@ public static partial class Maquina
             // O baseado por conta própria (DEC-028; pedido do usuário de 2026-10-01, 19:10), a última opção: sem ela (a chave
             // desligada, fora do chão, com a onda Chapado ou a paranoia na frente), o sorteio é o de sempre.
             Opcao(AcoesAutonomas.FumarBaseado, PodeFumarPorContaPropria ? perfil.PesoFumarBaseado : 0);
+            // Ir ao outro monitor (Fase 5, passo P13), a última opção: só com uma porta plana, numa lateral do monitor dele.
+            (bool portaEsquerda, bool portaDireita) = PortasDeTravessia();
+            Opcao(AcoesAutonomas.IrAoOutroMonitor, portaEsquerda || portaDireita ? perfil.PesoIrAoOutroMonitor : 0);
             if (opcoes.Count == 0) return;
 
             (int indice, Aleatorio a) = _s.Aleatorio.Ponderado([.. opcoes.Select(o => o.Peso)]);
@@ -1083,7 +1105,58 @@ public static partial class Maquina
                 case AcoesAutonomas.FumarBaseado:
                     FumarPorContaPropria();
                     break;
+                case AcoesAutonomas.IrAoOutroMonitor:
+                    PlanejarIdaAoOutroMonitor(perfil, portaEsquerda, portaDireita);
+                    break;
             }
+        }
+
+        /// <summary>
+        /// As laterais do monitor dele por onde a travessia vale agora (<see cref="PlanoDeTravessia"/>): andando ou num salto de
+        /// degrau, com a partida entre ele e a lateral.
+        /// </summary>
+        private (bool Esquerda, bool Direita) PortasDeTravessia()
+        {
+            if (!_cfg.Movimento || !Mundo(out MonitorDoDesktop m, out Superficies sup, out _)) return (false, false);
+            double x = _s.Movimento.X;
+            return (PlanoDeTravessia(m, -1, (int)Math.Max(0, x - sup.Esquerda)) is not null || TemTransbordo(m, -1),
+                PlanoDeTravessia(m, +1, (int)Math.Max(0, sup.Direita - x)) is not null || TemTransbordo(m, +1));
+        }
+
+        /// <summary>
+        /// Ir ao outro monitor (<see cref="AcoesAutonomas.IrAoOutroMonitor"/>; Fase 5, passo P13): anda até a porta plana (com
+        /// duas, sorteia o lado) e atravessa sem o sorteio da porta; o percurso é a distância até a borda mais uma caminhada do
+        /// perfil, que ele segue do outro lado.
+        /// </summary>
+        private void PlanejarIdaAoOutroMonitor(PerfilDeEnergia perfil, bool portaEsquerda, bool portaDireita)
+        {
+            int lado = portaEsquerda && portaDireita ? 0 : portaEsquerda ? -1 : 1;
+            if (lado == 0)
+            {
+                (int sorteio, Aleatorio a) = _s.Aleatorio.Entre(0, 1);
+                _s = _s with { Aleatorio = a };
+                lado = sorteio == 0 ? -1 : 1;
+            }
+            (int dip, Aleatorio a2) = _s.Aleatorio.Entre(perfil.DistanciaAndandoMinima, perfil.DistanciaAndandoMaxima);
+            _s = _s with { Aleatorio = a2, Direcao = lado > 0 ? Direcao.Direita : Direcao.Esquerda };
+            IrPara(Estado.Walking, "IDLE + AUTONOMY_TIMER: ir ao outro monitor (anda até a porta)");
+            if (!Mundo(out MonitorDoDesktop m, out Superficies sup, out double escala)) return;
+            double x = _s.Movimento.X;
+            double ateABorda = lado > 0 ? sup.Direita - x : x - sup.Esquerda;
+            // Um salto de degrau fica planejado, com a partida entre ele e a lateral (P13b): a caminhada vai até lá.
+            Travessia? plano = PlanoDeTravessia(m, lado, (int)Math.Max(0, ateABorda));
+            if (plano is { Tipo: TipoDeTravessia.Salto })
+            {
+                _s = _s with { Movimento = _s.Movimento with { Travessia = plano, Restante = double.PositiveInfinity } };
+                return;
+            }
+            // Sem a porta plana e sem o salto, pelo transbordo (P13c): anda até a lateral, escala e transborda.
+            if (plano is null)
+            {
+                _s = _s with { Movimento = _s.Movimento with { QuerAtravessar = true, QuerEscalar = true } };
+                return;
+            }
+            _s = _s with { Movimento = _s.Movimento with { QuerAtravessar = true, Restante = ateABorda + dip * escala } };
         }
 
         /// <summary>
@@ -1205,6 +1278,12 @@ public static partial class Maquina
         private void PassoAndando()
         {
             if (!Mundo(out MonitorDoDesktop m, out Superficies sup, out double escala)) return;
+            // A travessia andando em curso é atômica (passo P13; D7): nem a calma a para no meio.
+            if (_s.Movimento.Travessia is { Tipo: TipoDeTravessia.Andando } travessia)
+            {
+                PassoAtravessando(travessia);
+                return;
+            }
             if (Calmo)
             {
                 IrPara(Estado.Idle, "WALKING: autonomia pausada ou painel aberto (para)");
@@ -1220,22 +1299,170 @@ public static partial class Maquina
             if (naBorda) x = limite;
             else if (cambaleia) x = Math.Clamp(x, sup.Esquerda, sup.Direita);
             _s = _s with { Movimento = mv with { Restante = mv.Restante - passo } };
+            // A caminhada até a partida de um salto de degrau planejado (passo P13b): ao chegar, ele salta de lá.
+            if (mv.Travessia is { Tipo: TipoDeTravessia.Salto } pendente && (Sentido > 0 ? x >= pendente.X0 : x <= pendente.X0))
+            {
+                MoverPara(m, pendente.X0, sup.Chao);
+                Saltar(pendente);
+                return;
+            }
             MoverPara(m, x, sup.Chao);
 
             if (naBorda)
             {
-                // Toon force (DEC-023): a lateral é parede para ele mesmo quando outro monitor
-                // encosta nela; a travessia pelas passagens é da Fase 5.
+                // Toon force (DEC-023): a lateral é parede para ele mesmo quando outro monitor encosta nela.
                 if (mv.QuerEscalar)
                 {
                     IrPara(Estado.Climbing, "WALKING: parede (andava até ela para escalar)");
+                    // Indo ao outro monitor pelo transbordo (P13c), a intenção sobe com ele.
+                    if (mv.QuerAtravessar) _s = _s with { Movimento = _s.Movimento with { QuerAtravessar = true } };
                     TalvezFoguete();
+                    return;
+                }
+                // Numa porta plana (passo P13; C14 da crítica), a agenda sorteia entre atravessar e o caminho da parede.
+                if (PlanoDeTravessia(m, Sentido) is { } plano && (mv.QuerAtravessar || SorteiaAtravessar()))
+                {
+                    if (plano.Tipo == TipoDeTravessia.Salto)
+                    {
+                        Saltar(plano);
+                        return;
+                    }
+                    _s = _s with { Movimento = _s.Movimento with { Travessia = plano, QuerAtravessar = false } };
+                    _transicoes.Add(new Transicao(Estado.Walking, Estado.Walking, "WALKING: passagem (atravessa)"));
                     return;
                 }
                 Sinalizar(SinalDeMovimento.Parede);
                 return;
             }
             if (!mv.QuerEscalar && _s.Movimento.Restante <= 0) IrPara(Estado.Idle, "WALKING: fim do percurso");
+        }
+
+        /// <summary>
+        /// A travessia possível pela lateral <paramref name="lado"/> do monitor, ou nula (passo P13; DEC-032): com a capacidade
+        /// e a preferência ligadas, sem calma e sem um item na mão do usuário, andando por uma porta plana
+        /// (<see cref="Passagens.PortaPlana"/>) ou, sem ela, num salto de degrau (<see cref="Passagens.SaltoDeDegrau"/>, P13b), com
+        /// a partida até <paramref name="recuoMaximo"/> px antes da lateral.
+        /// </summary>
+        private Travessia? PlanoDeTravessia(MonitorDoDesktop m, int lado, int recuoMaximo = 0)
+        {
+            if (!_cfg.Travessia || !_s.Preferencias.AtravessarMonitores || Calmo || AtentoAoItem || _s.Topologia is not { } t) return null;
+            if (Passagens.PortaPlana(t, m, lado, _cfg.Tamanho) is { } porta)
+                return new Travessia(TipoDeTravessia.Andando, m.Chave, porta.ChaveVizinho, lado, porta.Borda);
+            return Passagens.SaltoDeDegrau(t, m, lado, _cfg.Tamanho, _cfg.Fisica, _cfg.PassosPorSegundo, recuoMaximo);
+        }
+
+        /// <summary>
+        /// O transbordo possível na lateral em que ele escala (P13c), se os pés passaram, de <paramref name="yAntes"/> a
+        /// <paramref name="yDepois"/>, subindo, pela altura do chão de um vizinho mais alto daquela lateral; ou nulo. Com as
+        /// mesmas guardas da travessia (<see cref="PlanoDeTravessia"/>).
+        /// </summary>
+        private Travessia? TransbordoAoPassar(MonitorDoDesktop m, double yAntes, double yDepois)
+        {
+            if (!_cfg.Travessia || !_s.Preferencias.AtravessarMonitores || Calmo || AtentoAoItem || _s.Topologia is not { } t) return null;
+            foreach (Porta porta in Passagens.Portas(t, m, Sentido))
+            {
+                if (t.PorChave(porta.ChaveVizinho) is not { } vizinho) continue;
+                int chao = vizinho.AreaUtil.Base;
+                if (chao < yDepois || chao >= yAntes) continue;
+                if (Passagens.Transbordo(t, m, Sentido, chao, _cfg.Tamanho, _cfg.Fisica, _cfg.PassosPorSegundo) is { } transbordo) return transbordo;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Se há um transbordo possível pela lateral <paramref name="lado"/> do monitor (P13c): algum vizinho mais alto daquela
+        /// lateral cujo chão ele alcança escalando.
+        /// </summary>
+        private bool TemTransbordo(MonitorDoDesktop m, int lado)
+        {
+            if (!_cfg.Travessia || !_s.Preferencias.AtravessarMonitores || Calmo || AtentoAoItem || _s.Topologia is not { } t) return false;
+            foreach (Porta porta in Passagens.Portas(t, m, lado))
+            {
+                if (t.PorChave(porta.ChaveVizinho) is { } vizinho
+                    && Passagens.Transbordo(t, m, lado, vizinho.AreaUtil.Base, _cfg.Tamanho, _cfg.Fisica, _cfg.PassosPorSegundo) is not null) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// O salto de degrau começa (P13b): JUMPING, com o plano, que o voo segue passo a passo (<see cref="PassoNoSalto"/>). O
+        /// plano entra depois de <see cref="IrPara"/>, que recomeça o movimento parado ao entrar num estado de movimento.
+        /// </summary>
+        private void Saltar(Travessia salto, string regra = "WALKING: degrau alcançável (salto de travessia)")
+        {
+            IrPara(Estado.Jumping, regra);
+            _s = _s with { Movimento = _s.Movimento with { Travessia = salto with { Passo = 0 } } };
+        }
+
+        /// <summary>
+        /// Um passo do salto de degrau (P13b; D6 e D8): a posição analítica do arco; o monitor da âncora troca na borda, com o
+        /// tamanho do novo monitor. No último passo, o pouso exato no chão do vizinho, e o contato com o chão leva a LANDING.
+        /// </summary>
+        private void PassoNoSalto(Travessia salto)
+        {
+            if (_s.Topologia is not { } t || t.PorChave(salto.ChaveOrigem) is not { } origem || t.PorChave(salto.ChaveDestino) is not { } destino)
+            {
+                _s = _s with { Movimento = _s.Movimento with { Travessia = null } };
+                return;
+            }
+            int passo = salto.Passo + 1;
+            if (passo >= salto.PassosTotais)
+            {
+                MoverPara(destino, salto.XDestino, salto.YDestino);
+                _s = _s with { Movimento = _s.Movimento with { VX = 0, VY = 0, Travessia = null } };
+                _transicoes.Add(new Transicao(Estado.Jumping, Estado.Jumping, "JUMPING: salto de travessia completo"));
+                Sinalizar(SinalDeMovimento.ContatoComOChao);
+                return;
+            }
+            (double x, double y) = Passagens.PosicaoNoSalto(salto, passo, _cfg.PassosPorSegundo);
+            var ancora = new PontoPx((int)Math.Round(x, MidpointRounding.AwayFromZero), (int)Math.Round(y, MidpointRounding.AwayFromZero));
+            MoverPara(Passagens.PassouDaBorda(salto, ancora) ? destino : origem, x, y);
+            _s = _s with { Movimento = _s.Movimento with { Travessia = salto with { Passo = passo } } };
+        }
+
+        /// <summary>
+        /// Na porta, um sorteio entre atravessar, com <see cref="PerfilDeEnergia.PesoAtravessar"/>, e o caminho da parede, com a
+        /// soma dos pesos dele (parar, escalar e virar; <see cref="Sinalizar"/>), que sorteia de novo entre os três: a mesma
+        /// distribuição de um sorteio só, com o código da parede intacto.
+        /// </summary>
+        private bool SorteiaAtravessar()
+        {
+            int atravessar = Perfil.PesoAtravessar;
+            if (atravessar <= 0) return false;
+            int parede = 3 + (Permite(AcoesAutonomas.Escalar) ? Perfil.PesoEscalar : 0) + 2;
+            (int i, Aleatorio a) = _s.Aleatorio.Ponderado([atravessar, parede]);
+            _s = _s with { Aleatorio = a };
+            return i == 0;
+        }
+
+        /// <summary>
+        /// Um passo da travessia andando (4.1 e D8): a âncora fina anda reta, sem o cambaleio, na velocidade do monitor da âncora,
+        /// e troca de monitor quando, arredondada, passa da borda; os pés ficam no chão (o mesmo dos dois lados). Ela termina com o
+        /// sprite inteiro no destino; aí, com calma, com um item na mão do usuário ou sem percurso, ele para.
+        /// </summary>
+        private void PassoAtravessando(Travessia travessia)
+        {
+            if (_s.Topologia is not { } t || t.PorChave(travessia.ChaveOrigem) is not { } origem || t.PorChave(travessia.ChaveDestino) is not { } destino)
+            {
+                _s = _s with { Movimento = _s.Movimento with { Travessia = null } };
+                return;
+            }
+            EstadoDoMovimento mv = _s.Movimento;
+            MonitorDoDesktop atual = _s.Lugar is { } lugar && Passagens.PassouDaBorda(travessia, lugar.Ancora) ? destino : origem;
+            double passo = PorPasso(Fisica.VelocidadeAndando, atual.Dpi / 96.0);
+            double x = mv.X + travessia.Lado * passo;
+            var ancora = new PontoPx((int)Math.Round(x, MidpointRounding.AwayFromZero), atual.AreaUtil.Base);
+            MonitorDoDesktop daAncora = Passagens.PassouDaBorda(travessia, ancora) ? destino : origem;
+            _s = _s with { Movimento = mv with { Restante = mv.Restante - passo } };
+            MoverPara(daAncora, x, daAncora.AreaUtil.Base);
+
+            Superficies noDestino = Superficies.Do(t, destino, _cfg.Tamanho.ParaPixels(destino.Dpi));
+            int ax = _s.Lugar!.Ancora.X;
+            bool completa = travessia.Lado > 0 ? ax >= noDestino.Esquerda : ax <= noDestino.Direita;
+            if (!completa) return;
+            _s = _s with { Movimento = _s.Movimento with { Travessia = null } };
+            _transicoes.Add(new Transicao(Estado.Walking, Estado.Walking, "WALKING: travessia completa"));
+            if (Calmo || AtentoAoItem || _s.Movimento.Restante <= 0) IrPara(Estado.Idle, "WALKING: fim do percurso depois da travessia");
         }
 
         private void PassoEscalando()
@@ -1255,6 +1482,14 @@ public static partial class Maquina
             double y = mv.Y + sentido * PorPasso(velocidade, escala);
             double x = Sentido > 0 ? sup.Direita : sup.Esquerda;
             _s = _s with { Movimento = mv with { SentidoVertical = sentido, Foguete = foguete } };
+            // Subindo, os pés cruzaram neste passo a altura do chão de um vizinho mais alto (o topo do trecho de parede abaixo
+            // da porta): o transbordo para ele (P13c; C14 da crítica), sem sorteio se ele ia ao outro monitor.
+            if (sentido < 0 && TransbordoAoPassar(m, mv.Y, y) is { } transbordo && (mv.QuerAtravessar || SorteiaAtravessar()))
+            {
+                MoverPara(m, x, transbordo.Y0);
+                Saltar(transbordo, "CLIMBING: transbordo para o chão do vizinho");
+                return;
+            }
             if (sentido < 0 && y <= sup.Teto)
             {
                 MoverPara(m, x, sup.Teto);
@@ -1338,6 +1573,11 @@ public static partial class Maquina
         private void PassoNoAr()
         {
             if (!Mundo(out MonitorDoDesktop m, out Superficies sup, out double escala)) return;
+            if (_s.Movimento.Travessia is { Tipo: TipoDeTravessia.Salto } salto)
+            {
+                PassoNoSalto(salto);
+                return;
+            }
             EstadoDoMovimento mv = _s.Movimento;
             double dt = 1.0 / _cfg.PassosPorSegundo;
             double vy = Math.Min(mv.VY + _cfg.Fisica.Gravidade * escala * dt, _cfg.Fisica.VelocidadeMaximaDeQueda * escala);
@@ -1404,6 +1644,8 @@ public static partial class Maquina
             double x = _s.Movimento.X;
             double livre = Sentido > 0 ? sup.Direita - x : x - sup.Esquerda;
             double atras = Sentido > 0 ? x - sup.Esquerda : sup.Direita - x;
+            // Com uma porta plana à frente (passo P13), o espaço continua do outro lado: não vira.
+            if (Mundo(out MonitorDoDesktop m, out _, out _) && PlanoDeTravessia(m, Sentido) is not null) livre = double.PositiveInfinity;
             if (livre < _cfg.Fisica.EspacoMinimo * escala && atras > livre) Virar();
             _s = _s with { Movimento = _s.Movimento with { Restante = dip * escala } };
         }
@@ -1683,6 +1925,8 @@ public static partial class Maquina
             _s = _s with { Estado = novo, Motivo = novo == Estado.Hidden ? _s.Motivo : MotivoDoOcultamento.Nenhum };
             // Sair de USING, pelo fim ou por uma interrupção, acaba o uso (DEC-028); a onda continua.
             if (de == Estado.Using && novo != Estado.Using) _s = _s with { Uso = null };
+            // Sair da caminhada desfaz a travessia em curso (passo P13; C15 da crítica).
+            if (novo != de && _s.Movimento.Travessia is not null) _s = _s with { Movimento = _s.Movimento with { Travessia = null } };
             if (novo != de && DecideNoEstado(novo)) _reagendar = true;
             // Ao entrar num estado de movimento, a física parte da âncora atual, parada; quem
             // chamou ajusta velocidade e plano depois (DEC-022).

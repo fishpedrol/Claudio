@@ -29,6 +29,25 @@ public sealed record ParametrosDeMovimento
     /// <summary>Altura do salto para longe da parede, em DIP.</summary>
     public double AlturaDoPuloDaParede { get; init; } = 40;
 
+    /// <summary>
+    /// Travessia (Fase 5, passo P13b; DEC-032): a maior subida, em DIP, de um degrau entre o chão de um monitor e o do vizinho
+    /// que ele vence num salto; medida pela menor escala dos dois, igual em todo nível de energia (invariante 12). Acima
+    /// disso, só pela parede (o transbordo, P13c).
+    /// </summary>
+    public double SubidaMaxima { get; init; } = 120;
+
+    /// <summary>A maior descida, em DIP, de um degrau que ele vence num salto (P13b).</summary>
+    public double DescidaMaxima { get; init; } = 480;
+
+    /// <summary>
+    /// Os tempos de voo do salto de travessia, em segundos, na ordem em que o solucionador os tenta (P13b): o primeiro com um
+    /// arco em que o sprite fica sempre na união das áreas úteis vence. Os longos servem à subida, que precisa subir antes de
+    /// passar da borda.
+    /// </summary>
+    public IReadOnlyList<double> TemposDoSalto { get; init; } = TemposDoSaltoPadrao;
+
+    private static readonly double[] TemposDoSaltoPadrao = [0.30, 0.40, 0.50, 0.65, 0.80, 1.00, 1.20, 1.40];
+
     /// <summary>Menor espaço livre, em DIP, para uma caminhada ou um pulo naquela direção; menos que isso, vira.</summary>
     public double EspacoMinimo { get; init; } = 24;
 
@@ -114,6 +133,15 @@ public sealed record EstadoDoMovimento(double X, double Y, double VX, double VY,
     /// fica desligado até a próxima decisão.
     /// </summary>
     public bool Agarrado { get; init; }
+
+    /// <summary>
+    /// Caminhada: a travessia em curso para o monitor vizinho (Fase 5, passo P13; DEC-032), atômica; nula fora dela. Sair da
+    /// caminhada a desfaz.
+    /// </summary>
+    public Travessia? Travessia { get; init; }
+
+    /// <summary>Caminhada: anda até a porta plana para atravessar (<see cref="AcoesAutonomas.IrAoOutroMonitor"/>), sem o sorteio da porta.</summary>
+    public bool QuerAtravessar { get; init; }
 }
 
 /// <summary>

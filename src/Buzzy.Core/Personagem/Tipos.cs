@@ -310,6 +310,14 @@ public enum AcoesAutonomas
     /// "tira do chapéu" o baseado, sem item no mundo, e o usa como o baseado que o usuário solta nele.
     /// </summary>
     FumarBaseado = 64,
+
+    /// <summary>
+    /// Ir ao outro monitor (Fase 5, passo P13; DEC-032): andar até a porta plana do monitor em que está e atravessar, sem o
+    /// sorteio da porta, que é das caminhadas comuns. No fim do enum, fora de <see cref="Todas"/>, como o baseado por conta
+    /// própria: só a configuração do aplicativo e os testes que a pedem a ligam. Só existe com a travessia ligada
+    /// (<see cref="ConfiguracaoDoNucleo.Travessia"/> e <see cref="Preferencias.AtravessarMonitores"/>) e uma porta plana.
+    /// </summary>
+    IrAoOutroMonitor = 128,
 }
 
 /// <summary>Consultas sobre os estados.</summary>

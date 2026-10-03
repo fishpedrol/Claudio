@@ -15,10 +15,11 @@ namespace Buzzy.Verificacao;
 /// Verificação sintética do tamagotchi adulto e da emoção dominante (DEC-027 e DEC-028; crítica de integração, seção 6,
 /// casos V1 a V16 e X1), com a chave ligada no aplicativo (passo T9), mais o caso "pausar com ele na parede sem estar
 /// preso" (correção do núcleo, achado 4), os do alívio e da paranoia (pedidos do usuário de 2026-10-01: V18, V17b e
-/// V17) e o do baseado por conta própria (pedido das 19:10: V19). Abre o receptor (o "aplicativo do usuário", com o foco) e
+/// V17), o do baseado por conta própria (pedido das 19:10: V19) e o da chave do conteúdo adulto (pedido de 2026-10-02:
+/// V20). Abre o receptor (o "aplicativo do usuário", com o foco) e
 /// o Buzzy várias vezes, sempre com o perfil de teste
 /// <c>verificacao</c>, <c>--diagnostico</c> e <c>--semente</c>: pausado com uma semente fixa (V1 a V7, V10 e V13 a V15,
-/// X1, V18 e, de novo, V9), pausado com a semente em que o primeiro sorteio da paranoia sai (V17b) e com a agenda ligada e
+/// X1, V18, V20 e, de novo, V9), pausado com a semente em que o primeiro sorteio da paranoia sai (V17b) e com a agenda ligada e
 /// sementes escolhidas por simulação do núcleo (<see cref="SementesDoTamagotchi"/>: V8, V11, V12, a parede e V17; e
 /// <see cref="Buzzy.App.Testes.Integracao.SementesDoBaseado"/>: V19). Todo
 /// clique, arraste e tecla é SINTÉTICO (SendInput), com as conferências do <see cref="Injetor"/> (dono do ponto, deriva do
@@ -132,6 +133,10 @@ internal sealed partial class Verificacao
             // Parte 5: o baseado por conta própria (pedido do usuário de 2026-10-01, 19:10), com a agenda ligada.
             V19BaseadoPorContaPropria(topologia);
             Digitar("T22-baseado;");
+
+            // Parte 6: a chave do conteúdo adulto (pedido do usuário de 2026-10-02; DEC-033), pausado.
+            V20ConteudoAdulto();
+            Digitar("T23-adulto;");
 
             Registrar("Menus do tamagotchi — depois de fechar, o foco volta ao aplicativo em uso", _menusSemVoltarOFoco == 0,
                 $"{_menusDoTamagotchi} menu(s) operado(s); em {_menusSemVoltarOFoco}, o receptor não voltou sozinho ao primeiro plano em 2 s e foi ativado pela ferramenta");
@@ -1451,6 +1456,57 @@ internal sealed partial class Verificacao
         finally
         {
             FecharBuzzy("V19");
+        }
+    }
+
+    /// <summary>
+    /// V20 (DEC-033): a chave "Conteúdo adulto" pelo menu, com o Buzzy pausado. Com a banana e a vodka no chão, A desliga: a
+    /// janela da vodka fecha (recolhida) e a da banana fica; o menu seguinte mostra a chave desmarcada, e V no submenu "Itens"
+    /// não invoca nada (só os quatro de alívio estão lá); A religa. Tudo por clique direito e teclas SINTÉTICOS.
+    /// </summary>
+    private void V20ConteudoAdulto()
+    {
+        const string Criterio = "V20 — Conteúdo adulto pelo menu (clique direito e A): desligado, a janela da vodka fecha e a da banana fica; o submenu \"Itens\" só tem os de alívio (V não invoca nada); A religa";
+        AbrirBuzzyDoTamagotchi(_sementeDoTamagotchi, pausado: true, "V20");
+        try
+        {
+            long marcaItens = LogDoBuzzy.Marca();
+            if (InvocarItem(Item.Banana, 'B', "V20") is not { } banana || InvocarItem(Item.Vodka, 'V', "V20") is not { } vodka) return;
+            if (EsperarItemNoChao(banana, marcaItens, _areaUtilPrincipal, 4000) is null || EsperarItemNoChao(vodka, marcaItens, _areaUtilPrincipal, 4000) is null)
+            {
+                Registrar(Criterio, Falhou, "os itens não pararam no chão em 4 s");
+                return;
+            }
+
+            long marca = LogDoBuzzy.Marca();
+            MenuOperado desligar = MenuNoPersonagem("V20, desligar", (Vk('A'), "A (Conteúdo adulto)"));
+            EventoBuzzy? desligado = LogDoBuzzy.Esperar(marca, e => e.Chave == "NUCLEO" && e["evento"] == "CmdSetAdultContent", 2000);
+            EventoBuzzy? removida = LogDoBuzzy.Esperar(marca, e => e.Chave == "ITEM" && e["removido"] == vodka.IdNoLog && e["motivo"] == "Recolhido", 3000);
+            Thread.Sleep(300);
+            bool vodkaFechou = !Nativo.IsWindow(vodka.Hwnd);
+            bool bananaFicou = Nativo.IsWindowVisible(banana.Hwnd) && !LogDoBuzzy.Desde(marca).Any(e => e.Chave == "ITEM" && e["removido"] == banana.IdNoLog);
+
+            long marcaDoMenu = LogDoBuzzy.Marca();
+            MenuOperado semVodka = MenuNoPersonagem("V20, V sem a vodka", (Vk('I'), "I (Itens)"), (Vk('V'), "V (nenhum item)"));
+            EventoBuzzy? exibindo = LogDoBuzzy.Desde(marcaDoMenu).FirstOrDefault(e => e.Chave == "MENU" && e["exibindo"] == "sim");
+            bool nadaNovo = !LogDoBuzzy.Desde(marcaDoMenu).Any(e => e.Chave == "ITEM" && e.Campos.ContainsKey("mostrado"));
+
+            long marcaReligar = LogDoBuzzy.Marca();
+            MenuOperado religar = MenuNoPersonagem("V20, religar", (Vk('A'), "A (Conteúdo adulto)"));
+            EventoBuzzy? religado = LogDoBuzzy.Esperar(marcaReligar, e => e.Chave == "NUCLEO" && e["evento"] == "CmdSetAdultContent", 2000);
+
+            bool recusado = desligar.Recusado || semVodka.Recusado || religar.Recusado;
+            bool ok = desligar.Fechado?["fechado"] == "ConteudoAdulto" && desligado?["regra"] == "CMD_SET_ADULT_CONTENT: desligado" && removida is not null && vodkaFechou && bananaFicou
+                && exibindo?["conteudoAdulto"] == "nao" && semVodka.Fechado?["fechado"] == "Nenhum" && nadaNovo
+                && religar.Fechado?["fechado"] == "ConteudoAdulto" && religado?["regra"] == "CMD_SET_ADULT_CONTENT: ligado";
+            Registrar(Criterio, recusado ? Inconclusivo : ok ? Ok : Falhou,
+                $"desligar: {DescreverMenu(desligar)}, regra {desligado?["regra"] ?? "nenhuma"}; vodka recolhida={removida is not null}, janela fechada={vodkaFechou}; banana ficou={bananaFicou}; "
+                + $"menu seguinte com conteudoAdulto={exibindo?["conteudoAdulto"] ?? "?"} e ícones {exibindo?["icones"] ?? "?"}; I e V: {DescreverMenu(semVodka)}, nenhum item novo={nadaNovo}; "
+                + $"religar: {DescreverMenu(religar)}, regra {religado?["regra"] ?? "nenhuma"}");
+        }
+        finally
+        {
+            FecharBuzzy("V20");
         }
     }
 

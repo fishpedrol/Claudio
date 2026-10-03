@@ -10,7 +10,7 @@ namespace Buzzy.Core.Testes.Personagem;
 /// <summary>
 /// Reproduções gravadas comparadas com um resultado de referência (TODO.md, Fase 2). Cada
 /// arquivo de <c>Referencias/</c> traz, no cabeçalho, a semente e a configuração
-/// (<c># semente: 42</c>, <c># queda-fisica: sim</c>, <c># painel: sim</c>, <c># movimento: sim</c>, <c># tamagotchi: sim</c>,
+/// (<c># semente: 42</c>, <c># queda-fisica: sim</c>, <c># painel: sim</c>, <c># movimento: sim</c>, <c># tamagotchi: sim</c>, <c># travessia: sim</c>,
 /// <c># acoes: Andar,Descansar</c>), depois as linhas de evento (<c>&gt;</c>) e a saída esperada.
 ///
 /// As referências são lidas da pasta-fonte (não da cópia do build, que pode estar velha), a lista
@@ -34,7 +34,8 @@ internal static class ReproducaoTestes
         "03-tela-cheia.txt",
         "04-agenda-e-energia.txt",
         "05-movimento-e-fisica.txt",
-        // A 06 é da Fase 5 (crítica de integração do tamagotchi, F15).
+        // A travessia entre monitores (Fase 5, passo P13; DEC-032).
+        "06-travessia.txt",
         "07-tamagotchi.txt",
         // A paranoia (pedido do usuário de 2026-10-01).
         "08-paranoia.txt",
@@ -400,6 +401,9 @@ internal static class ReproducaoTestes
                     break;
                 case "tamagotchi":
                     cfg = cfg with { Tamagotchi = valor == "sim" };
+                    break;
+                case "travessia":
+                    cfg = cfg with { Travessia = valor == "sim" };
                     break;
                 case "acoes":
                     cfg = cfg with

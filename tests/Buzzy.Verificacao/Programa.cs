@@ -8,11 +8,11 @@ using System.Windows;
 namespace Buzzy.Verificacao;
 
 /// <summary>
-/// Buzzy.Verificacao — verificação sintética dos critérios [MANUAL] das Fases 1, 3 e 4 e do tamagotchi (DEC-027 e
+/// Buzzy.Verificacao — verificação sintética dos critérios [MANUAL] das Fases 1, 3, 4 e 5 e do tamagotchi (DEC-027 e
 /// DEC-028; crítica de integração, seção 6).
 ///
 /// Uso:
-///   Buzzy.Verificacao.exe --injetar-input-na-tela [--fase 1|3|4|tamagotchi] [--semente N] [--ocioso S] [--espera-ocioso S]
+///   Buzzy.Verificacao.exe --injetar-input-na-tela [--fase 1|3|4|5|tamagotchi] [--semente N] [--ocioso S] [--espera-ocioso S]
 ///   Buzzy.Verificacao.exe --receptor &lt;log&gt; &lt;x&gt; &lt;y&gt; &lt;largura&gt; &lt;altura&gt;   (uso interno)
 ///
 /// Sem <c>--injetar-input-na-tela</c>, só imprime o uso e sai com código 2, sem abrir nada.
@@ -29,7 +29,7 @@ internal static class Programa
     private const string OpcaoDeInjetar = "--injetar-input-na-tela";
 
     private const string TextoDeUso = """
-        Buzzy.Verificacao: verificação dos critérios [MANUAL] das Fases 1, 3 e 4 e do tamagotchi com input SINTÉTICO.
+        Buzzy.Verificacao: verificação dos critérios [MANUAL] das Fases 1, 3, 4 e 5 e do tamagotchi com input SINTÉTICO.
 
         ATENÇÃO: abre o Buzzy e uma janela de teste, move o cursor e envia cliques e teclas por
         SendInput. Rode só com o computador livre e depois de avisar quem o usa. A Fase 3 também
@@ -37,16 +37,18 @@ internal static class Programa
         tamagotchi invoca itens pelo menu, arrasta-os até o personagem e o deixa andar sozinho,
         também paranoico, achando que tem alguém no teto, e fumando um baseado por conta própria
         (de desenho animado); leva de 7 a 13 minutos, com um repouso de 60 s em que nada deve ser
-        tocado.
+        tocado. A Fase 5 deixa o Buzzy atravessar sozinho para o outro monitor e o arrasta até lá, fecha e
+        reabre; leva cerca de 2 minutos.
 
         Os Buzzy abertos usam o perfil de teste "verificacao" (%LOCALAPPDATA%\Buzzy\testes\verificacao),
         apagado antes de cada abertura: as configurações reais do usuário não são lidas nem gravadas.
 
         Uso:
-          Buzzy.Verificacao.exe --injetar-input-na-tela [--fase 1|3|4|tamagotchi] [--semente N] [--ocioso S] [--espera-ocioso S]
+          Buzzy.Verificacao.exe --injetar-input-na-tela [--fase 1|3|4|5|tamagotchi] [--semente N] [--ocioso S] [--espera-ocioso S]
 
           --injetar-input-na-tela  obrigatória: confirma que a ferramenta pode agir na tela.
           --fase F                 1 (padrão): shell do desktop; 3: input e arraste; 4: movimento e superfícies;
+                                   5: travessia entre monitores e soltar, fechar e reabrir no mesmo lugar;
                                    tamagotchi: emoção dominante, itens, uso e onda (DEC-027 e DEC-028).
           --semente N              só com --fase tamagotchi: a semente dos Buzzy abertos pausados (padrão 2028);
                                    os abertos com a agenda ligada usam sementes escolhidas por simulação do núcleo.
@@ -85,8 +87,8 @@ internal static class Programa
                     injetar = true;
                     break;
                 case "--fase":
-                    if (i + 1 >= args.Length || args[i + 1] is not ("1" or "3" or "4" or "tamagotchi"))
-                        return Uso("--fase precisa de 1, 3, 4 ou tamagotchi.");
+                    if (i + 1 >= args.Length || args[i + 1] is not ("1" or "3" or "4" or "5" or "tamagotchi"))
+                        return Uso("--fase precisa de 1, 3, 4, 5 ou tamagotchi.");
                     fase = args[++i];
                     break;
                 case "--semente":
@@ -192,6 +194,7 @@ internal static class Programa
         {
             "3" => v.ExecutarFase3(),
             "4" => v.ExecutarFase4(),
+            "5" => v.ExecutarFase5(),
             "tamagotchi" => v.ExecutarTamagotchi(semente),
             _ => v.Executar(),
         };

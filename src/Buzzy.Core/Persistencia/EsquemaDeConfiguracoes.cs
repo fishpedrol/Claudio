@@ -7,12 +7,13 @@ using Buzzy.Core.Personagem;
 namespace Buzzy.Core.Persistencia;
 
 /// <summary>
-/// Esquema v3 do settings.json (Fase 5; ARCHITECTURE.md 2.12; SECURITY.md 7): converte bytes em
+/// Esquema v4 do settings.json (Fase 5; ARCHITECTURE.md 2.12; SECURITY.md 7): converte bytes em
 /// <see cref="ConfiguracoesSalvas"/> e de volta, sem E/S. A v2 acrescentou a emoção dominante
 /// (<c>preferencias.emocaoDominante</c>, DEC-027); a v3, a postura gravada com a posição (DEC-029, item 11): a borda do
 /// esconderijo (<c>posicao.esconderijo</c>, DEC-025) e a marca "preso pelo usuário" (<c>posicao.presoPeloUsuario</c>,
-/// DEC-024). Os campos novos são sempre escritos; arquivos v1 e v2, sem eles, são lidos sem migração e sem aviso, com a
-/// emoção automática, sem esconderijo e solto.
+/// DEC-024); a v4, a chave do conteúdo adulto (<c>preferencias.conteudoAdulto</c>, DEC-033). Os campos novos são sempre
+/// escritos; arquivos v1 a v3, sem eles, são lidos sem migração e sem aviso, com a emoção automática, sem esconderijo,
+/// solto e com o conteúdo adulto ligado, o padrão.
 ///
 /// A leitura é tolerante campo a campo e nunca lança. Só é ilegível o arquivo grande demais, fora de
 /// UTF-8, que não é JSON (comentários e vírgula final são aceitos), fundo demais, sem objeto na raiz ou
@@ -31,10 +32,10 @@ public static class EsquemaDeConfiguracoes
 {
     /// <summary>
     /// Versão escrita no campo <c>schemaVersion</c>. Toda ampliação do esquema a incrementa: a 2 acrescentou a emoção
-    /// dominante, e a 3, a borda do esconderijo e a marca de preso; um build de uma versão anterior vê o arquivo novo como
+    /// dominante, a 3, a borda do esconderijo e a marca de preso, e a 4, o conteúdo adulto; um build de uma versão anterior vê o arquivo novo como
     /// versão futura e não grava por cima.
     /// </summary>
-    public const int VersaoAtual = 3;
+    public const int VersaoAtual = 4;
 
     /// <summary>Tamanho máximo do arquivo, contando um BOM; maior, é ilegível sem ser interpretado.</summary>
     public const int TamanhoMaximoEmBytes = 65_536;
@@ -48,12 +49,12 @@ public static class EsquemaDeConfiguracoes
     /// <summary>Faixa das coordenadas gravadas (âncora e tela do monitor), em pixels físicos.</summary>
     public const int CoordenadaMinima = -32_768, CoordenadaMaxima = 32_767;
 
-    // Campos do esquema v3, na ordem em que são escritos.
+    // Campos do esquema v4, na ordem em que são escritos.
     private static readonly string[] CamposDaRaiz = ["schemaVersion", "posicao", "preferencias"];
     private static readonly string[] CamposDaPosicao = ["chaveMonitor", "telaDoMonitor", "fracaoX", "fracaoY", "ancoraAbsoluta", "esconderijo", "presoPeloUsuario"];
     private static readonly string[] CamposDaTela = ["esquerda", "topo", "direita", "base"];
     private static readonly string[] CamposDaAncora = ["x", "y"];
-    private static readonly string[] CamposDasPreferencias = ["energia", "modoTelaCheia", "atravessarMonitores", "emocaoDominante"];
+    private static readonly string[] CamposDasPreferencias = ["energia", "modoTelaCheia", "atravessarMonitores", "emocaoDominante", "conteudoAdulto"];
 
     private static readonly NivelDeEnergia[] NiveisDeEnergia = [NivelDeEnergia.Baixa, NivelDeEnergia.Media, NivelDeEnergia.Alta];
 
@@ -164,6 +165,7 @@ public static class EsquemaDeConfiguracoes
             json.WriteBoolean("modoTelaCheia", normalizadas.Preferencias.ModoTelaCheia);
             json.WriteBoolean("atravessarMonitores", normalizadas.Preferencias.AtravessarMonitores);
             json.WriteString("emocaoDominante", NomeDaEmocao(normalizadas.Preferencias.EmocaoDominante));
+            json.WriteBoolean("conteudoAdulto", normalizadas.Preferencias.ConteudoAdulto);
             json.WriteEndObject();
             json.WriteEndObject();
         }
@@ -420,7 +422,7 @@ public static class EsquemaDeConfiguracoes
 
     /// <summary>
     /// Preferências campo a campo: ausente vale o padrão, sem aviso; inválido vale o padrão, com aviso. A emoção
-    /// dominante nula ou ausente (um arquivo v1) é a automática, sem aviso.
+    /// dominante nula ou ausente (um arquivo v1) é a automática, sem aviso; o conteúdo adulto ausente (até a v3) é o ligado.
     /// </summary>
     private static Preferencias LerPreferencias(JsonElement? valor, List<string> avisos)
     {
@@ -446,6 +448,7 @@ public static class EsquemaDeConfiguracoes
             LerBooleano(campos[2], "preferencias.atravessarMonitores", padrao.AtravessarMonitores, avisos))
         {
             EmocaoDominante = emocao,
+            ConteudoAdulto = LerBooleano(campos[4], "preferencias.conteudoAdulto", padrao.ConteudoAdulto, avisos),
         };
     }
 

@@ -145,6 +145,9 @@ internal static class InvariantesTestes
         // E (revisão do baseado, achado 4): em IDLE fora do chão, sem a física, ele não fuma; e o menu de contexto em USING,
         // inclusive no baseado por conta própria, não interrompe o uso.
         "IDLE fora do chão com a ação: não fumou", "menu de contexto em USING", "o menu não interrompeu o baseado por conta própria",
+        // A chave do conteúdo adulto (DEC-033): desligada no meio do fluxo, com algo em curso, recusando item adulto e
+        // terminando um uso adulto (invariante 30).
+        "30: desligado no meio do fluxo", "30: desligado com algo do tamagotchi em curso", "30: item adulto recusado", "30: o uso adulto termina ao desligar",
     ];
 
     /// <summary>Situações da execução com o tamagotchi e a emoção dominante (as da emoção, com itens e ondas).</summary>
@@ -484,6 +487,24 @@ internal static class InvariantesTestes
         // Invariante 5: depois de SETTLING, a âncora está na área útil de um monitor presente.
         if (transicoes.Any(t => t.De == Estado.Settling) && depois.Topologia is { } topologia && ancoraDepois is { } a)
             Verificar(NaAreaUtil(topologia, a), () => $"invariante 5: {onde()}: âncora {a} fora de toda área útil de {topologia}");
+
+        // Invariante 21 (Fase 5, passo P13; DEC-032): com a física, à vista e fora de PRESSED, DRAGGING, REACTING, do esconderijo
+        // (DEC-025, de propósito atrás da borda) e de uma travessia em curso, o sprite fica inteiro na área útil do monitor da
+        // âncora, quando cabe nela; no meio de uma travessia, inteiro na união das áreas úteis.
+        if (cfg.Movimento && depois.Estado.Visivel() && depois.Lugar is { } lugar21 && depois.Topologia is { } t21
+            && depois.Estado is not (Estado.Pressed or Estado.Dragging or Estado.Reacting or Estado.Peeking) && depois.Esconderijo == LadoDoEsconderijo.Nenhum)
+        {
+            RetanguloPx area21 = lugar21.Monitor.AreaUtil;
+            if (depois.Movimento.Travessia is not null)
+            {
+                Contar("21: no meio de uma travessia");
+                Verificar(Passagens.NaUniaoDasAreasUteis(t21, lugar21.Retangulo), () => $"invariante 21: {onde()}: atravessando com o sprite {lugar21.Retangulo} fora da união das áreas úteis");
+            }
+            else if (lugar21.Tamanho.Largura <= area21.Largura && lugar21.Tamanho.Altura <= area21.Altura)
+            {
+                Verificar(area21.Contem(lugar21.Retangulo), () => $"invariante 21: {onde()}: {depois.Estado} com o sprite {lugar21.Retangulo} fora da área útil {area21} do monitor da âncora");
+            }
+        }
 
         // Invariante 6: trocar expressão não muda estado nem posição.
         if (evento is ExpressionChange x)
@@ -933,6 +954,18 @@ internal static class InvariantesTestes
         EstadoDoNucleo depois = r.Estado;
         IReadOnlyList<Transicao> transicoes = r.Transicoes;
 
+        // ------------------------------------------------ 30: com o conteúdo adulto desligado, nada adulto (DEC-033)
+        if (!depois.Preferencias.ConteudoAdulto)
+        {
+            Verificar(depois.Itens.Todos.All(i => cfg.TabelaDeItens(i.Item).Alivio), () => $"invariante 30: {onde()}: item adulto no mundo com a chave desligada ({depois.Itens})");
+            Verificar(!(depois.Onda is { } frente && cfg.TabelaDeOndas(frente.Tipo).DeSubstancia) && !(depois.OndaDeFundo is { } fundo && cfg.TabelaDeOndas(fundo.Tipo).DeSubstancia),
+                () => $"invariante 30: {onde()}: onda de substância com a chave desligada ({depois.Onda}, fundo {depois.OndaDeFundo})");
+            Verificar(depois.Uso is not { } uso || cfg.TabelaDeItens(uso.Item).Alivio, () => $"invariante 30: {onde()}: usando {depois.Uso?.Item} com a chave desligada");
+            if (evento is CmdSetAdultContent { Ligado: false } && antes.Preferencias.ConteudoAdulto) Contar("30: desligado no meio do fluxo");
+            if (evento is CmdSetAdultContent { Ligado: false } && (antes.Itens.Todos.Any(i => !cfg.TabelaDeItens(i.Item).Alivio) || antes.Onda is not null || antes.Uso is not null))
+                Contar("30: desligado com algo do tamagotchi em curso");
+        }
+
         // ------------------------------------------------ 28: os itens no mundo e as janelas deles
         Verificar(depois.Itens.Quantidade <= cfg.MaximoDeItens, () => $"invariante 28: {onde()}: {depois.Itens.Quantidade} itens");
         foreach (ItemNoMundo item in depois.Itens.Todos)
@@ -1013,6 +1046,8 @@ internal static class InvariantesTestes
             {
                 ItemDragEnd => MotivoDaRemocao.Usado,
                 CmdClearItems => MotivoDaRemocao.Recolhido,
+                // Desligar o conteúdo adulto (DEC-033) recolhe só os itens adultos.
+                CmdSetAdultContent { Ligado: false } or SettingsChanged { Preferencias.ConteudoAdulto: false } when !cfg.TabelaDeItens(antes.Itens.PorId(remocao.Id)!.Item).Alivio => MotivoDaRemocao.Recolhido,
                 CmdSummonItem => MotivoDaRemocao.Substituido,
                 _ => (MotivoDaRemocao)(-1),
             };
@@ -1024,6 +1059,12 @@ internal static class InvariantesTestes
         if (evento is CmdSummonItem invocacao)
         {
             bool aceita = antes.Carregado && antes.Estado.Visivel() && Enum.IsDefined(invocacao.Item) && antes.Lugar is not null;
+            // Com o conteúdo adulto desligado (DEC-033), um item adulto também é ignorado.
+            if (aceita && !antes.Preferencias.ConteudoAdulto && !cfg.TabelaDeItens(invocacao.Item).Alivio)
+            {
+                aceita = false;
+                Contar("30: item adulto recusado");
+            }
             if (!aceita)
             {
                 Contar("item invocado ignorado");
@@ -1224,7 +1265,10 @@ internal static class InvariantesTestes
             rastro.AncoraNoUso = transladado.Ancora;
         if (antes.Estado == Estado.Using && depois.Estado != Estado.Using)
         {
-            Verificar(depois.Onda == antes.Onda && depois.OndaDeFundo == antes.OndaDeFundo, () => $"C16: {onde()}: o uso acabou e a onda mudou ({antes.Onda} → {depois.Onda})");
+            // Desligar o conteúdo adulto (DEC-033) termina o uso adulto e tira as ondas de substância no mesmo evento.
+            bool desligouOAdulto = antes.Preferencias.ConteudoAdulto && !depois.Preferencias.ConteudoAdulto;
+            if (desligouOAdulto) Contar("30: o uso adulto termina ao desligar");
+            Verificar(desligouOAdulto || (depois.Onda == antes.Onda && depois.OndaDeFundo == antes.OndaDeFundo), () => $"C16: {onde()}: o uso acabou e a onda mudou ({antes.Onda} → {depois.Onda})");
             bool peloFim = transicoes.Count > 0 && transicoes[0].Regra.StartsWith("USING: fim do uso", StringComparison.Ordinal);
             if (peloFim)
             {
@@ -2236,6 +2280,11 @@ internal static class InvariantesTestes
                     EntregarAoTamagotchi(doItem);
                 if (sombraDoTamagotchi.Estado.Gesto == Gesto.Nenhum && doTamagotchi.Next(15) == 0)
                     lotesDoTamagotchiComEmocao.Add([new CmdSetDominantEmotion(EsquemaDeConfiguracoesTestes.EmocaoAleatoria(doTamagotchi))]);
+                // A chave do conteúdo adulto (DEC-033), num lote só dela e fora de um gesto curto: desligada de vez em quando, e
+                // religada logo, para o resto do fluxo continuar com os itens adultos.
+                bool adulto = sombraDoTamagotchi.Estado.Preferencias.ConteudoAdulto;
+                if (sombraDoTamagotchi.Estado.Gesto == Gesto.Nenhum && doTamagotchi.Next(adulto ? 40 : 6) == 0)
+                    EntregarAoTamagotchi([new CmdSetAdultContent(!adulto)]);
                 EntregarAoTamagotchi([.. lote.Select(e => Adaptar(e, sombra.Estado, sombraDoTamagotchi.Estado, doTamagotchi))]);
             }
 

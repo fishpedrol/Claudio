@@ -42,6 +42,7 @@ public static class Gravacao
             ItemEffectTimer e => string.Create(Invariante, $"ItemEffectTimer geracao={e.Geracao}"),
             ExpressionChange e => $"ExpressionChange expressao={e.Expressao}",
             CmdSetDominantEmotion e => $"CmdSetDominantEmotion emocao={e.Emocao?.ToString() ?? Automatica}",
+            CmdSetAdultContent e => $"CmdSetAdultContent ligado={SimNao(e.Ligado)}",
             CmdSummonItem e => $"CmdSummonItem item={e.Item}",
             ItemPress e => string.Create(Invariante, $"ItemPress id={e.Id} {Ponto(e.Cursor)}"),
             ItemDragStart e => string.Create(Invariante, $"ItemDragStart id={e.Id}"),
@@ -123,6 +124,7 @@ public static class Gravacao
             "ItemEffectTimer" => new ItemEffectTimer(campos.TryGetValue("geracao", out string? go) ? long.Parse(go, NumberStyles.Integer, Invariante) : atual.GeracaoDaOnda),
             "ExpressionChange" => new ExpressionChange(Enum.Parse<Expressao>(Campo("expressao"))),
             "CmdSetDominantEmotion" => new CmdSetDominantEmotion(LerEmocao(Campo("emocao"))),
+            "CmdSetAdultContent" => new CmdSetAdultContent(SimOuNao("ligado", Campo("ligado"))),
             "CmdSummonItem" => new CmdSummonItem(LerValor<Item>("item", Campo("item"), "não é um item")),
             "CmdClearItems" => new CmdClearItems(),
             "ItemPress" => new ItemPress(Inteiro(Campo("id")), Cursor()),
@@ -254,7 +256,7 @@ public static class Gravacao
     /// </summary>
     private static string DescreverPreferencias(Preferencias p)
         => $"energia={p.Energia} telaCheia={SimNao(p.ModoTelaCheia)}" + (p.AtravessarMonitores ? "" : " travessia=nao")
-            + (p.EmocaoDominante is { } emocao ? $" emocao={emocao}" : "");
+            + (p.EmocaoDominante is { } emocao ? $" emocao={emocao}" : "") + (p.ConteudoAdulto ? "" : " adulto=nao");
 
     /// <summary>Lê o que <see cref="DescreverPreferencias"/> escreve; um campo ausente vale o padrão.</summary>
     private static Preferencias LerPreferencias(Dictionary<string, string> campos) => new(
@@ -263,6 +265,7 @@ public static class Gravacao
         campos.TryGetValue("travessia", out string? a) ? SimOuNao("travessia", a) : Preferencias.Padrao.AtravessarMonitores)
     {
         EmocaoDominante = campos.TryGetValue("emocao", out string? m) ? LerEmocao(m) : null,
+        ConteudoAdulto = !campos.TryGetValue("adulto", out string? adulto) || SimOuNao("adulto", adulto),
     };
 
     /// <summary>

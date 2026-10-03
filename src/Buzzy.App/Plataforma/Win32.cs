@@ -33,6 +33,8 @@ internal static class Win32
     internal const int WM_MOUSEACTIVATE = 0x0021;
     internal const int WM_DISPLAYCHANGE = 0x007E;
     internal const int WM_CONTEXTMENU = 0x007B;
+    internal const int WM_WTSSESSION_CHANGE = 0x02B1;
+    internal const int WM_POWERBROADCAST = 0x0218;
     internal const int WM_MOUSEMOVE = 0x0200;
     internal const int WM_LBUTTONDOWN = 0x0201;
     internal const int WM_LBUTTONUP = 0x0202;
@@ -45,6 +47,14 @@ internal static class Win32
     internal const int MA_NOACTIVATE = 3;
     internal const int MK_LBUTTON = 0x0001;
     internal const int SPI_SETWORKAREA = 0x002F;
+
+    // ---- Sessão e energia -----------------------------------------------------------
+    internal const uint NOTIFY_FOR_THIS_SESSION = 0;
+    internal const int WTS_SESSION_LOCK = 0x7;
+    internal const int WTS_SESSION_UNLOCK = 0x8;
+    internal const int PBT_APMSUSPEND = 0x0004;
+    internal const int PBT_APMRESUMESUSPEND = 0x0007;
+    internal const int PBT_APMRESUMEAUTOMATIC = 0x0012;
 
     // ---- SetWindowPos --------------------------------------------------------------
     internal static readonly nint HWND_TOPMOST = -1;
@@ -178,6 +188,16 @@ internal static class Win32
 
     [DllImport("user32.dll", EntryPoint = "RegisterWindowMessageW", CharSet = CharSet.Unicode, SetLastError = true)]
     internal static extern int RegisterWindowMessage(string lpString);
+
+    // ---- WTS: notificações de bloqueio e desbloqueio da sessão atual ----------------
+
+    [DllImport("wtsapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool WTSRegisterSessionNotification(nint hWnd, uint dwFlags);
+
+    [DllImport("wtsapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool WTSUnRegisterSessionNotification(nint hWnd);
 
     // ---- user32: captura do mouse no gesto começado no personagem (ARCHITECTURE.md 2.7) ----
 

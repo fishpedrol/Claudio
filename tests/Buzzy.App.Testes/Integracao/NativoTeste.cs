@@ -26,6 +26,8 @@ internal static class NativoTeste
     internal const int WM_SETTINGCHANGE = 0x001A;
     internal const int WM_CANCELMODE = 0x001F;
     internal const int WM_DISPLAYCHANGE = 0x007E;
+    internal const int WM_WTSSESSION_CHANGE = 0x02B1;
+    internal const int WM_POWERBROADCAST = 0x0218;
     internal const int WM_MOUSEMOVE = 0x0200;
     internal const int WM_LBUTTONDOWN = 0x0201;
     internal const int WM_LBUTTONUP = 0x0202;
@@ -33,6 +35,11 @@ internal static class NativoTeste
     internal const int WM_RBUTTONUP = 0x0205;
     internal const int MK_LBUTTON = 0x0001;
     internal const int SPI_SETWORKAREA = 0x002F;
+    internal const int WTS_SESSION_LOCK = 0x7;
+    internal const int WTS_SESSION_UNLOCK = 0x8;
+    internal const int PBT_APMSUSPEND = 0x0004;
+    internal const int PBT_APMRESUMESUSPEND = 0x0007;
+    internal const int PBT_APMRESUMEAUTOMATIC = 0x0012;
     internal const int SW_SHOWMINNOACTIVE = 7;
 
     /// <summary>DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2.</summary>
