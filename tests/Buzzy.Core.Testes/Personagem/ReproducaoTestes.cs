@@ -292,7 +292,7 @@ internal static class ReproducaoTestes
         // Lista fechada, como a da emoção: o nome exato, ou o número de um valor fora do enum (para os testes de
         // saneamento); a marca, só sim ou nao.
         Afirmar.Igual((LadoDoEsconderijo)7, ((Loaded)Gravacao.Ler("Loaded topologia=UmMonitor esconderijo=7", _ => umMonitor, estado).Single()).Esconderijo, "fora do enum, pelo número");
-        foreach (string invalida in new[] { "esconderijo=Cima", "esconderijo=1", "esconderijo=baixo", "esconderijo=Baixo,Direita", "preso=talvez", "preso=true" })
+        foreach (string invalida in new[] { "esconderijo=Topo", "esconderijo=1", "esconderijo=baixo", "esconderijo=Baixo,Direita", "preso=talvez", "preso=true" })
             Afirmar.Lanca<FormatException>(() => Gravacao.Ler($"Loaded topologia=UmMonitor {invalida}", _ => umMonitor, estado), invalida);
     }
 

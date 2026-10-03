@@ -94,6 +94,7 @@ public static partial class Maquina
                 case CmdExit: Sair("CMD_EXIT"); break;
                 case CmdSetDominantEmotion e: EscolherEmocao(e.Emocao); break;
                 case CmdSetAdultContent e: EscolherConteudoAdulto(e.Ligado); break;
+                case CmdSetFullscreenMode e: EscolherModoTelaCheia(e.Ligado); break;
                 case CmdSummonItem e: InvocarItem(e.Item); break;
                 case CmdClearItems: RecolherItens(); break;
                 case ItemPress e: PegarItem(e.Id, e.Cursor); break;
@@ -218,8 +219,19 @@ public static partial class Maquina
             {
                 if (_s.Estado == Estado.Jumping || (_s.Estado == Estado.Walking && travessia.Tipo == TipoDeTravessia.Andando))
                 {
+                    // A volta da tela cheia interrompida (DEC-035) termina na posição de antes dela, que já acompanhou a topologia.
+                    if (travessia.Pulo == PuloDaTelaCheia.Volta && _s.RetornoDaTelaCheia is { } retornoDoPulo)
+                    {
+                        (Posicionamento rv, PosicaoDoPersonagem pv) = Posicionador.Reacomodar(nova, retornoDoPulo, _cfg.Tamanho);
+                        _s = _s with { RetornoDaTelaCheia = null };
+                        Acomodar(rv.Ancora, "TOPOLOGY_CHANGED: pulo da tela cheia interrompido, de volta à posição anterior", pv);
+                        return;
+                    }
                     (Posicionamento ra, PosicaoDoPersonagem pa) = Posicionador.Reacomodar(nova, _s.Posicao, _cfg.Tamanho);
                     Acomodar(ra.Ancora, "TOPOLOGY_CHANGED: travessia interrompida", pa);
+                    // A ida interrompida por cima do monitor ainda ocupado sai dele de novo.
+                    if (travessia.Pulo == PuloDaTelaCheia.Ida && _s.Lugar is { } interrompido && Fechado(interrompido.Monitor.Chave))
+                        SairDoMonitorOcupado("TOPOLOGY_CHANGED: pulo da tela cheia interrompido sobre o monitor ocupado");
                     return;
                 }
                 _s = _s with { Movimento = _s.Movimento with { Travessia = null, Restante = 0 } };
@@ -265,6 +277,8 @@ public static partial class Maquina
         {
             if (!_s.Estado.AceitaPressionar() || _s.Lugar is null) return;
             PontoPx ancora = _s.Lugar.Ancora;
+            // Pegar no ar a volta da tela cheia (DEC-035): a tela cheia já acabou, e o usuário assume daqui; o retorno acaba.
+            if (PuloEmVoo is { Pulo: PuloDaTelaCheia.Volta }) _s = _s with { RetornoDaTelaCheia = null };
             _s = _s with { Pegada = new PontoPx(cursor.X - ancora.X, cursor.Y - ancora.Y), PassosRestantes = 0, TelaCheiaMudouNoGesto = false };
             IrPara(Estado.Pressed, "PRESS sobre pixel opaco");
         }
@@ -367,8 +381,9 @@ public static partial class Maquina
         }
 
         /// <summary>
-        /// Borda do esconderijo (DEC-025): a lateral mais próxima, se o personagem está no alto e junto
-        /// dela (na parede, por exemplo); senão, a de baixo.
+        /// Borda do esconderijo (DEC-025): a de cima, se o topo do sprite está ao alcance do cipó (pendurado nele, por exemplo;
+        /// pedido do usuário de 2026-10-03); a lateral mais próxima, se o personagem está no alto e junto dela (na parede, por
+        /// exemplo); senão, a de baixo.
         /// </summary>
         private LadoDoEsconderijo LadoMaisProximo(Posicionamento lugar)
         {
@@ -376,6 +391,7 @@ public static partial class Maquina
             double escala = lugar.Monitor.Dpi / 96.0;
             PontoPx a = lugar.Ancora;
             bool noAlto = sup.Chao - a.Y >= _cfg.Fisica.AlturaMinimaParaAgarrar * escala;
+            if (a.Y - sup.Teto <= _cfg.Fisica.DistanciaParaOCipo * escala) return LadoDoEsconderijo.Cima;
             double aEsquerda = a.X - sup.Esquerda, aDireita = sup.Direita - a.X;
             bool juntoDeUmaLateral = Math.Min(aEsquerda, aDireita) <= _cfg.Fisica.DistanciaParaAParede * escala;
             if (!noAlto || !juntoDeUmaLateral) return LadoDoEsconderijo.Baixo;
@@ -385,7 +401,8 @@ public static partial class Maquina
         /// <summary>
         /// Onde fica o esconderijo na borda dada (DEC-025), perto do lugar atual: na de baixo, os pés
         /// no chão (o quadro inteiro fica acima da barra e a pose só mostra a cabeça e as mãos); numa
-        /// lateral, encostado nela, na mesma altura. O sprite continua inteiro na área útil.
+        /// lateral, encostado nela, na mesma altura; na de cima, com o topo do sprite nela, como no cipó.
+        /// O sprite continua inteiro na área útil.
         /// </summary>
         private Posicionamento EsconderijoPara(Posicionamento lugar, LadoDoEsconderijo lado)
         {
@@ -395,6 +412,7 @@ public static partial class Maquina
             {
                 LadoDoEsconderijo.Direita => new PontoPx(sup.Direita, Math.Clamp(a.Y, sup.Teto, sup.Chao)),
                 LadoDoEsconderijo.Esquerda => new PontoPx(sup.Esquerda, Math.Clamp(a.Y, sup.Teto, sup.Chao)),
+                LadoDoEsconderijo.Cima => new PontoPx(Math.Clamp(a.X, sup.Esquerda, sup.Direita), sup.Teto),
                 _ => new PontoPx(Math.Clamp(a.X, sup.Esquerda, sup.Direita), sup.Chao),
             };
             return NoLugar(lugar.Monitor, ancora);
@@ -533,6 +551,7 @@ public static partial class Maquina
 
             LiberarGestoDoUsuario();
             FixarArrasteInterrompido();
+            DarOPuloPorTerminado();
             FecharPainelSeAberto();
             // Os itens (DEC-028): o da mão solta a captura, e os que caem vão ao chão (D18).
             LiberarItemNaMao();
@@ -657,6 +676,7 @@ public static partial class Maquina
         {
             LiberarGestoDoUsuario();
             FixarArrasteInterrompido();
+            DarOPuloPorTerminado();
             FecharPainelSeAberto();
             LiberarItemNaMao();
             AssentarItens();
@@ -729,6 +749,22 @@ public static partial class Maquina
                 return;
             }
             if (_s.Estado is Estado.Booting or Estado.Exiting) return;
+            DesistirDoSaltoParaMonitorFechado();
+
+            // O pulo da tela cheia em voo (DEC-035) segue com o destino livre. A tela cheia acabou: volta dali mesmo. O destino
+            // ficou ocupado: sai dali para o monitor livre mais próximo, com o retorno de antes.
+            if (PuloEmVoo is { } emVoo)
+            {
+                if (ocupados.Vazio)
+                {
+                    if (_s.RetornoDaTelaCheia is not null) VoltarDaTelaCheia("FULLSCREEN_TARGETS_CHANGED(vazio): pula de volta no meio do pulo", "FULLSCREEN_TARGETS_CHANGED(vazio): restaura a posição anterior");
+                }
+                else if (ocupados.Contem(emVoo.ChaveDestino))
+                {
+                    SairDoMonitorOcupado("FULLSCREEN_TARGETS_CHANGED: o destino do pulo ficou ocupado");
+                }
+                return;
+            }
 
             if (_s.Estado == Estado.Hidden)
             {
@@ -760,7 +796,7 @@ public static partial class Maquina
             if (ocupados.Vazio)
             {
                 if (_s.RetornoDaTelaCheia is not null)
-                    RestaurarRetorno("FULLSCREEN_TARGETS_CHANGED(vazio): restaura a posição anterior");
+                    VoltarDaTelaCheia("FULLSCREEN_TARGETS_CHANGED(vazio): pula de volta à posição anterior", "FULLSCREEN_TARGETS_CHANGED(vazio): restaura a posição anterior");
                 return;
             }
 
@@ -788,6 +824,12 @@ public static partial class Maquina
                 IrPara(Estado.Hidden, $"{regra}: nenhum monitor livre");
                 return;
             }
+            // Perto da lateral que encosta no livre, só um pulinho para o outro lado da borda (item 6); senão, ou sem um arco
+            // dele que caiba, o pulo até o cipó.
+            MonitorDoDesktop daqui = _s.Topologia.PorChave(_s.Lugar.Monitor.Chave) ?? _s.Lugar.Monitor;
+            int lado = LadoDoPulinho(daqui, _s.Lugar.Ancora.X, monitorLivre);
+            if (lado != 0 && Pular(monitorLivre, ChegadaDoPulinho(daqui, monitorLivre, lado), PuloDaTelaCheia.Ida, $"{regra}: pulinho para o monitor livre", pulinho: true)) return;
+            if (Pular(monitorLivre, ChegadaNoCipo(monitorLivre), PuloDaTelaCheia.Ida, $"{regra}: pula para o cipó do monitor livre")) return;
             Posicionamento noLivre = Posicionador.NoMonitor(monitorLivre, _s.Posicao.FracaoX, _s.Posicao.FracaoY, _cfg.Tamanho);
             Acomodar(noLivre.Ancora, $"{regra}: transfere para o monitor livre");
         }
@@ -798,6 +840,145 @@ public static partial class Maquina
             _s = _s with { RetornoDaTelaCheia = null };
             if (retorno is not null) _s = _s with { Posicao = retorno };
             Mostrar(regra);
+        }
+
+        // ---------------------------------------------------------------- pulo da tela cheia (DEC-035)
+
+        /// <summary>O pulo da tela cheia em voo, ou nulo.</summary>
+        private Travessia? PuloEmVoo => _s.Estado == Estado.Jumping && _s.Movimento.Travessia is { Pulo: not PuloDaTelaCheia.Nenhum } pulo ? pulo : null;
+
+        /// <summary>
+        /// Visível, com a posição de antes da tela cheia guardada: volta para ela num pulo (DEC-035) ou, sem um arco que caiba,
+        /// direto, como antes, com a <paramref name="regraDireta"/>.
+        /// </summary>
+        private void VoltarDaTelaCheia(string regraDoPulo, string regraDireta)
+        {
+            if (_s.RetornoDaTelaCheia is { } retorno && _s.Topologia is { } t)
+            {
+                (Posicionamento r, _) = Posicionador.Reacomodar(t, retorno, _cfg.Tamanho);
+                // Das duas pontas perto da mesma borda entre os monitores, a volta também é um pulinho (item 6).
+                bool pulinho = _s.Lugar is { } l && t.PorChave(l.Monitor.Chave) is { } aqui && aqui.Chave != r.Monitor.Chave
+                    && LadoDoPulinho(aqui, l.Ancora.X, r.Monitor) is var lado && lado != 0 && LadoDoPulinho(r.Monitor, r.Ancora.X, aqui) == -lado;
+                if (pulinho && Pular(r.Monitor, r.Ancora, PuloDaTelaCheia.Volta, $"{regraDoPulo} (pulinho)", pulinho: true)) return;
+                if (Pular(r.Monitor, r.Ancora, PuloDaTelaCheia.Volta, regraDoPulo)) return;
+            }
+            RestaurarRetorno(regraDireta);
+        }
+
+        /// <summary>
+        /// O lado (−1 ou +1) do monitor <paramref name="monitor"/> em que ele está perto da borda com o <paramref name="vizinho"/>
+        /// (DEC-035, item 6): a lateral tem uma porta para o vizinho (as áreas úteis se encostam, DEC-032), e a âncora em
+        /// <paramref name="x"/> está a até <see cref="ParametrosDeMovimento.DistanciaDoPulinho"/> dela. Senão, 0: no meio, ou perto
+        /// da beirada sem monitor do lado.
+        /// </summary>
+        private int LadoDoPulinho(MonitorDoDesktop monitor, int x, MonitorDoDesktop vizinho)
+        {
+            Topologia t = _s.Topologia!;
+            Superficies sup = Superficies.Do(t, monitor, _cfg.Tamanho.ParaPixels(monitor.Dpi));
+            double alcance = _cfg.Fisica.DistanciaDoPulinho * monitor.Dpi / 96.0;
+            foreach (int lado in (ReadOnlySpan<int>)[-1, 1])
+            {
+                double ateABorda = lado > 0 ? sup.Direita - x : x - sup.Esquerda;
+                if (ateABorda <= alcance && Passagens.Portas(t, monitor, lado).Any(p => p.ChaveVizinho == vizinho.Chave)) return lado;
+            }
+            return 0;
+        }
+
+        /// <summary>
+        /// Onde o pulinho pousa (DEC-035, item 6): do outro lado da borda, a <see cref="ParametrosDeMovimento.EntradaDoPulinho"/>
+        /// dela, na mesma superfície: no chão, no chão do livre; no cipó, no cipó; na parede da borda, encostado na parede do
+        /// livre, na mesma altura.
+        /// </summary>
+        private PontoPx ChegadaDoPulinho(MonitorDoDesktop daqui, MonitorDoDesktop livre, int lado)
+        {
+            Topologia t = _s.Topologia!;
+            Superficies aqui = Superficies.Do(t, daqui, _cfg.Tamanho.ParaPixels(daqui.Dpi)), la = Superficies.Do(t, livre, _cfg.Tamanho.ParaPixels(livre.Dpi));
+            int entrada = _s.Estado == Estado.Climbing ? 0 : (int)Math.Round(_cfg.Fisica.EntradaDoPulinho * livre.Dpi / 96.0, MidpointRounding.AwayFromZero);
+            int x = lado > 0 ? la.Esquerda + entrada : la.Direita - entrada;
+            int y0 = _s.Lugar!.Ancora.Y;
+            int y = y0 >= aqui.Chao ? la.Chao : y0 <= aqui.Teto ? la.Teto : Math.Clamp(y0, la.Teto, la.Chao);
+            return new PontoPx(Math.Clamp(x, la.Esquerda, la.Direita), y);
+        }
+
+        /// <summary>
+        /// Onde ele agarra o cipó do monitor livre (DEC-035): na borda de cima, a <see cref="ParametrosDeMovimento.EntradaNoCipo"/>
+        /// da lateral voltada para a partida; com a partida na faixa do monitor (um em cima do outro), na mesma vertical.
+        /// </summary>
+        private PontoPx ChegadaNoCipo(MonitorDoDesktop livre)
+        {
+            Superficies sup = Superficies.Do(_s.Topologia!, livre, _cfg.Tamanho.ParaPixels(livre.Dpi));
+            int entrada = (int)Math.Round(_cfg.Fisica.EntradaNoCipo * livre.Dpi / 96.0, MidpointRounding.AwayFromZero);
+            int partida = _s.Lugar!.Ancora.X;
+            int x = partida < livre.Tela.Esquerda ? sup.Esquerda + entrada : partida >= livre.Tela.Direita ? sup.Direita - entrada : partida;
+            return new PontoPx(Math.Clamp(x, sup.Esquerda, sup.Direita), sup.Teto);
+        }
+
+        /// <summary>
+        /// Começa o pulo da tela cheia (DEC-035) da âncora atual até <paramref name="chegada"/>, no monitor
+        /// <paramref name="destino"/>: JUMPING, com o arco de <see cref="Passagens.PlanejarPuloDaTelaCheia"/>, sem o gesto em curso e
+        /// com a cara empolgada (na automática, sem onda). Com a capacidade ou o movimento desligados, ou sem um arco em que o
+        /// sprite fique na união das áreas úteis (por exemplo, escondido atrás da borda), não muda nada e devolve falso: quem
+        /// chamou faz a troca direta, como antes.
+        /// </summary>
+        private bool Pular(MonitorDoDesktop destino, PontoPx chegada, PuloDaTelaCheia pulo, string regra, bool pulinho = false)
+        {
+            if (!_cfg.PuloDaTelaCheia || !_cfg.Movimento || _s.Topologia is not { } t || _s.Lugar is not { } lugar) return false;
+            MonitorDoDesktop origem = t.PorChave(lugar.Monitor.Chave) ?? lugar.Monitor;
+            PontoPx partida = lugar.Ancora;
+            Travessia? plano = Passagens.PlanejarPuloDaTelaCheia(t, origem, partida.X, partida.Y, destino, chegada.X, chegada.Y,
+                _cfg.Tamanho, _cfg.Fisica, _cfg.PassosPorSegundo, pulo, pulinho);
+            if (plano is null) return false;
+            _s = _s with { Gesto = Gesto.Nenhum, PassosDoGesto = 0, Direcao = chegada.X >= partida.X ? Direcao.Direita : Direcao.Esquerda };
+            if (!ComOnda && _s.Preferencias.EmocaoDominante is null) _s = _s with { Expressao = Expressao.Empolgado };
+            IrPara(Estado.Jumping, regra);
+            // IrPara só recomeça o movimento quando o estado muda: um pulo que substitui outro em voo parte daqui também.
+            _s = _s with { Movimento = new EstadoDoMovimento(partida.X, partida.Y, 0, 0, double.PositiveInfinity, -1, false) { Travessia = plano } };
+            return true;
+        }
+
+        /// <summary>
+        /// O fim do pulo da tela cheia (DEC-035): a acomodação na chegada. Na ida, perto da borda de cima, ele agarra o cipó
+        /// (<see cref="OndeAgarrar"/>); no chão (o pulinho, item 6), pousa (LANDING); na volta, a posição de antes da tela cheia vale, com a postura dela, e o retorno acaba.
+        /// </summary>
+        private void ChegarDoPulo(Travessia pulo)
+        {
+            if (pulo.Pulo == PuloDaTelaCheia.Volta && _s.RetornoDaTelaCheia is { } retorno && _s.Topologia is { } t)
+            {
+                (Posicionamento r, PosicaoDoPersonagem p) = Posicionador.Reacomodar(t, retorno, _cfg.Tamanho);
+                _s = _s with { RetornoDaTelaCheia = null };
+                Acomodar(r.Ancora, "JUMPING: fim do pulo da tela cheia, de volta à posição anterior", p);
+                return;
+            }
+            var chegada = new PontoPx((int)Math.Round(pulo.XDestino, MidpointRounding.AwayFromZero), (int)Math.Round(pulo.YDestino, MidpointRounding.AwayFromZero));
+            // A ida que acaba no chão (o pulinho, item 6) pousa, como o salto de degrau.
+            if (pulo.Pulo == PuloDaTelaCheia.Ida && _s.Topologia?.PorChave(pulo.ChaveDestino) is { } destino && chegada.Y == destino.AreaUtil.Base)
+            {
+                MoverPara(destino, chegada.X, chegada.Y);
+                _transicoes.Add(new Transicao(Estado.Jumping, Estado.Jumping, "JUMPING: fim do pulinho da tela cheia, no chão do monitor livre"));
+                Sinalizar(SinalDeMovimento.ContatoComOChao);
+                return;
+            }
+            Acomodar(chegada, pulo.Pulo == PuloDaTelaCheia.Ida
+                ? "JUMPING: fim do pulo da tela cheia, agarra o cipó do monitor livre"
+                : "JUMPING: fim do pulo da tela cheia");
+        }
+
+        /// <summary>
+        /// Esconder ou sair com o pulo da tela cheia em voo (DEC-035): ele vale como terminado. Na ida, a posição passa a ser a
+        /// chegada, e o retorno continua guardado; na volta, a posição de antes da tela cheia, e o retorno acaba. Assim, nem a
+        /// gravação nem o reaparecer partem de um ponto no ar, por cima do monitor ocupado.
+        /// </summary>
+        private void DarOPuloPorTerminado()
+        {
+            if (PuloEmVoo is not { } pulo || _s.Topologia is not { } t) return;
+            if (pulo.Pulo == PuloDaTelaCheia.Volta)
+            {
+                if (_s.RetornoDaTelaCheia is { } retorno) _s = _s with { Posicao = retorno, RetornoDaTelaCheia = null };
+                return;
+            }
+            if (t.PorChave(pulo.ChaveDestino) is not { } destino) return;
+            Posicionamento chegada = NoLugar(destino, new PontoPx((int)Math.Round(pulo.XDestino, MidpointRounding.AwayFromZero), (int)Math.Round(pulo.YDestino, MidpointRounding.AwayFromZero)));
+            _s = _s with { Lugar = chegada, Posicao = Posicionador.Descrever(chegada) };
         }
 
         private static MonitorDoDesktop? MonitorLivreMaisProximo(Topologia topologia, MonitoresOcupados ocupados, PontoPx referencia)
@@ -815,6 +996,66 @@ public static partial class Maquina
                 }
             }
             return melhor;
+        }
+
+        /// <summary>
+        /// Se o monitor de chave <paramref name="chave"/> está fechado à autonomia (DEC-034): ocupado pela tela cheia, com o modo
+        /// ligado. A travessia não entra nele, e a lateral que encosta nele é parede; arrastar até lá continua valendo
+        /// (DEC-013: a escolha do usuário prevalece).
+        /// </summary>
+        private bool Fechado(string chave) => _s.Preferencias.ModoTelaCheia && _s.Ocupados.Contem(chave);
+
+        /// <summary>O filtro das portas (<see cref="Fechado"/>), ou nulo sem nenhum monitor ocupado com o modo ligado.</summary>
+        private Func<string, bool>? Fechados => _s.Preferencias.ModoTelaCheia && !_s.Ocupados.Vazio ? Fechado : null;
+
+        /// <summary>
+        /// A caminhada até a partida de um salto de degrau planejado para um monitor que ficou fechado (DEC-034): o plano cai,
+        /// e ela para no passo seguinte, pela regra de sempre, como numa mudança de topologia. Uma travessia já em curso
+        /// termina, e na chegada ele volta pela porta (<see cref="VoltarSeAPortaFechou"/>).
+        /// </summary>
+        private void DesistirDoSaltoParaMonitorFechado()
+        {
+            if (_s.Estado == Estado.Walking && _s.Movimento.Travessia is { Tipo: TipoDeTravessia.Salto } planejado && Fechado(planejado.ChaveDestino))
+                _s = _s with { Movimento = _s.Movimento with { Travessia = null, Restante = 0 } };
+        }
+
+        /// <summary>
+        /// O fim de uma travessia num monitor que fechou no meio dela (DEC-034): a porta fechou, e ele volta à origem, inteiro,
+        /// encostado na lateral da porta, no chão, sem retorno guardado, porque nunca esteve lá por escolha. Sem a origem, ou
+        /// com ela fechada também, sai como numa mudança de tela cheia (<see cref="SairDoMonitorOcupado"/>). Devolve se voltou.
+        /// </summary>
+        private bool VoltarSeAPortaFechou(Travessia travessia, string regra)
+        {
+            if (!Fechado(travessia.ChaveDestino)) return false;
+            if (_s.Topologia is { } t && t.PorChave(travessia.ChaveOrigem) is { } origem && !Fechado(origem.Chave))
+            {
+                Superficies sup = Superficies.Do(t, origem, _cfg.Tamanho.ParaPixels(origem.Dpi));
+                Acomodar(new PontoPx(travessia.Lado > 0 ? sup.Direita : sup.Esquerda, sup.Chao), regra);
+            }
+            else
+            {
+                SairDoMonitorOcupado(regra);
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// CMD_SET_FULLSCREEN_MODE (DEC-034): o modo de tela cheia (Q-09) ligado ou desligado pelo menu. Registra a escolha numa
+        /// transição para o mesmo estado e a grava nas preferências. Desligar desfaz o efeito temporário, como pelas
+        /// preferências (<see cref="MudarPreferencias"/>). Ligar com ele à vista num monitor já ocupado o tira de lá, como se a
+        /// tela cheia tivesse acabado de começar, e um salto planejado para um monitor ocupado cai; num gesto do usuário,
+        /// nada muda (invariante 14). Antes da carga ou igual ao atual, é ignorado.
+        /// </summary>
+        private void EscolherModoTelaCheia(bool ligado)
+        {
+            if (!_s.Carregado || ligado == _s.Preferencias.ModoTelaCheia) return;
+            _transicoes.Add(new Transicao(_s.Estado, _s.Estado, $"CMD_SET_FULLSCREEN_MODE: {(ligado ? "ligado" : "desligado")}"));
+            MudarPreferencias(_s.Preferencias with { ModoTelaCheia = ligado });
+            _depois.Add(new GravarPreferencias(_s.Preferencias));
+            if (!ligado || _s.Estado is Estado.Pressed or Estado.Dragging || !_s.Estado.Visivel()) return;
+            DesistirDoSaltoParaMonitorFechado();
+            if (_s.Lugar is { } lugar && _s.Ocupados.Contem(lugar.Monitor.Chave))
+                SairDoMonitorOcupado("CMD_SET_FULLSCREEN_MODE: ligado com ele num monitor ocupado pela tela cheia");
         }
 
         /// <summary>
@@ -858,7 +1099,7 @@ public static partial class Maquina
             }
             else if (_s.Estado.Visivel() && _s.RetornoDaTelaCheia is not null)
             {
-                RestaurarRetorno("SETTINGS_CHANGED: modo de tela cheia desligado");
+                VoltarDaTelaCheia("SETTINGS_CHANGED: modo de tela cheia desligado, pula de volta", "SETTINGS_CHANGED: modo de tela cheia desligado");
             }
             else
             {
@@ -1341,14 +1582,15 @@ public static partial class Maquina
         /// A travessia possível pela lateral <paramref name="lado"/> do monitor, ou nula (passo P13; DEC-032): com a capacidade
         /// e a preferência ligadas, sem calma e sem um item na mão do usuário, andando por uma porta plana
         /// (<see cref="Passagens.PortaPlana"/>) ou, sem ela, num salto de degrau (<see cref="Passagens.SaltoDeDegrau"/>, P13b), com
-        /// a partida até <paramref name="recuoMaximo"/> px antes da lateral.
+        /// a partida até <paramref name="recuoMaximo"/> px antes da lateral. Nunca para um monitor fechado (<see cref="Fechado"/>).
         /// </summary>
         private Travessia? PlanoDeTravessia(MonitorDoDesktop m, int lado, int recuoMaximo = 0)
         {
             if (!_cfg.Travessia || !_s.Preferencias.AtravessarMonitores || Calmo || AtentoAoItem || _s.Topologia is not { } t) return null;
-            if (Passagens.PortaPlana(t, m, lado, _cfg.Tamanho) is { } porta)
+            Func<string, bool>? fechados = Fechados;
+            if (Passagens.PortaPlana(t, m, lado, _cfg.Tamanho, fechados) is { } porta)
                 return new Travessia(TipoDeTravessia.Andando, m.Chave, porta.ChaveVizinho, lado, porta.Borda);
-            return Passagens.SaltoDeDegrau(t, m, lado, _cfg.Tamanho, _cfg.Fisica, _cfg.PassosPorSegundo, recuoMaximo);
+            return Passagens.SaltoDeDegrau(t, m, lado, _cfg.Tamanho, _cfg.Fisica, _cfg.PassosPorSegundo, recuoMaximo, fechados);
         }
 
         /// <summary>
@@ -1359,12 +1601,13 @@ public static partial class Maquina
         private Travessia? TransbordoAoPassar(MonitorDoDesktop m, double yAntes, double yDepois)
         {
             if (!_cfg.Travessia || !_s.Preferencias.AtravessarMonitores || Calmo || AtentoAoItem || _s.Topologia is not { } t) return null;
-            foreach (Porta porta in Passagens.Portas(t, m, Sentido))
+            Func<string, bool>? fechados = Fechados;
+            foreach (Porta porta in Passagens.Portas(t, m, Sentido, fechados))
             {
                 if (t.PorChave(porta.ChaveVizinho) is not { } vizinho) continue;
                 int chao = vizinho.AreaUtil.Base;
                 if (chao < yDepois || chao >= yAntes) continue;
-                if (Passagens.Transbordo(t, m, Sentido, chao, _cfg.Tamanho, _cfg.Fisica, _cfg.PassosPorSegundo) is { } transbordo) return transbordo;
+                if (Passagens.Transbordo(t, m, Sentido, chao, _cfg.Tamanho, _cfg.Fisica, _cfg.PassosPorSegundo, fechados) is { } transbordo) return transbordo;
             }
             return null;
         }
@@ -1376,10 +1619,11 @@ public static partial class Maquina
         private bool TemTransbordo(MonitorDoDesktop m, int lado)
         {
             if (!_cfg.Travessia || !_s.Preferencias.AtravessarMonitores || Calmo || AtentoAoItem || _s.Topologia is not { } t) return false;
-            foreach (Porta porta in Passagens.Portas(t, m, lado))
+            Func<string, bool>? fechados = Fechados;
+            foreach (Porta porta in Passagens.Portas(t, m, lado, fechados))
             {
                 if (t.PorChave(porta.ChaveVizinho) is { } vizinho
-                    && Passagens.Transbordo(t, m, lado, vizinho.AreaUtil.Base, _cfg.Tamanho, _cfg.Fisica, _cfg.PassosPorSegundo) is not null) return true;
+                    && Passagens.Transbordo(t, m, lado, vizinho.AreaUtil.Base, _cfg.Tamanho, _cfg.Fisica, _cfg.PassosPorSegundo, fechados) is not null) return true;
             }
             return false;
         }
@@ -1396,7 +1640,8 @@ public static partial class Maquina
 
         /// <summary>
         /// Um passo do salto de degrau (P13b; D6 e D8): a posição analítica do arco; o monitor da âncora troca na borda, com o
-        /// tamanho do novo monitor. No último passo, o pouso exato no chão do vizinho, e o contato com o chão leva a LANDING.
+        /// tamanho do novo monitor. No último passo, o pouso exato no chão do vizinho, e o contato com o chão leva a LANDING. No pulo
+        /// da tela cheia (DEC-035), o monitor de cada passo é o da âncora, e a chegada é uma acomodação (<see cref="ChegarDoPulo"/>).
         /// </summary>
         private void PassoNoSalto(Travessia salto)
         {
@@ -1406,18 +1651,27 @@ public static partial class Maquina
                 return;
             }
             int passo = salto.Passo + 1;
+            if (passo >= salto.PassosTotais && salto.Pulo != PuloDaTelaCheia.Nenhum)
+            {
+                ChegarDoPulo(salto);
+                return;
+            }
             if (passo >= salto.PassosTotais)
             {
                 MoverPara(destino, salto.XDestino, salto.YDestino);
                 _s = _s with { Movimento = _s.Movimento with { VX = 0, VY = 0, Travessia = null } };
                 _transicoes.Add(new Transicao(Estado.Jumping, Estado.Jumping, "JUMPING: salto de travessia completo"));
+                if (VoltarSeAPortaFechou(salto, "JUMPING: o destino do salto ficou ocupado pela tela cheia (volta pela porta)")) return;
                 Sinalizar(SinalDeMovimento.ContatoComOChao);
                 return;
             }
             (double x, double y) = Passagens.PosicaoNoSalto(salto, passo, _cfg.PassosPorSegundo);
             var ancora = new PontoPx((int)Math.Round(x, MidpointRounding.AwayFromZero), (int)Math.Round(y, MidpointRounding.AwayFromZero));
-            MoverPara(Passagens.PassouDaBorda(salto, ancora) ? destino : origem, x, y);
+            MoverPara(Passagens.MonitorNoSalto(t, salto, origem, destino, ancora), x, y);
             _s = _s with { Movimento = _s.Movimento with { Travessia = salto with { Passo = passo } } };
+            // No pulo da tela cheia, a velocidade do arco vai ao estado, para a pose esticar quando ele vai rápido (DEC-035).
+            if (salto.Pulo != PuloDaTelaCheia.Nenhum)
+                _s = _s with { Movimento = _s.Movimento with { VX = salto.VX, VY = salto.VY0 + salto.G * passo / _cfg.PassosPorSegundo } };
         }
 
         /// <summary>
@@ -1462,6 +1716,7 @@ public static partial class Maquina
             if (!completa) return;
             _s = _s with { Movimento = _s.Movimento with { Travessia = null } };
             _transicoes.Add(new Transicao(Estado.Walking, Estado.Walking, "WALKING: travessia completa"));
+            if (VoltarSeAPortaFechou(travessia, "WALKING: o destino da travessia ficou ocupado pela tela cheia (volta pela porta)")) return;
             if (Calmo || AtentoAoItem || _s.Movimento.Restante <= 0) IrPara(Estado.Idle, "WALKING: fim do percurso depois da travessia");
         }
 

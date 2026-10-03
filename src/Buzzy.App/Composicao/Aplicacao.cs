@@ -31,7 +31,12 @@ namespace Buzzy.App.Composicao;
 /// <c>--perfil-de-teste</c> veio sem nome, com um nome inválido ou escrito de outro jeito: nesta execução nada
 /// é lido nem gravado como configuração (falha fechada), em vez de cair na pasta real do usuário.
 /// </param>
-internal sealed record OpcoesDaAplicacao(bool MovimentoPausado, ulong? Semente, string? PerfilDeTeste = null, bool PersistenciaDesligada = false)
+/// <param name="SemTelaCheia">
+/// <c>--sem-tela-cheia</c>: o observador da janela em primeiro plano não liga (DEC-034). Os testes e a verificação de
+/// tela, que conferem o lugar inicial, usam para não depender do que estiver em tela cheia na máquina. A chave do menu
+/// continua valendo; só nenhum monitor fica ocupado.
+/// </param>
+internal sealed record OpcoesDaAplicacao(bool MovimentoPausado, ulong? Semente, string? PerfilDeTeste = null, bool PersistenciaDesligada = false, bool SemTelaCheia = false)
 {
     internal static readonly OpcoesDaAplicacao Padrao = new(false, null);
 }
@@ -47,8 +52,9 @@ internal sealed record OpcoesDaAplicacao(bool MovimentoPausado, ulong? Semente, 
 /// conferência tardia do lugar das janelas, 1,5 s depois de cada releitura publicada (Fase 5,
 /// passo P9; <see cref="AgendaDaReleitura"/>), novas tentativas de pôr o ícone na
 /// bandeja, a próxima decisão da agenda autônoma, o fim de cada fase da onda de um item do
-/// tamagotchi (DEC-028) e a gravação do settings.json com atraso, com as novas tentativas dela
-/// (Fase 5, passo P7; <see cref="AgendaDeGravacao"/>). O relógio de passo fixo só corre enquanto o
+/// tamagotchi (DEC-028), a gravação do settings.json com atraso, com as novas tentativas dela
+/// (Fase 5, passo P7; <see cref="AgendaDeGravacao"/>), e a avaliação da tela cheia depois de uma troca de primeiro plano
+/// (DEC-034; <see cref="AgendaDaTelaCheia"/>). O relógio de passo fixo só corre enquanto o
 /// núcleo pede (reação, pouso, gesto curto e movimento) e anda junto com os quadros do
 /// compositor do WPF (<see cref="CompositionTarget.Rendering"/>): a janela se move no máximo uma
 /// vez por quadro, com a posição mais recente. O arraste não usa relógio: cada movimento do
@@ -92,6 +98,13 @@ internal sealed partial class Aplicacao
 
     private JanelaDeServico? _servico;
     private JanelaPersonagem? _personagem;
+
+    /// <summary>
+    /// O modo de tela cheia (DEC-013 e DEC-034): o observador da janela em primeiro plano e a agenda que avalia o que ele lê.
+    /// Nulos se a assinatura falhar: aí o modo não age.
+    /// </summary>
+    private ObservadorDeTelaCheia? _observadorDeTelaCheia;
+    private AgendaDaTelaCheia? _telaCheia;
     private Bandeja? _bandeja;
     private Nucleo? _nucleo;
     private Topologia _topologia = null!;
@@ -228,6 +241,7 @@ internal sealed partial class Aplicacao
         _dpiDoIcone = topologia.Principal.Dpi;
         _bandeja = new Bandeja(_servico.Hwnd, CriarIcone(_dpiDoIcone));
         AdicionarIconeNaBandeja();
+        IniciarTelaCheia();
 
         _instancia.EscutarPedidos(() => Adiar(() =>
         {
@@ -394,6 +408,8 @@ internal sealed partial class Aplicacao
         Diagnostico.Evento("TOPOLOGIA",
             [("motivo", motivos), ("mudou", mudou ? "sim" : "nao"), ("visivel", _visivel), ("impressao", nova.ImpressaoDigital), .. CamposDasChaves(leitura)]);
         _eventosDoSistema.TopologiaRelida(publicada: true);
+        // Os monitores ocupados dependem das telas: uma troca de modo de vídeo do jogo muda a tela do monitor dele (DEC-034).
+        _telaCheia?.Sinalizar("topologia");
         return true;
     }
 
@@ -465,6 +481,7 @@ internal sealed partial class Aplicacao
         Enviar(new TopologyChanged(nova), motivos);
         Diagnostico.Evento("TOPOLOGIA",
             [("motivo", motivos), ("imediata", "sim"), ("mudou", mudou ? "sim" : "nao"), ("visivel", _visivel), ("impressao", nova.ImpressaoDigital), .. CamposDasChaves(leitura)]);
+        _telaCheia?.Sinalizar("topologia");
     }
 
     /// <summary>
@@ -659,6 +676,12 @@ internal sealed partial class Aplicacao
                 // Inverte o que o usuário leu ao abrir (DEC-033): desligar tira o que é adulto da tela; a escolha vai para o
                 // settings.json com atraso, como a emoção.
                 Enviar(new CmdSetAdultContent(!modelo.ConteudoAdulto), "menu");
+                break;
+            case ComandoDoMenu.ModoTelaCheia:
+                // "Desviar da tela cheia" (DEC-034): inverte o que o usuário leu ao abrir. Desligado, ele volta para onde estava
+                // antes da tela cheia; ligado com ele num monitor ocupado, sai de lá. A escolha vai para o settings.json com
+                // atraso, como a emoção.
+                Enviar(new CmdSetFullscreenMode(!modelo.ModoTelaCheia), "menu");
                 break;
             case ComandoDoMenu.Nenhum when peloTeclado:
                 // Quem abriu o menu da bandeja pelo teclado e o cancelou volta para a área de
@@ -1054,6 +1077,7 @@ internal sealed partial class Aplicacao
         _personagem?.SoltarCaptura();
         // A releitura agendada e a conferência tardia (disparos únicos) não saem depois do encerramento.
         _releitura.Parar();
+        PararTelaCheia();
         _repetirBandeja.Stop();
         PararRelogio();
         CancelarDecisaoAutonoma();
@@ -1063,6 +1087,69 @@ internal sealed partial class Aplicacao
         _servico?.Dispose();
         _personagem?.Close();
         _app.Shutdown(CodigosDeSaida.Normal);
+    }
+
+    // ------------------------------------------------------------------ tela cheia (DEC-013, DEC-034)
+
+    /// <summary>
+    /// Liga o modo de tela cheia (DEC-034): o observador assina a troca de primeiro plano, e a primeira avaliação sai na hora,
+    /// para um jogo que já estava em tela cheia na partida. O núcleo recebe os monitores ocupados mesmo com o modo
+    /// desligado, só para o cache: ligar o modo pelo menu age na hora. Sem a assinatura, o modo não age, e o log diz.
+    /// </summary>
+    private void IniciarTelaCheia()
+    {
+        if (_opcoes.SemTelaCheia)
+        {
+            Diagnostico.Evento("TELA_CHEIA", ("observador", "desligado"), ("motivo", "--sem-tela-cheia"));
+            return;
+        }
+        var observador = new ObservadorDeTelaCheia();
+        if (!observador.Iniciar())
+        {
+            Diagnostico.Evento("TELA_CHEIA", ("observador", "falhou"));
+            return;
+        }
+        _observadorDeTelaCheia = observador;
+        _telaCheia = new AgendaDaTelaCheia(observador.Ler, () => _topologia,
+            (espera, acao) => DisparoUnico.NoDispatcher(espera, acao, DispatcherPriority.Normal), PublicarTelaCheia);
+        observador.Sinal += motivo => _telaCheia?.Sinalizar(motivo);
+        Diagnostico.Evento("TELA_CHEIA", ("observador", "ligado"));
+        _telaCheia.AvaliarAgora("início");
+    }
+
+    /// <summary>
+    /// Uma mudança dos monitores ocupados vai ao núcleo (FULLSCREEN_TARGETS_CHANGED). No log, só as chaves opacas, os
+    /// motivos, o sinal do shell, quantos monitores a janela cobria antes dele e as contagens de eventos: nunca a janela, o
+    /// retângulo dela ou de quem ela é (SECURITY.md 3.1). O fim da tela cheia devolve o personagem ao topo do grupo "sempre no
+    /// topo", uma vez: a janela em tela cheia, ativada depois dele, pode ter ficado por cima, e ele voltaria escondido atrás
+    /// dela, como no relato do usuário de 2026-10-03.
+    /// </summary>
+    private void PublicarTelaCheia(MudancaDaTelaCheia mudanca)
+    {
+        if (_encerrando || _nucleo is null) return;
+        Diagnostico.Evento("TELA_CHEIA",
+            ("ocupados", mudanca.Ocupados.Vazio ? "-" : string.Join(";", mudanca.Ocupados.Chaves)),
+            ("motivo", mudanca.Motivos),
+            ("shell", mudanca.Shell?.ToString() ?? "falhou"),
+            ("candidatos", mudanca.Candidatos),
+            ("eventosPrimeiroPlano", _observadorDeTelaCheia?.EventosDePrimeiroPlano ?? 0),
+            ("eventosGeometria", _observadorDeTelaCheia?.EventosDeGeometria ?? 0));
+        Enviar(new FullscreenTargetsChanged(mudanca.Ocupados), $"tela cheia: {mudanca.Motivos}");
+        if (!mudanca.Ocupados.Vazio || _encerrando || !_visivel || _personagem is null) return;
+        _personagem.ReafirmarTopo();
+        _itens?.ReordenarAbaixoDoPersonagem();
+    }
+
+    /// <summary>
+    /// O encerramento: nenhuma avaliação sai depois, os ganchos saem, e o log leva as contagens finais (P7). O observador
+    /// continua referenciado até o fim do processo: um evento que já estava na fila ainda chama o delegado dele.
+    /// </summary>
+    private void PararTelaCheia()
+    {
+        _telaCheia?.Parar();
+        if (_observadorDeTelaCheia is not { Ligado: true } observador) return;
+        Diagnostico.Evento("TELA_CHEIA", ("fim", "sim"), ("eventosPrimeiroPlano", observador.EventosDePrimeiroPlano), ("eventosGeometria", observador.EventosDeGeometria));
+        observador.Dispose();
     }
 
     // ------------------------------------------------------------------ apoio

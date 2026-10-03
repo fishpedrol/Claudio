@@ -80,6 +80,12 @@ public enum LadoDoEsconderijo
 
     /// <summary>Atrás da lateral direita da área útil.</summary>
     Direita,
+
+    /// <summary>
+    /// Atrás da borda de cima da área útil, de cabeça para baixo (pedido do usuário de 2026-10-03: "queria que desse pra
+    /// esconder ele em cima tambem, quando ele esta no cipo, dando 2 clicks").
+    /// </summary>
+    Cima,
 }
 
 /// <summary>Grupo do estado na tabela de ARCHITECTURE.md 2.6.</summary>

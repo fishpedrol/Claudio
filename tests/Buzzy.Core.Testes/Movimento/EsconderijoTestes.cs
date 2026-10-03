@@ -90,6 +90,49 @@ internal static class EsconderijoTestes
         }
     }
 
+    // No cipó (pedido do usuário de 2026-10-03: "queria que desse pra esconder ele em cima tambem, quando ele esta no cipo,
+    // dando 2 clicks"): o clique duplo o esconde atrás da borda de cima, no mesmo lugar, e não na barra de tarefas; dez
+    // minutos depois, continua lá, só trocando de cara; outro clique duplo o devolve ao cipó, agarrado e preso. Gravado
+    // escondido em cima, ele reabre lá.
+    [Teste]
+    public static void NoCipo_CliqueDuploEscondeAtrasDaBordaDeCimaEVoltaAoCipo()
+    {
+        var sim = new SimuladorDeTempo(DoApp, 6, TopologiasDeExemplo.UmMonitor);
+        Superficies sup = Sup(sim);
+        ArrastarPara(sim, new PontoPx(960, sup.Teto + 10));
+        sim.Esta(Estado.Hanging, "no cipó");
+        PontoPx noCipo = sim.Estado.Lugar!.Ancora;
+        Afirmar.Igual(new PontoPx(960, sup.Teto), noCipo, "pendurado no meio da borda de cima");
+
+        CliqueDuplo(sim);
+        sim.Esta(Estado.Peeking, "escondido");
+        Afirmar.Igual(LadoDoEsconderijo.Cima, sim.Estado.Esconderijo, "atrás da borda de cima");
+        Afirmar.Igual(noCipo, sim.Estado.Lugar!.Ancora, "no mesmo lugar, com o topo do sprite na borda");
+        Afirmar.Verdadeiro(sim.Transicoes.Any(t => t.Regra == "DOUBLE_CLICK: esconde-se atrás da borda (Cima)"), "a regra");
+
+        sim.AoAplicar = (_, e, depois) =>
+        {
+            Afirmar.Igual(Estado.Peeking, depois.Estado, $"{e}: continua escondido");
+            Afirmar.Igual(noCipo, depois.Lugar!.Ancora, $"{e}: não se move");
+        };
+        sim.Avancar(TimeSpan.FromMinutes(10));
+        sim.AoAplicar = null;
+
+        var gravadas = new List<GravarPosicao>();
+        sim.AoResultado = (_, _, r) => gravadas.AddRange(r.Efeitos.OfType<GravarPosicao>());
+        sim.Aplicar(new CmdExit());
+        GravarPosicao gravada = Afirmar.NaoNulo(gravadas.SingleOrDefault(), "uma gravação na saída");
+        Afirmar.Igual(LadoDoEsconderijo.Cima, gravada.Esconderijo, "grava a borda de cima");
+        var reaberto = new SimuladorDeTempo(DoApp, 6, new Loaded(TopologiasDeExemplo.UmMonitor, gravada.Posicao, Preferencias.Padrao) { Esconderijo = gravada.Esconderijo, PresoPeloUsuario = gravada.PresoPeloUsuario });
+        reaberto.Esta(Estado.Peeking, "reabre escondido");
+        Afirmar.Igual((LadoDoEsconderijo.Cima, noCipo), (reaberto.Estado.Esconderijo, reaberto.Estado.Lugar!.Ancora), "em cima, no mesmo lugar");
+
+        CliqueDuplo(reaberto);
+        reaberto.Esta(Estado.Hanging, "de volta ao cipó");
+        Afirmar.Igual(noCipo, reaberto.Estado.Lugar!.Ancora, "no mesmo lugar");
+        Afirmar.Verdadeiro(reaberto.Estado.Movimento.Agarrado && reaberto.Estado.PresoPeloUsuario, "agarrado e preso, como o usuário deixou");
+    }
+
     [Teste]
     public static void Escondido_CliqueSimplesReageEContinuaEscondido()
     {

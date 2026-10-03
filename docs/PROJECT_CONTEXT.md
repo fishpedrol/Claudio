@@ -1,6 +1,6 @@
 # PROJECT_CONTEXT.md — Estado atual do Buzzy
 
-> Estado de cada fase, última validação e como validar. Atualizado em 2026-10-02. Critérios, passos, pendências e evidências ficam em [TODO.md](TODO.md); o andamento e as próximas ações, em [CONTINUIDADE.md](../CONTINUIDADE.md).
+> Estado de cada fase, última validação e como validar. Atualizado em 2026-10-03. Critérios, passos, pendências e evidências ficam em [TODO.md](TODO.md); o andamento e as próximas ações, em [CONTINUIDADE.md](../CONTINUIDADE.md).
 
 ## Fases
 
@@ -12,6 +12,7 @@
 | 3 — Input e arraste (DEC-021) | PLANNED: implementada e verificada | UAC [MANUAL], escalas mistas [HW], ClickLock ligado [MANUAL] |
 | 4 — Movimento e superfícies, com toon force, cipó, "preso" e esconderijo (DEC-022 a DEC-025) | PLANNED: implementada e verificada | gravação de tela a 120 qps, critério 5 [MANUAL] |
 | 5 — Multi-monitor e posição persistida (DEC-029 a DEC-032) | PLANNED, em andamento: passos P1–P13 verificados por testes automatizados e de integração; o app grava a posição, a postura, a emoção e a chave adulta em `%LOCALAPPDATA%\Buzzy\settings.json` (esquema v4), acompanha a topologia aberto, não se esconde quando o Windows o minimiza numa troca de monitores e atravessa entre monitores (andando, num salto de degrau ou pela parede) | P14 (depende do protótipo P6 [HW]), P15 e P16; a tela do bloco B (`--fase 1`, `3` e `4`) e as medições de 10 min; S1–S12 [MANUAL][HW]; o protótipo P5 |
+| Modo de tela cheia (Q-09; DEC-013), antecipado pelo relato do usuário (DEC-034) | Implementado e verificado por testes automatizados e de integração: o observador da janela em primeiro plano, os usos restritos no portão de APIs, a travessia que não entra num monitor ocupado a chave "Desviar da tela cheia" no menu e o pulo até o cipó na troca de monitor (DEC-035) | a cópia da Área de Trabalho atualizada; a validação com o jogo do usuário, com `--diagnostico` (faz as vezes do protótipo P7); vídeo em tela cheia e jogo exclusivo [MANUAL][HW] |
 | Interação — emoção dominante e tamagotchi adulto (DEC-027, DEC-028), com a chave `Tamagotchi` ligada, e a chave "Conteúdo adulto" (DEC-033) | PLANNED, em andamento: passos T1–T13 e arte A1–A4 feitos e verificados, inclusive na tela (V1–V19, input SINTÉTICO) | a V20 na tela; revisão visual e de tom pelo usuário, inclusive da lista do que é adulto; as conferências [MANUAL] e [HW] da seção |
 | 6 a 11 | não começadas; a identidade em pixel art (DEC-018, DEC-019) já aparece em quadro parado e poses provisórias | — |
 
@@ -19,7 +20,7 @@ Os passos da Fase 5 se chamam "passo P1" a "passo P16"; um P-número sem "passo"
 
 ## Última validação
 
-2026-10-02, 16:54, fim do passo P13: `tools\testar.ps1 -Integracao` com código 0 — build Release sem avisos, Core 536/536, Portão 74/74, App 380/380 com a integração, portão de APIs aprovado, nenhum pacote vulnerável e os arquivos reais do usuário intocados.
+2026-10-03, 13:36, pulo e pulinho da tela cheia (DEC-035) e esconderijo na borda de cima (DEC-025, item 6): `tools\testar.ps1 -Integracao` com código 0 — build Release sem avisos, Core 559/559, Portão 79/79, App 393/393 com a integração, portão de APIs aprovado com os três usos restritos no relatório, nenhum pacote vulnerável e os arquivos reais do usuário intocados.
 
 Telas mais recentes, com input SINTÉTICO: tamagotchi em 2026-10-02, 56 OK e 0 falhas (`resultados/verificacao-tamagotchi.log`); fases 1, 3 e 4 em 2026-10-01, antes do bloco B: 25 OK e 4 SIMULADO, 34 OK e 2 N/A, 28 OK (`resultados/verificacao-fase1.log`, `-fase3.log`, `-fase4.log`).
 
@@ -47,4 +48,4 @@ tools\medir-desempenho.ps1 [-Modo repouso|autonomia|onda] [-Semente N]
 
 `--semente N` só vale com `--fase tamagotchi` (7 a 13 min, com um repouso de 60 s sem tocar em nada). A Verificação espera até 20 s sem uso do mouse e do teclado antes de começar e exige que não haja outro Buzzy aberto. O `-Modo onda` (cerca de 11 min) entrega uma vodka só por mensagens postadas, sem mover o cursor.
 
-Opções do app: `--diagnostico` grava o log local `%LOCALAPPDATA%\Buzzy\diagnostico.log` (até 1 MB; sem ela, não há log); `--pausado` começa com o movimento pausado; `--semente N` fixa a agenda autônoma; `--perfil-de-teste NOME` isola os dados em `%LOCALAPPDATA%\Buzzy\testes\NOME` (regras do nome em [SECURITY.md](SECURITY.md) 3.1; outra grafia ou nome inválido desligam a persistência naquela execução). Sem perfil, o Buzzy lê e grava `%LOCALAPPDATA%\Buzzy\settings.json`.
+Opções do app: `--diagnostico` grava o log local `%LOCALAPPDATA%\Buzzy\diagnostico.log` (até 1 MB; sem ela, não há log); `--pausado` começa com o movimento pausado; `--semente N` fixa a agenda autônoma; `--sem-tela-cheia` não liga o observador de tela cheia (os testes de integração, menos o do próprio observador, e a verificação de tela usam, para o lugar inicial não depender do que estiver em tela cheia na máquina; DEC-034); `--perfil-de-teste NOME` isola os dados em `%LOCALAPPDATA%\Buzzy\testes\NOME` (regras do nome em [SECURITY.md](SECURITY.md) 3.1; outra grafia ou nome inválido desligam a persistência naquela execução). Sem perfil, o Buzzy lê e grava `%LOCALAPPDATA%\Buzzy\settings.json`.

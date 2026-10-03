@@ -158,6 +158,16 @@ public sealed record CmdSetAdultContent(bool Ligado) : Evento
 }
 
 /// <summary>
+/// <c>CMD_SET_FULLSCREEN_MODE</c> (DEC-034): "Desviar da tela cheia" no menu, o modo de tela cheia (Q-09) ligado ou
+/// desligado. Grava a escolha nas preferências. Desligar desfaz o efeito temporário, como as preferências; ligar com ele à
+/// vista num monitor já ocupado o tira de lá.
+/// </summary>
+public sealed record CmdSetFullscreenMode(bool Ligado) : Evento
+{
+    public override Origem Origem => Origem.ComandoDoUsuario;
+}
+
+/// <summary>
 /// <c>CMD_SUMMON_ITEM</c> (DEC-028): o usuário invocou um item pelo menu. Ele aparece ao lado do personagem, acima do
 /// chão, e cai. Escondido, antes da carga, fora do enum ou com o tamagotchi desligado, é ignorado.
 /// </summary>

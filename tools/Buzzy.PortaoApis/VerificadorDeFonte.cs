@@ -5,6 +5,7 @@ namespace Buzzy.PortaoApis;
 /// inteiras, ou sequências de palavras separadas por ponto (Process.Start), sem diferenciar
 /// maiúsculas. Os comentários são removidos antes (<see cref="RemovedorDeComentarios"/>); os
 /// textos continuam sendo lidos, e assim GetProcAddress("SendInput") acusa as duas palavras.
+/// A exceção é o arquivo de um uso restrito (<see cref="UsosRestritos"/>), que pode citar a função dele.
 ///
 /// Limites conhecidos: nomes montados em partes ("Send" + "Input"), apelidos de using e
 /// identificadores escritos com escapes Unicode não são reconhecidos aqui. A verificação dos
@@ -74,6 +75,8 @@ internal static class VerificadorDeFonte
         var vistas = new HashSet<(int Posicao, Regra Regra)>();
         void Acusar(int posicao, string encontrado, Regra regra)
         {
+            // O único arquivo de um uso restrito pode citar a função dele (UsosRestritos); as outras regras valem nele também.
+            if (UsosRestritos.NaFonte(arquivo, regra) is not null) return;
             if (!vistas.Add((posicao, regra))) return;
             (int linha, int coluna) = Posicao(inicioDasLinhas, posicao);
             violacoes.Add(new Violacao(arquivo, linha, coluna, Codigos.CodigoFonte, regra.Categoria, encontrado,

@@ -58,8 +58,8 @@ public static class EsquemaDeConfiguracoes
 
     private static readonly NivelDeEnergia[] NiveisDeEnergia = [NivelDeEnergia.Baixa, NivelDeEnergia.Media, NivelDeEnergia.Alta];
 
-    /// <summary>As quatro bordas do esconderijo, a lista fechada da leitura (<see cref="TentarLerEsconderijo"/>).</summary>
-    private static readonly LadoDoEsconderijo[] Bordas = [LadoDoEsconderijo.Nenhum, LadoDoEsconderijo.Baixo, LadoDoEsconderijo.Esquerda, LadoDoEsconderijo.Direita];
+    /// <summary>As bordas do esconderijo e o "nenhum", a lista fechada da leitura (<see cref="TentarLerEsconderijo"/>).</summary>
+    private static readonly LadoDoEsconderijo[] Bordas = [LadoDoEsconderijo.Nenhum, LadoDoEsconderijo.Baixo, LadoDoEsconderijo.Esquerda, LadoDoEsconderijo.Direita, LadoDoEsconderijo.Cima];
 
     /// <summary>A emoção dominante "Automática" (nula) no arquivo.</summary>
     private const string EmocaoAutomatica = "automatica";
@@ -248,19 +248,21 @@ public static class EsquemaDeConfiguracoes
     }
 
     /// <summary>
-    /// Nome da borda do esconderijo no arquivo (DEC-025): <c>"nenhum"</c>, <c>"baixo"</c>, <c>"esquerda"</c> ou
-    /// <c>"direita"</c>; fora do enum, <c>"nenhum"</c>.
+    /// Nome da borda do esconderijo no arquivo (DEC-025): <c>"nenhum"</c>, <c>"baixo"</c>, <c>"esquerda"</c>,
+    /// <c>"direita"</c> ou <c>"cima"</c> (2026-10-03, no mesmo esquema: uma versão anterior lê <c>"cima"</c> como nenhum, o
+    /// padrão seguro); fora do enum, <c>"nenhum"</c>.
     /// </summary>
     public static string NomeDoEsconderijo(LadoDoEsconderijo lado) => lado switch
     {
         LadoDoEsconderijo.Baixo => "baixo",
         LadoDoEsconderijo.Esquerda => "esquerda",
         LadoDoEsconderijo.Direita => "direita",
+        LadoDoEsconderijo.Cima => "cima",
         _ => "nenhum",
     };
 
     /// <summary>
-    /// Borda do esconderijo pelos quatro nomes do arquivo (<see cref="NomeDoEsconderijo"/>), sem diferenciar maiúsculas,
+    /// Borda do esconderijo pelos nomes do arquivo (<see cref="NomeDoEsconderijo"/>), sem diferenciar maiúsculas,
     /// e nunca pelo Enum.Parse, que aceitaria números e listas (SECURITY.md 7). Falso, <paramref name="lado"/> é nenhum,
     /// o padrão seguro.
     /// </summary>
@@ -350,14 +352,14 @@ public static class EsquemaDeConfiguracoes
     }
 
     /// <summary>
-    /// Borda do esconderijo, opcional: um dos quatro nomes (<see cref="TentarLerEsconderijo"/>). Ausente ou nula vale
+    /// Borda do esconderijo, opcional: um dos nomes (<see cref="TentarLerEsconderijo"/>). Ausente ou nula vale
     /// nenhuma, sem aviso, como a emoção; outro valor vale nenhuma, com um aviso que não repete o valor do arquivo.
     /// </summary>
     private static LadoDoEsconderijo LerEsconderijo(JsonElement? valor, List<string> avisos)
     {
         if (valor is not { ValueKind: not JsonValueKind.Null } borda) return LadoDoEsconderijo.Nenhum;
         if (borda.ValueKind == JsonValueKind.String && TentarLerEsconderijo(borda.GetString()!, out LadoDoEsconderijo lado)) return lado;
-        avisos.Add("posicao.esconderijo: não é nenhum, baixo, esquerda nem direita; vale nenhum");
+        avisos.Add("posicao.esconderijo: não é nenhum, baixo, esquerda, direita nem cima; vale nenhum");
         return LadoDoEsconderijo.Nenhum;
     }
 

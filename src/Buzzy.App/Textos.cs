@@ -41,6 +41,9 @@ internal static class Textos
     /// <summary>"Conteúdo adulto": liga ou desliga os itens adultos, as ondas de substância e a paranoia (DEC-033).</summary>
     internal static string MenuConteudoAdulto => Obter(nameof(MenuConteudoAdulto));
 
+    /// <summary>"Desviar da tela cheia": liga ou desliga o modo de tela cheia (Q-09; DEC-034).</summary>
+    internal static string MenuModoTelaCheia => Obter(nameof(MenuModoTelaCheia));
+
     /// <summary>
     /// O nome de um item do tamagotchi (DEC-028) no submenu "Itens", com a tecla de acesso. Só o nome: o menu não descreve
     /// nada. Um valor fora do enum é erro.
@@ -55,7 +58,7 @@ internal static class Textos
     [
         nameof(MenuEsconder), nameof(MenuMostrar), nameof(MenuPausar), nameof(MenuRetomar), nameof(MenuSair), nameof(DicaDaBandeja), nameof(AvisoElevado),
         nameof(MenuEmocaoDominante), nameof(MenuEmocaoAutomatica), .. Expressoes.DeHumor.Select(ChaveDaEmocao),
-        nameof(MenuItens), nameof(MenuRecolherItens), nameof(MenuConteudoAdulto), .. TabelaDoTamagotchi.Itens.Select(ChaveDoItem),
+        nameof(MenuItens), nameof(MenuRecolherItens), nameof(MenuConteudoAdulto), nameof(MenuModoTelaCheia), .. TabelaDoTamagotchi.Itens.Select(ChaveDoItem),
     ];
 
     internal static string Obter(string chave)

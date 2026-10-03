@@ -114,7 +114,7 @@ internal sealed class PoseTestes
     [Teste]
     public void Escondido_SoACabecaEAsMaosAparecemJuntoABordaDoEsconderijo()
     {
-        foreach ((LadoDoEsconderijo lado, Giro giro) in new[] { (LadoDoEsconderijo.Baixo, Giro.Nenhum), (LadoDoEsconderijo.Esquerda, Giro.Horario), (LadoDoEsconderijo.Direita, Giro.AntiHorario) })
+        foreach ((LadoDoEsconderijo lado, Giro giro) in new[] { (LadoDoEsconderijo.Baixo, Giro.Nenhum), (LadoDoEsconderijo.Esquerda, Giro.Horario), (LadoDoEsconderijo.Direita, Giro.AntiHorario), (LadoDoEsconderijo.Cima, Giro.MeiaVolta) })
         {
             var dinamica = new Dinamica(0, 0, false, Esconderijo: lado);
             foreach (Estado estado in new[] { Estado.Peeking, Estado.Reacting, Estado.Pressed })
@@ -129,6 +129,7 @@ internal sealed class PoseTestes
             {
                 LadoDoEsconderijo.Baixo => b == h && t > h / 2,
                 LadoDoEsconderijo.Esquerda => e == 0 && d < w / 2,
+                LadoDoEsconderijo.Cima => t == 0 && b < h / 2,
                 _ => d == w && e > w / 2,
             };
             Afirmar.Verdadeiro(certo, $"{lado}: só a cabeça e as mãos, encostadas na borda do esconderijo ({e},{t})-({d},{b}) num quadro de {w}×{h}");
@@ -201,6 +202,7 @@ internal sealed class PoseTestes
             new(0, 0, false, Esconderijo: LadoDoEsconderijo.Baixo),
             new(0, 0, false, Esconderijo: LadoDoEsconderijo.Esquerda),
             new(0, 0, false, Esconderijo: LadoDoEsconderijo.Direita),
+            new(0, 0, false, Esconderijo: LadoDoEsconderijo.Cima),
         ];
         Dinamica[] dinamicas = [default, new(1200, 0, false), new(-800, 1, false), new(-1000, 0, true), new(0, 0, false, Agarrado: true), .. esconderijos];
         long[] passos = [0, 3, 7, 12, 25, 40];

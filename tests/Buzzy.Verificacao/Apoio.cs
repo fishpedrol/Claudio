@@ -156,13 +156,17 @@ internal static class PerfilDaVerificacao
 {
     internal const string Nome = "verificacao";
 
-    /// <summary>Um Buzzy.exe com o log de diagnóstico, o perfil da verificação e os argumentos dados.</summary>
+    /// <summary>
+    /// Um Buzzy.exe com o log de diagnóstico, o perfil da verificação, sem o observador de tela cheia (as fases conferem o
+    /// lugar inicial, que não pode depender do que estiver em tela cheia na máquina; DEC-034) e os argumentos dados.
+    /// </summary>
     internal static ProcessStartInfo Descrever(string exeBuzzy, params string[] argumentos)
     {
         var psi = new ProcessStartInfo(exeBuzzy) { UseShellExecute = false };
         psi.ArgumentList.Add("--diagnostico");
         psi.ArgumentList.Add("--perfil-de-teste");
         psi.ArgumentList.Add(Nome);
+        psi.ArgumentList.Add("--sem-tela-cheia");
         foreach (string argumento in argumentos) psi.ArgumentList.Add(argumento);
         return psi;
     }

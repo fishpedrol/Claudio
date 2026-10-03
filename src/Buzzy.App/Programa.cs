@@ -11,7 +11,7 @@ namespace Buzzy.App;
 /// <summary>
 /// Ponto de entrada do Buzzy.
 ///
-/// Uso: <c>Buzzy.exe [--diagnostico] [--pausado] [--semente N] [--perfil-de-teste NOME]</c>.
+/// Uso: <c>Buzzy.exe [--diagnostico] [--pausado] [--semente N] [--perfil-de-teste NOME] [--sem-tela-cheia]</c>.
 /// <list type="bullet">
 /// <item><c>--diagnostico</c> liga o log em <c>%LOCALAPPDATA%\Buzzy\diagnostico.log</c>; sem ele, o
 /// Buzzy só grava as configurações (<c>settings.json</c>, com a reserva <c>settings.json.bak</c>, o temporário
@@ -25,6 +25,8 @@ namespace Buzzy.App;
 /// ser um nome reservado do Windows; sem nome, com um inválido ou com a opção escrita de outro jeito
 /// (<c>--perfil-de-teste=NOME</c>, outra caixa, <c>/perfil-de-teste</c>), a persistência fica desligada
 /// nesta execução.</item>
+/// <item><c>--sem-tela-cheia</c> não liga o observador da janela em primeiro plano (DEC-034): os testes e a
+/// verificação de tela, que conferem o lugar inicial, não dependem do que estiver em tela cheia na máquina.</item>
 /// </list>
 /// </summary>
 internal static class Programa
@@ -125,7 +127,8 @@ internal static class Programa
                     ("motivo", p + 1 < argumentos.Length ? "nome inválido; persistência desligada" : "falta o nome; persistência desligada"));
             }
         }
-        return new OpcoesDaAplicacao(pausado, semente, perfil, persistenciaDesligada);
+        bool semTelaCheia = argumentos.Contains("--sem-tela-cheia", StringComparer.Ordinal);
+        return new OpcoesDaAplicacao(pausado, semente, perfil, persistenciaDesligada, semTelaCheia);
     }
 
     /// <summary>A opção do perfil de teste, exatamente como tem de ser escrita.</summary>

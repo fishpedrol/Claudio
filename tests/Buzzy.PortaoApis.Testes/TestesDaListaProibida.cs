@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Buzzy.PortaoApis.Testes.Apoio;
 using Buzzy.Testes;
 
 namespace Buzzy.PortaoApis.Testes;
@@ -185,6 +186,30 @@ public sealed class TestesDaListaProibida
         Afirmar.Igual("ws2_32", ListaProibida.NormalizarModulo(@"C:\Windows\System32\WS2_32.DLL"));
         Afirmar.Nulo(ListaProibida.ProcurarNativa("ws2_32x.dll", "connect"));
         Afirmar.Nulo(ListaProibida.ProcurarNativa("urlmon.dll", "CoInternetParseUrl"));
+    }
+
+    [Teste]
+    public void UsosRestritosApontamParaFuncoesProibidasEParaOObservador()
+    {
+        // DEC-034: a permissão só faz sentido para uma função que a lista proíbe, com o nome exato da regra; e o arquivo dela
+        // existe e declara o tipo dela.
+        Afirmar.Sequencia<string>(["SetWinEventHook", "GetForegroundWindow", "GetWindowThreadProcessId"], UsosRestritos.Entradas.Select(u => u.Funcao));
+        foreach (UsoRestrito uso in UsosRestritos.Entradas)
+        {
+            Regra regra = Afirmar.NaoNulo(ListaProibida.ProcurarNativa(uso.Modulo, uso.Funcao), uso.Funcao);
+            Afirmar.Igual(uso.Funcao, regra.Alvo, uso.Funcao);
+            Afirmar.Igual(Categoria.LerOutrosAplicativos, regra.Categoria, uso.Funcao);
+            Afirmar.Igual("user32", uso.Modulo, uso.Funcao);
+            Afirmar.Igual("Buzzy", uso.Assembly, uso.Funcao);
+            Afirmar.Verdadeiro(uso.Motivo.Contains("DEC-034", StringComparison.Ordinal), uso.Funcao);
+
+            string arquivo = Path.Combine(Repositorio.Raiz(), uso.Arquivo);
+            Afirmar.Verdadeiro(File.Exists(arquivo), $"arquivo do uso restrito não existe: {arquivo}");
+            int ponto = uso.Tipo.LastIndexOf('.');
+            string texto = File.ReadAllText(arquivo);
+            Afirmar.Contem($"namespace {uso.Tipo[..ponto]};", texto, uso.Arquivo);
+            Afirmar.Contem($"class {uso.Tipo[(ponto + 1)..]}", texto, uso.Arquivo);
+        }
     }
 
     [Teste]

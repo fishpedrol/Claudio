@@ -94,7 +94,8 @@ internal static class SpriteProvisorio
         if (EfeitosPixel.Modificavel(pose)) pose = EfeitosPixel.Modificar(pose, quadro.Efeito, quadro.Fase);
         Tela tela = BonecoPixel.Desenhar(pose, expressao, quadro.Item, quadro.Efeito, quadro.Fase);
         if (quadro.Espelhado) tela = tela.Espelhada();
-        if (quadro.Giro != Giro.Nenhum) tela = tela.Girada(horario: quadro.Giro == Giro.Horario);
+        if (quadro.Giro == Giro.MeiaVolta) tela = tela.Girada(horario: true).Girada(horario: true);
+        else if (quadro.Giro != Giro.Nenhum) tela = tela.Girada(horario: quadro.Giro == Giro.Horario);
         return quadro.Deformacao switch
         {
             Deformacao.Achatado => tela.Deformada(EscalaAchatada.X, EscalaAchatada.Y),

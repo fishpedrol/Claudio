@@ -20,9 +20,22 @@ internal sealed class AssemblySintetico
     private readonly BlobHandle _assinaturaVazia;
     private readonly List<(string Modulo, string Entrada)> _pinvokes = [];
     private readonly List<string> _metodosCom = [];
+    private readonly string _namespaceDasDeclaracoes;
+    private readonly string _tipoDasDeclaracoes;
+    private readonly string? _aninhadoDasDeclaracoes;
 
-    public AssemblySintetico(string nome)
+    /// <param name="nome">Nome do assembly e do módulo (com .dll).</param>
+    /// <param name="namespaceDasDeclaracoes">Namespace do tipo que declara os P/Invoke.</param>
+    /// <param name="tipoDasDeclaracoes">Tipo que declara os P/Invoke.</param>
+    /// <param name="aninhado">
+    /// Se dado, os P/Invoke ficam num tipo com este nome aninhado no tipo acima (<c>Tipo+Aninhado</c>), e o externo fica
+    /// sem métodos.
+    /// </param>
+    public AssemblySintetico(string nome, string namespaceDasDeclaracoes = "Sintetico", string tipoDasDeclaracoes = "Amostra", string? aninhado = null)
     {
+        _namespaceDasDeclaracoes = namespaceDasDeclaracoes;
+        _tipoDasDeclaracoes = tipoDasDeclaracoes;
+        _aninhadoDasDeclaracoes = aninhado;
         _md.AddModule(0, _md.GetOrAddString(nome + ".dll"), _md.GetOrAddGuid(Guid.NewGuid()), default, default);
         _md.AddAssembly(_md.GetOrAddString(nome), new Version(1, 0, 0, 0), default, default, 0, AssemblyHashAlgorithm.None);
         _runtime = ReferenciarAssembly("System.Runtime");
@@ -58,7 +71,7 @@ internal sealed class AssemblySintetico
 
     public byte[] Gerar()
     {
-        // MethodDef: primeiro os P/Invoke (do tipo Amostra), depois os métodos da interface.
+        // MethodDef: primeiro os P/Invoke (do tipo das declarações), depois os métodos da interface.
         var modulos = new Dictionary<string, ModuleReferenceHandle>(StringComparer.Ordinal);
         for (int i = 0; i < _pinvokes.Count; i++)
         {
@@ -90,9 +103,17 @@ internal sealed class AssemblySintetico
 
         FieldDefinitionHandle semCampos = MetadataTokens.FieldDefinitionHandle(1);
         _md.AddTypeDefinition(default, default, _md.GetOrAddString("<Module>"), default, semCampos, MetadataTokens.MethodDefinitionHandle(1));
-        _md.AddTypeDefinition(
+        TypeDefinitionHandle declarante = _md.AddTypeDefinition(
             TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed | TypeAttributes.Class,
-            _md.GetOrAddString("Sintetico"), _md.GetOrAddString("Amostra"), _object, semCampos, MetadataTokens.MethodDefinitionHandle(1));
+            _md.GetOrAddString(_namespaceDasDeclaracoes), _md.GetOrAddString(_tipoDasDeclaracoes), _object, semCampos, MetadataTokens.MethodDefinitionHandle(1));
+        if (_aninhadoDasDeclaracoes is not null)
+        {
+            // O externo fica sem métodos: a lista dele começa onde começa a do aninhado.
+            TypeDefinitionHandle aninhado = _md.AddTypeDefinition(
+                TypeAttributes.NestedPublic | TypeAttributes.Abstract | TypeAttributes.Sealed | TypeAttributes.Class,
+                default, _md.GetOrAddString(_aninhadoDasDeclaracoes), _object, semCampos, MetadataTokens.MethodDefinitionHandle(1));
+            _md.AddNestedType(aninhado, declarante);
+        }
         _md.AddTypeDefinition(
             TypeAttributes.Public | TypeAttributes.Interface | TypeAttributes.Abstract,
             _md.GetOrAddString("Sintetico"), _md.GetOrAddString("IAmostraCom"), default, semCampos,

@@ -3,13 +3,15 @@ using System.Runtime.InteropServices;
 namespace Buzzy.App.Plataforma;
 
 /// <summary>
-/// Todas as declarações de chamadas ao Windows do Buzzy, num lugar só (adaptador de
-/// plataforma, DEC-007). O portão de APIs proibidas (SECURITY.md 3.2 e 8) inspeciona estas
-/// declarações no binário a cada build.
+/// As declarações de chamadas ao Windows do Buzzy, num lugar só (adaptador de plataforma,
+/// DEC-007), menos as do observador de tela cheia, que ficam nele (<see cref="ObservadorDeTelaCheia"/>):
+/// o portão de APIs proibidas (SECURITY.md 3.2 e 8) só as permite naquele tipo, e inspeciona
+/// todas as declarações no binário a cada build.
 ///
 /// Limites respeitados de propósito: nenhum hook, nenhuma injeção de input, nenhuma captura
-/// de tela, nenhuma rede, nenhum processo, nenhuma leitura de título, texto, identidade ou
-/// geometria de janelas de outros aplicativos. As funções abaixo só agem sobre janelas do
+/// de tela, nenhuma rede, nenhum processo, nenhuma leitura de título, texto ou identidade de
+/// janelas de outros aplicativos. A única geometria de outro aplicativo lida é o retângulo da
+/// janela em primeiro plano, pelo observador de tela cheia, com <c>GetWindowRect</c> daqui (DEC-034). As funções abaixo só agem sobre janelas do
 /// próprio Buzzy, sobre a topologia dos monitores (e a configuração de vídeo deles, lida só
 /// para a chave estável do monitor), sobre o ícone da bandeja e sobre o menu do Buzzy, com os
 /// bitmaps dos ícones dele criados na memória do próprio processo.

@@ -118,7 +118,9 @@ internal sealed record Regra(
 ///   EnumDisplayMonitors, Shell_NotifyIcon, SetForegroundWindow para o menu da bandeja e afins),
 ///   conforme SECURITY.md 3.1.
 ///
-/// O Buzzy.exe (apphost) tem uma lista de permissões própria, em <see cref="PermissoesDoApphost"/>.
+/// O Buzzy.exe (apphost) tem uma lista de permissões própria, em <see cref="PermissoesDoApphost"/>. O observador de tela
+/// cheia (DEC-013 e DEC-034) usa três funções desta lista por uma permissão restrita a um tipo e a um arquivo, em
+/// <see cref="UsosRestritos"/>; no resto do produto, elas continuam proibidas.
 /// </summary>
 internal static class ListaProibida
 {
@@ -234,11 +236,12 @@ internal static class ListaProibida
         Funcao("QueryFullProcessImageName", Categoria.LerOutrosAplicativos, "lê o caminho do executável de um processo"),
         Funcao("GetModuleFileNameEx", Categoria.LerOutrosAplicativos, "lê o caminho de um módulo de outro processo"),
         Funcao("K32GetModuleFileNameEx", Categoria.LerOutrosAplicativos, "GetModuleFileNameEx exportada pelo kernel32 (além da lista mínima)"),
-        Funcao("GetForegroundWindow", Categoria.LerOutrosAplicativos, "identifica a janela de outro aplicativo em primeiro plano; só entra com DEC-013 na Fase 8"),
+        // As três abaixo marcadas com DEC-034 só valem no observador de tela cheia, pela permissão restrita de UsosRestritos
+        // (SECURITY.md 3.1 e 8, item 1); em qualquer outro tipo ou arquivo, reprovam.
+        Funcao("GetForegroundWindow", Categoria.LerOutrosAplicativos, "identifica a janela de outro aplicativo em primeiro plano; só no observador de tela cheia (DEC-013, DEC-034)"),
+        Funcao("GetWindowThreadProcessId", Categoria.LerOutrosAplicativos, "identifica a thread e o processo donos de uma janela, inclusive de outro aplicativo; só no observador de tela cheia, sem o processo (DEC-034) (além da lista mínima)"),
         Funcao("WindowFromPoint", Categoria.LerOutrosAplicativos, "identifica a janela de outro aplicativo sob um ponto"),
-        // Nesta fase o observador de DEC-013 ainda não existe; na Fase 8 ele terá regra própria,
-        // restrita aos eventos e filtros de DEC-013 (SECURITY.md 8, item 1).
-        Funcao("SetWinEventHook", Categoria.LerOutrosAplicativos, "observa eventos de janelas de outros aplicativos; proibido nesta fase, só entra com DEC-013 na Fase 8 e com regra própria"),
+        Funcao("SetWinEventHook", Categoria.LerOutrosAplicativos, "observa eventos de janelas de outros aplicativos; só no observador de tela cheia, restrito aos eventos e filtros da DEC-013 (DEC-034)"),
         Funcao("AccessibleObjectFromWindow", Categoria.LerOutrosAplicativos, "lê a interface de outro aplicativo por MSAA (além da lista mínima)"),
         Funcao("AccessibleObjectFromPoint", Categoria.LerOutrosAplicativos, "lê a interface de outro aplicativo por MSAA (além da lista mínima)"),
         Tipo("System.Windows.Clipboard", Categoria.LerOutrosAplicativos, "lê a área de transferência (WPF)", fonte: ["Clipboard"]),

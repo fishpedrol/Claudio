@@ -45,6 +45,9 @@ internal sealed class IsolamentoTestes : IDisposable
         OpcoesDaAplicacao opcoes = ProgramaDoBuzzy.LerOpcoes(["--pausado"]);
         Afirmar.Nulo(opcoes.PerfilDeTeste);
         Afirmar.Falso(opcoes.PersistenciaDesligada);
+        Afirmar.Falso(opcoes.SemTelaCheia, "o observador de tela cheia liga por padrão (DEC-034)");
+        Afirmar.Verdadeiro(ProgramaDoBuzzy.LerOpcoes(["--diagnostico", "--sem-tela-cheia", "--pausado"]).SemTelaCheia, "--sem-tela-cheia");
+        Afirmar.Falso(ProgramaDoBuzzy.LerOpcoes(["--Sem-Tela-Cheia"]).SemTelaCheia, "só a grafia exata");
     }
 
     [Teste]
@@ -133,11 +136,15 @@ internal sealed class IsolamentoTestes : IDisposable
     [Teste]
     public void BuzzyEmTeste_AbreComOPerfilDeIntegracao()
     {
+        // Sem pedir a tela cheia, vai --sem-tela-cheia (DEC-034): o lugar inicial não depende do que estiver em tela cheia.
         List<string> argumentos = [.. BuzzyEmTeste.DescreverProcesso().ArgumentList];
-        Afirmar.Sequencia(["--diagnostico", "--perfil-de-teste", PerfilDeTeste.Integracao, "--pausado"], argumentos);
+        Afirmar.Sequencia(["--diagnostico", "--perfil-de-teste", PerfilDeTeste.Integracao, "--sem-tela-cheia", "--pausado"], argumentos);
 
         argumentos = [.. BuzzyEmTeste.DescreverProcesso(pausado: false, semente: 5, perfil: "persistencia").ArgumentList];
-        Afirmar.Sequencia(["--diagnostico", "--perfil-de-teste", "persistencia", "--semente", "5"], argumentos);
+        Afirmar.Sequencia(["--diagnostico", "--perfil-de-teste", "persistencia", "--sem-tela-cheia", "--semente", "5"], argumentos);
+
+        argumentos = [.. BuzzyEmTeste.DescreverProcesso(telaCheia: true).ArgumentList];
+        Afirmar.Sequencia(["--diagnostico", "--perfil-de-teste", PerfilDeTeste.Integracao, "--pausado"], argumentos, "com a tela cheia, como no uso real");
 
         // A pasta que o teste limpa é a mesma que o Buzzy usa com esse perfil.
         string buzzy = Afirmar.NaoNulo(PastaDeDados.DoBuzzy());
@@ -193,7 +200,7 @@ internal sealed class IsolamentoTestes : IDisposable
 
         string buzzyEmTeste = fontes[@"Integracao\BuzzyEmTeste.cs"];
         Afirmar.Igual(1, Regex.Matches(buzzyEmTeste, @"Process\.Start\(").Count, "BuzzyEmTeste inicia o Buzzy num lugar só");
-        Afirmar.Contem("Process.Start(DescreverProcesso(pausado, semente, perfil))", buzzyEmTeste);
+        Afirmar.Contem("Process.Start(DescreverProcesso(pausado, semente, perfil, telaCheia))", buzzyEmTeste);
         Afirmar.Igual(1, Regex.Matches(buzzyEmTeste, @"new ProcessStartInfo\(").Count, "e o descreve num lugar só");
         Afirmar.Contem("new ProcessStartInfo(Caminhos.ExeDoBuzzy())", buzzyEmTeste);
 

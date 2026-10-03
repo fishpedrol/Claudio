@@ -680,6 +680,7 @@ internal static class EsquemaDeConfiguracoesTestes
         (string Texto, LadoDoEsconderijo Lado)[] aceitos =
         [
             ("nenhum", LadoDoEsconderijo.Nenhum), ("baixo", LadoDoEsconderijo.Baixo), ("ESQUERDA", LadoDoEsconderijo.Esquerda), ("Direita", LadoDoEsconderijo.Direita),
+            ("cima", LadoDoEsconderijo.Cima),
         ];
         foreach ((string texto, LadoDoEsconderijo lado) in aceitos)
         {
@@ -689,11 +690,11 @@ internal static class EsquemaDeConfiguracoesTestes
             Afirmar.Igual((lado, true), (lida.Configuracoes.Esconderijo, lida.Configuracoes.PresoPeloUsuario), $"\"{texto}\" no arquivo");
             Afirmar.Sequencia([], lida.Avisos, $"\"{texto}\": sem aviso");
         }
-        Afirmar.Sequencia(["nenhum", "baixo", "esquerda", "direita", "nenhum", "nenhum"],
-            new[] { LadoDoEsconderijo.Nenhum, LadoDoEsconderijo.Baixo, LadoDoEsconderijo.Esquerda, LadoDoEsconderijo.Direita, (LadoDoEsconderijo)7, (LadoDoEsconderijo)(-1) }
+        Afirmar.Sequencia(["nenhum", "baixo", "esquerda", "direita", "cima", "nenhum", "nenhum"],
+            new[] { LadoDoEsconderijo.Nenhum, LadoDoEsconderijo.Baixo, LadoDoEsconderijo.Esquerda, LadoDoEsconderijo.Direita, LadoDoEsconderijo.Cima, (LadoDoEsconderijo)7, (LadoDoEsconderijo)(-1) }
                 .Select(EsquemaDeConfiguracoes.NomeDoEsconderijo), "nomes escritos; fora do enum, nenhum");
 
-        string[] recusados = ["1", "0", "Baixo,Direita", " baixo", "baixo ", "em cima", "cima", "", "Direita\u0000", "dİreita"];
+        string[] recusados = ["1", "0", "Baixo,Direita", " baixo", "baixo ", "em cima", "topo", " cima", "", "Direita\u0000", "dİreita"];
         foreach (string texto in recusados)
         {
             string caso = $"\"{JsonEncodedText.Encode(texto)}\"";
@@ -702,8 +703,8 @@ internal static class EsquemaDeConfiguracoesTestes
             LeituraDasConfiguracoes lida = Ler(ComPostura(caso, "false"));
             Afirmar.NaoNulo(lida.Configuracoes.Posicao, $"{caso}: a posição continua");
             Afirmar.Igual(LadoDoEsconderijo.Nenhum, lida.Configuracoes.Esconderijo, $"{caso} no arquivo: nenhum");
-            Afirmar.Sequencia(["posicao.esconderijo: não é nenhum, baixo, esquerda nem direita; vale nenhum"], lida.Avisos, $"{caso}: aviso");
-            if (texto.Length > 0) Afirmar.Falso(lida.Avisos[0].Contains(texto, StringComparison.Ordinal) && !"posicao.esconderijo: não é nenhum, baixo, esquerda nem direita; vale nenhum".Contains(texto, StringComparison.Ordinal),
+            Afirmar.Sequencia(["posicao.esconderijo: não é nenhum, baixo, esquerda, direita nem cima; vale nenhum"], lida.Avisos, $"{caso}: aviso");
+            if (texto.Length > 0) Afirmar.Falso(lida.Avisos[0].Contains(texto, StringComparison.Ordinal) && !"posicao.esconderijo: não é nenhum, baixo, esquerda, direita nem cima; vale nenhum".Contains(texto, StringComparison.Ordinal),
                 $"{caso}: o aviso não repete o valor do arquivo");
         }
         foreach (string json in new[] { "2", "true", "[\"baixo\"]", "{\"lado\": \"baixo\"}" })
@@ -857,7 +858,7 @@ internal static class EsquemaDeConfiguracoesTestes
             new Press(default), new Click(), new DoubleClick(), new DragStart(), new DragMove(default), new DragEnd(default), new DragCancel(),
             new ContextMenu(default), new EnergyPanelOpen(), new EnergySelected(NivelDeEnergia.Alta), new EnergyPanelClose(),
             new CmdHide(), new CmdShow(), new CmdPauseAutonomy(), new CmdResumeAutonomy(), new CmdOpenSettings(), new CmdResetPosition(), new CmdExit(),
-            new CmdSetDominantEmotion(Expressao.Feliz), new CmdSetAdultContent(false), new Loaded(UmMonitor, null, Preferencias.Padrao), new TopologyChanged(UmMonitor), new SessionLocked(), new SessionUnlocked(),
+            new CmdSetDominantEmotion(Expressao.Feliz), new CmdSetAdultContent(false), new CmdSetFullscreenMode(false), new Loaded(UmMonitor, null, Preferencias.Padrao), new TopologyChanged(UmMonitor), new SessionLocked(), new SessionUnlocked(),
             new Suspending(), new Resumed(), new SessionEnding(), new FullscreenTargetsChanged(MonitoresOcupados.Nenhum),
             new SettingsChanged(Preferencias.Padrao), new Tick(), new MovementSignal(default), new AutonomyTimer(1), new ExpressionChange(default),
             new ItemEffectTimer(1),

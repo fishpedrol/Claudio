@@ -137,14 +137,17 @@ internal sealed class BuzzyEmTeste : IDisposable
     /// <summary>
     /// Descreve, sem iniciar, um Buzzy.exe com <c>--diagnostico</c> e o perfil de teste dado.
     /// Com <paramref name="pausado"/>, o movimento autônomo começa pausado: o personagem fica no
-    /// lugar inicial, como os testes de gesto e de janela esperam.
+    /// lugar inicial, como os testes de gesto e de janela esperam. Sem <paramref name="telaCheia"/>, vai
+    /// <c>--sem-tela-cheia</c>: com um jogo ou vídeo em tela cheia no principal durante a bateria (2026-10-03), o modo
+    /// levava o Buzzy de teste ao outro monitor, e os testes do lugar inicial falhavam (DEC-034).
     /// </summary>
-    internal static ProcessStartInfo DescreverProcesso(bool pausado = true, ulong? semente = null, string perfil = PerfilDeTeste.Integracao)
+    internal static ProcessStartInfo DescreverProcesso(bool pausado = true, ulong? semente = null, string perfil = PerfilDeTeste.Integracao, bool telaCheia = false)
     {
         var psi = new ProcessStartInfo(Caminhos.ExeDoBuzzy()) { UseShellExecute = false };
         psi.ArgumentList.Add("--diagnostico");
         psi.ArgumentList.Add("--perfil-de-teste");
         psi.ArgumentList.Add(perfil);
+        if (!telaCheia) psi.ArgumentList.Add("--sem-tela-cheia");
         if (pausado) psi.ArgumentList.Add("--pausado");
         if (semente is { } s)
         {
@@ -158,15 +161,16 @@ internal sealed class BuzzyEmTeste : IDisposable
     /// Inicia um Buzzy.exe com <c>--diagnostico</c> e o perfil de teste, sem conferências e sem
     /// limpar a pasta do perfil (a segunda instância usa isto, com o primeiro Buzzy aberto).
     /// </summary>
-    internal static Process IniciarProcesso(bool pausado = true, ulong? semente = null, string perfil = PerfilDeTeste.Integracao)
-        => Process.Start(DescreverProcesso(pausado, semente, perfil)) ?? throw new InvalidOperationException("Buzzy.exe não iniciou.");
+    internal static Process IniciarProcesso(bool pausado = true, ulong? semente = null, string perfil = PerfilDeTeste.Integracao, bool telaCheia = false)
+        => Process.Start(DescreverProcesso(pausado, semente, perfil, telaCheia)) ?? throw new InvalidOperationException("Buzzy.exe não iniciou.");
 
     /// <summary>
     /// Inicia o Buzzy do teste. Com <paramref name="limpar"/>, apaga antes a pasta do perfil (só a
     /// de <paramref name="perfil"/>, em <c>%LOCALAPPDATA%\Buzzy\testes</c>), para ele partir sem
-    /// posição salva; sem, parte do que a execução anterior com o mesmo perfil deixou.
+    /// posição salva; sem, parte do que a execução anterior com o mesmo perfil deixou. Com <paramref name="telaCheia"/>,
+    /// o observador de tela cheia liga, como no uso real (<see cref="DescreverProcesso"/>).
     /// </summary>
-    internal static BuzzyEmTeste Iniciar(bool pausado = true, ulong? semente = null, string perfil = PerfilDeTeste.Integracao, bool limpar = true)
+    internal static BuzzyEmTeste Iniciar(bool pausado = true, ulong? semente = null, string perfil = PerfilDeTeste.Integracao, bool limpar = true, bool telaCheia = false)
     {
         ExigirTesteSemElevacao();
         string exe = Caminhos.ExeDoBuzzy();
@@ -181,7 +185,7 @@ internal sealed class BuzzyEmTeste : IDisposable
         // Sem nenhum Buzzy aberto, ninguém usa a pasta do perfil.
         if (limpar) PerfilDeTeste.Limpar(perfil);
         ExigirNenhumBuzzyAberto(); // repetida imediatamente antes de iniciar
-        var b = new BuzzyEmTeste(IniciarProcesso(pausado, semente, perfil), inicioDoLog);
+        var b = new BuzzyEmTeste(IniciarProcesso(pausado, semente, perfil, telaCheia), inicioDoLog);
         try
         {
             b.Inicio = b.Processo.StartTime;

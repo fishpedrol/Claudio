@@ -48,6 +48,42 @@ public sealed record ParametrosDeMovimento
 
     private static readonly double[] TemposDoSaltoPadrao = [0.30, 0.40, 0.50, 0.65, 0.80, 1.00, 1.20, 1.40];
 
+    // O pulo da tela cheia (DEC-035, pedido do usuário de 2026-10-03: "ele ta literalmente teleportando"): da posição dele ao
+    // cipó do monitor livre e, no fim da tela cheia, de volta, num arco só.
+
+    /// <summary>Velocidade média do pulo da tela cheia ao longo da reta entre a partida e a chegada, em DIP/s.</summary>
+    public double VelocidadeDoPuloDaTelaCheia { get; init; } = 2400;
+
+    /// <summary>Menor duração do pulo da tela cheia, em segundos: um pulo curto não vira um piscar.</summary>
+    public double TempoMinimoDoPuloDaTelaCheia { get; init; } = 0.6;
+
+    /// <summary>Maior duração do pulo da tela cheia, em segundos: um pulo de uma ponta à outra não se arrasta.</summary>
+    public double TempoMaximoDoPuloDaTelaCheia { get; init; } = 1.2;
+
+    /// <summary>
+    /// Quanto o arco do pulo da tela cheia sobe acima da reta (ou desce abaixo dela, no balanço de cipó a cipó), em DIP, entre
+    /// pontos de alturas parecidas; limitado à metade da distância.
+    /// </summary>
+    public double AlturaDoPuloDaTelaCheia { get; init; } = 160;
+
+    /// <summary>A que distância, em DIP, da lateral do monitor livre voltada para a partida ele agarra o cipó.</summary>
+    public double EntradaNoCipo { get; init; } = 200;
+
+    // O pulinho (DEC-035, item 6; pedido do usuário de 2026-10-03: "quando ele estiver na borda do monitor queria que ele so
+    // desse um pulinho msm"): perto da lateral que encosta no monitor livre, ele só salta para o outro lado da borda.
+
+    /// <summary>Até que distância, em DIP, entre a âncora e a lateral que encosta no monitor livre a troca é um pulinho.</summary>
+    public double DistanciaDoPulinho { get; init; } = 320;
+
+    /// <summary>A que distância, em DIP, da borda ele pousa do outro lado no pulinho (encostado na parede, se escalava).</summary>
+    public double EntradaDoPulinho { get; init; } = 96;
+
+    /// <summary>Quanto o pulinho sobe acima da reta (ou desce, de cipó a cipó), em DIP; limitado à metade da distância.</summary>
+    public double AlturaDoPulinho { get; init; } = 72;
+
+    /// <summary>Menor duração do pulinho, em segundos.</summary>
+    public double TempoMinimoDoPulinho { get; init; } = 0.35;
+
     /// <summary>Menor espaço livre, em DIP, para uma caminhada ou um pulo naquela direção; menos que isso, vira.</summary>
     public double EspacoMinimo { get; init; } = 24;
 

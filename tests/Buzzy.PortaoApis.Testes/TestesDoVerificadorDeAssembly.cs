@@ -215,6 +215,67 @@ public sealed class TestesDoVerificadorDeAssembly : IDisposable
     }
 
     [Teste]
+    public void UsoRestritoSoValeNoTipoENoAssemblyDoObservador()
+    {
+        // DEC-034: as três funções do observador de tela cheia, declaradas no tipo dele (ou num aninhado) do Buzzy, são uso
+        // restrito; no mesmo tipo, WindowFromPoint, a variante W e outro módulo continuam violação.
+        foreach (string? aninhado in new[] { null, "Nativo" })
+        {
+            var sintetico = new AssemblySintetico("Buzzy", "Buzzy.App.Plataforma", "ObservadorDeTelaCheia", aninhado);
+            sintetico.DeclararPInvoke("user32.dll", "SetWinEventHook");
+            sintetico.DeclararPInvoke("USER32.DLL", "GetForegroundWindow");
+            sintetico.DeclararPInvoke("user32", "GetWindowThreadProcessId");
+            sintetico.DeclararPInvoke("user32.dll", "WindowFromPoint");
+            sintetico.DeclararPInvoke("user32.dll", "SetWinEventHookW");
+            sintetico.DeclararPInvoke("kernel32.dll", "GetForegroundWindow");
+            string caminho = Path.Combine(_pasta.Caminho, $"Observador{aninhado}.dll");
+            sintetico.Gravar(caminho);
+
+            AnaliseDeAssembly analise = VerificadorDeAssembly.Verificar(caminho);
+            Afirmar.Sequencia<string>(["USER32.DLL!GetForegroundWindow", "user32!GetWindowThreadProcessId", "user32.dll!SetWinEventHook"],
+                analise.UsosRestritos.Select(u => u.Api).Order(StringComparer.Ordinal), $"aninhado: {aninhado}");
+            Afirmar.Sequencia<string>(["kernel32.dll!GetForegroundWindow", "user32.dll!SetWinEventHookW", "user32.dll!WindowFromPoint"],
+                analise.Violacoes.Select(v => v.Api).Order(StringComparer.Ordinal), $"aninhado: {aninhado}");
+            string tipo = aninhado is null ? "Buzzy.App.Plataforma.ObservadorDeTelaCheia." : "Buzzy.App.Plataforma.ObservadorDeTelaCheia+Nativo.";
+            foreach (UsoRestritoVisto uso in analise.UsosRestritos)
+            {
+                Afirmar.Verdadeiro(uso.Onde.StartsWith(tipo, StringComparison.Ordinal), uso.Onde);
+                Afirmar.Igual(Categoria.LerOutrosAplicativos, uso.Categoria, uso.Api);
+                Afirmar.Igual(caminho, uso.Arquivo);
+            }
+        }
+    }
+
+    [Teste]
+    public void FuncoesDoObservadorForaDoLugarDeleSaoViolacao()
+    {
+        (string Assembly, string Namespace, string Tipo, string? Aninhado)[] lugares =
+        [
+            ("Buzzy", "Buzzy.App.Plataforma", "Win32", null),
+            ("Buzzy", "Buzzy.App.Plataforma", "ObservadorDeTelaCheiaFalso", null),
+            ("Buzzy", "Buzzy.App", "ObservadorDeTelaCheia", null),
+            ("Buzzy.Core", "Buzzy.App.Plataforma", "ObservadorDeTelaCheia", null),
+            ("Outro", "Buzzy.App.Plataforma", "ObservadorDeTelaCheia", "Nativo"),
+        ];
+        int n = 0;
+        foreach ((string assembly, string nomeDoNamespace, string tipo, string? aninhado) in lugares)
+        {
+            var sintetico = new AssemblySintetico(assembly, nomeDoNamespace, tipo, aninhado);
+            sintetico.DeclararPInvoke("user32.dll", "SetWinEventHook");
+            sintetico.DeclararPInvoke("user32.dll", "GetForegroundWindow");
+            sintetico.DeclararPInvoke("user32.dll", "GetWindowThreadProcessId");
+            string caminho = Path.Combine(_pasta.Caminho, $"Lugar{++n}.dll");
+            sintetico.Gravar(caminho);
+
+            AnaliseDeAssembly analise = VerificadorDeAssembly.Verificar(caminho);
+            string lugar = $"{assembly}: {nomeDoNamespace}.{tipo}{(aninhado is null ? "" : "+" + aninhado)}";
+            Afirmar.Igual(0, analise.UsosRestritos.Count, lugar);
+            Afirmar.Sequencia<string>(["user32.dll!GetForegroundWindow", "user32.dll!GetWindowThreadProcessId", "user32.dll!SetWinEventHook"],
+                analise.Violacoes.Select(v => v.Api).Order(StringComparer.Ordinal), lugar);
+        }
+    }
+
+    [Teste]
     public void ArquivoNativoNaoEhAssemblyGerenciado()
     {
         string apphost = Repositorio.ApphostReal();

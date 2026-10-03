@@ -30,6 +30,35 @@ public sealed class TestesDoVerificadorDeFonte : IDisposable
     }
 
     [Teste]
+    public void UsoRestritoSoValeNoArquivoDoObservador()
+    {
+        // DEC-034: só o arquivo do observador de tela cheia cita as três funções dele; as outras regras valem nele também.
+        const string fonte = "SetWinEventHook(a); GetForegroundWindow(); GetWindowThreadProcessId(h, 0); WindowFromPoint(p); SendInput();";
+        string[] doObservador =
+        [
+            @"C:\repo\src\Buzzy.App\Plataforma\ObservadorDeTelaCheia.cs",
+            "C:/repo/src/Buzzy.App/Plataforma/ObservadorDeTelaCheia.cs",
+            @"C:\REPO\SRC\BUZZY.APP\PLATAFORMA\observadordetelacheia.cs",
+        ];
+        foreach (string arquivo in doObservador)
+            Afirmar.Sequencia<string>(["WindowFromPoint", "SendInput"], VerificadorDeFonte.VerificarTexto(arquivo, fonte).Select(v => v.Api), arquivo);
+
+        string[] outros =
+        [
+            @"C:\repo\src\Buzzy.App\Plataforma\Win32.cs",
+            @"C:\repo\src\Buzzy.Core\Plataforma\ObservadorDeTelaCheia.cs",
+            @"C:\repo\src\Buzzy.App\ObservadorDeTelaCheia.cs",
+            @"C:\repo\src\Buzzy.App\Plataforma\OutroObservadorDeTelaCheia.cs",
+            @"C:\repo\Buzzy.App\Plataforma\ObservadorDeTelaCheia.cs",
+        ];
+        foreach (string arquivo in outros)
+        {
+            Afirmar.Sequencia<string>(["SetWinEventHook", "GetForegroundWindow", "GetWindowThreadProcessId", "WindowFromPoint", "SendInput"],
+                VerificadorDeFonte.VerificarTexto(arquivo, fonte).Select(v => v.Api), arquivo);
+        }
+    }
+
+    [Teste]
     public void ComentariosNaoSaoAcusados()
     {
         const string fonte = "// SendInput\n/* GetForegroundWindow\n WindowFromPoint */\n/// <see cref=\"BitBlt\"/>\nint x; // Process.Start";

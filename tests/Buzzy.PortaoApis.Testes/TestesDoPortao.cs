@@ -83,6 +83,36 @@ public sealed class TestesDoPortao : IDisposable
     }
 
     [Teste]
+    public void ObservadorDeTelaCheiaAprovaComoUsoRestrito()
+    {
+        // DEC-034, de ponta a ponta: as três funções declaradas no tipo do observador e citadas só no arquivo dele aprovam, e
+        // o relatório mostra cada uma como uso restrito.
+        Produto produto = MontarProdutoLimpo();
+        var buzzy = new AssemblySintetico("Buzzy", "Buzzy.App.Plataforma", "ObservadorDeTelaCheia", "Nativo");
+        buzzy.DeclararPInvoke("user32.dll", "SetWindowPos");
+        buzzy.DeclararPInvoke("user32.dll", "SetWinEventHook");
+        buzzy.DeclararPInvoke("user32.dll", "GetForegroundWindow");
+        buzzy.DeclararPInvoke("user32.dll", "GetWindowThreadProcessId");
+        buzzy.Gravar(Path.Combine(produto.Binarios, "Buzzy.dll"));
+        _pasta.Escrever(@"src\Buzzy.App\Plataforma\ObservadorDeTelaCheia.cs",
+            "namespace Buzzy.App.Plataforma;\ninternal sealed class ObservadorDeTelaCheia\n{\n    void F() { SetWinEventHook(); GetForegroundWindow(); GetWindowThreadProcessId(0, 0); }\n}\n");
+        (int codigo, string saida, string erros) = Rodar(produto);
+
+        Afirmar.Igual(0, codigo, saida + erros);
+        Afirmar.Contem("Resumo: APROVADO - nenhuma violação; 4 importação(ões) permitida(s) no apphost; 3 uso(s) restrito(s).", saida);
+        Afirmar.Igual(3, Regex.Matches(saida, @" uso restrito em Buzzy\.App\.Plataforma\.ObservadorDeTelaCheia\+Nativo\.").Count, saida);
+        Afirmar.Contem("Buzzy.dll: user32.dll!SetWinEventHook [Ler outros aplicativos] uso restrito em", saida);
+
+        // A mesma chamada em outro arquivo reprova, e o arquivo do observador continua sem acusação.
+        string outro = _pasta.Escrever(@"src\Buzzy.App\Plataforma\Outro.cs", "static class O\n{\n    static void F() => GetForegroundWindow();\n}\n");
+        (codigo, saida, _) = Rodar(produto);
+        Afirmar.Igual(1, codigo, saida);
+        string linha = saida.Split('\n').Select(l => l.TrimEnd('\r')).Single(l => LinhaDeErro.IsMatch(l));
+        Afirmar.Igual(outro, LinhaDeErro.Match(linha).Groups["origem"].Value);
+        Afirmar.Contem("Resumo: REPROVADO - 1 violação(ões) em 1 arquivo(s) (Ler outros aplicativos: 1)", saida);
+    }
+
+    [Teste]
     public void LinhasQueNaoSaoViolacaoNaoParecemErroOuAvisoDoMsbuild()
     {
         Produto produto = MontarProdutoLimpo();

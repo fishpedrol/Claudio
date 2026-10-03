@@ -28,6 +28,9 @@ internal enum ComandoDoMenu
 
     /// <summary>Ligar ou desligar o conteúdo adulto (CMD_SET_ADULT_CONTENT, DEC-033).</summary>
     ConteudoAdulto = 7,
+
+    /// <summary>"Desviar da tela cheia": ligar ou desligar o modo de tela cheia (CMD_SET_FULLSCREEN_MODE, DEC-034; Q-09).</summary>
+    ModoTelaCheia = 8,
 }
 
 /// <summary>
@@ -50,7 +53,8 @@ internal readonly record struct EscolhaDoMenu(ComandoDoMenu Comando, Expressao? 
 /// <param name="ConteudoAdulto">
 /// A chave do conteúdo adulto (DEC-033): a marca em "Conteúdo adulto"; desligada, o submenu "Itens" só tem os de alívio.
 /// </param>
-internal sealed record ModeloDoMenu(bool BuzzyVisivel, bool MovimentoPausado, Expressao? EmocaoDominante, bool AltoContraste, bool Tamagotchi, int ItensNaTela = 0, bool ConteudoAdulto = true);
+/// <param name="ModoTelaCheia">O modo de tela cheia (Q-09; DEC-034): a marca em "Desviar da tela cheia".</param>
+internal sealed record ModeloDoMenu(bool BuzzyVisivel, bool MovimentoPausado, Expressao? EmocaoDominante, bool AltoContraste, bool Tamagotchi, int ItensNaTela = 0, bool ConteudoAdulto = true, bool ModoTelaCheia = true);
 
 /// <summary>O tipo de uma linha do menu.</summary>
 internal enum TipoDeEntrada
@@ -127,7 +131,8 @@ internal static class MenuNativo
     /// comandos de hoje e, antes de "Sair", o submenu da emoção dominante (DEC-027): "Automática", um separador e as 14
     /// caras de humor na ordem de expressoes.png, cada uma com o próprio rosto como ícone (só texto em alto contraste) e
     /// a marca de rádio na atual. Com a chave do tamagotchi ligada (DEC-028; crítica, L13), vem depois o submenu "Itens"
-    /// (<see cref="SubmenuDosItens"/>) e o comando "Conteúdo adulto", com a marca quando ligado (DEC-033).
+    /// (<see cref="SubmenuDosItens"/>) e o comando "Conteúdo adulto", com a marca quando ligado (DEC-033). Sempre, antes do
+    /// último separador, "Desviar da tela cheia", com a marca quando o modo está ligado (DEC-034).
     /// </summary>
     internal static IReadOnlyList<EntradaDoMenu> Entradas(ModeloDoMenu modelo)
     {
@@ -145,7 +150,7 @@ internal static class MenuNativo
                 Rosto: modelo.AltoContraste ? null : PoseDoPersonagem.NomeDaExpressao(emocao)));
         }
 
-        var principal = new List<EntradaDoMenu>(8)
+        var principal = new List<EntradaDoMenu>(9)
         {
             new(TipoDeEntrada.Comando, modelo.BuzzyVisivel ? Textos.MenuEsconder : Textos.MenuMostrar, (int)ComandoDoMenu.AlternarVisibilidade),
             new(TipoDeEntrada.Comando, modelo.MovimentoPausado ? Textos.MenuRetomar : Textos.MenuPausar, (int)ComandoDoMenu.AlternarMovimento),
@@ -157,6 +162,7 @@ internal static class MenuNativo
             principal.Add(SubmenuDosItens(modelo));
             principal.Add(new(TipoDeEntrada.Comando, Textos.MenuConteudoAdulto, (int)ComandoDoMenu.ConteudoAdulto, Marcada: modelo.ConteudoAdulto));
         }
+        principal.Add(new(TipoDeEntrada.Comando, Textos.MenuModoTelaCheia, (int)ComandoDoMenu.ModoTelaCheia, Marcada: modelo.ModoTelaCheia));
         principal.Add(EntradaDoMenu.Separador);
         principal.Add(new(TipoDeEntrada.Comando, Textos.MenuSair, (int)ComandoDoMenu.Sair));
         return principal;
@@ -192,7 +198,8 @@ internal static class MenuNativo
     internal static ModeloDoMenu ModeloAoAbrir(Nucleo? nucleo, bool visivel, bool altoContraste)
         => new(visivel, nucleo?.Estado.AutonomiaPausada ?? false, nucleo?.Estado.Preferencias.EmocaoDominante,
             AltoContraste: altoContraste, Tamagotchi: nucleo?.Configuracao.Tamagotchi ?? false, ItensNaTela: nucleo?.Estado.Itens.Quantidade ?? 0,
-            ConteudoAdulto: nucleo?.Estado.Preferencias.ConteudoAdulto ?? true);
+            ConteudoAdulto: nucleo?.Estado.Preferencias.ConteudoAdulto ?? true,
+            ModoTelaCheia: nucleo?.Estado.Preferencias.ModoTelaCheia ?? true);
 
     /// <summary>
     /// O DPI dos ícones do menu: o do monitor em que ele abre (o que contém o ponto ou, num vão, o mais próximo), e não o do
@@ -216,6 +223,7 @@ internal static class MenuNativo
         (int)ComandoDoMenu.Sair => new(ComandoDoMenu.Sair),
         IdDaAutomatica => new(ComandoDoMenu.Emocao, null),
         (int)ComandoDoMenu.ConteudoAdulto => new(ComandoDoMenu.ConteudoAdulto),
+        (int)ComandoDoMenu.ModoTelaCheia => new(ComandoDoMenu.ModoTelaCheia),
         IdDeRecolherItens => new(ComandoDoMenu.RecolherItens),
         >= IdDaPrimeiraEmocao when id - IdDaPrimeiraEmocao < Expressoes.DeHumor.Count => new(ComandoDoMenu.Emocao, Expressoes.DeHumor[id - IdDaPrimeiraEmocao]),
         >= IdDoPrimeiroItem when id - IdDoPrimeiroItem < TabelaDoTamagotchi.Itens.Count => new(ComandoDoMenu.Item, Item: TabelaDoTamagotchi.Itens[id - IdDoPrimeiroItem]),
@@ -250,7 +258,7 @@ internal static class MenuNativo
             // Para diagnóstico e para a verificação da Fase 1: o dono do menu é janela do
             // próprio Buzzy; sem primeiro plano, o menu não recebe teclado nem fecha ao clicar fora.
             Diagnostico.Evento("MENU", ("exibindo", "sim"), ("dono", dono.Handle), ("donoEmPrimeiroPlano", primeiroPlano),
-                ("emocaoMarcada", NomeNoLog(modelo.EmocaoDominante)), ("conteudoAdulto", modelo.ConteudoAdulto ? "sim" : "nao"), ("icones", icones));
+                ("emocaoMarcada", NomeNoLog(modelo.EmocaoDominante)), ("conteudoAdulto", modelo.ConteudoAdulto ? "sim" : "nao"), ("modoTelaCheia", modelo.ModoTelaCheia ? "sim" : "nao"), ("icones", icones));
             uint opcoes = Win32.TPM_RETURNCMD | Win32.TPM_NONOTIFY | Win32.TPM_RIGHTBUTTON | Win32.TPM_LEFTALIGN
                 | (abrirParaCima ? Win32.TPM_BOTTOMALIGN : Win32.TPM_TOPALIGN);
             int escolhido = Win32.TrackPopupMenuEx(menu, opcoes, ponto.X, ponto.Y, dono.Handle, 0);

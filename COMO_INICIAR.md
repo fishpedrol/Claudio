@@ -70,13 +70,14 @@ A cópia da pasta `net10.0-windows` na sua Área de Trabalho foi atualizada em 2
 | Interromper o uso | Clique no Buzzy ou arraste-o, também quando ele fuma sozinho. O efeito continua até passar |
 | Acalmar o efeito aos poucos | Dê comida ou bebida sem álcool: **banana**, **água**, **café** ou **energético**. Cada um acalma um passo o efeito de uma substância; a água acalma qualquer efeito |
 | Tirar os itens da tela | Menu → **Itens** → **Recolher itens** |
+| Jogar ou ver vídeo em tela cheia | Nada a fazer: com uma janela em tela cheia (um jogo, um vídeo) em primeiro plano, ele vai para o outro monitor e volta para onde estava quando ela sai do primeiro plano; com um monitor só, ou com ela cobrindo todos, ele some até lá. Arrastar o Buzzy ou mostrá-lo pela bandeja nesse meio-tempo vale como escolha sua. Para desligar, menu → **Desviar da tela cheia** (marcado quando ligado, o padrão); a escolha é lembrada ao reabrir |
 | Ligar ou desligar o conteúdo adulto | Menu → **Conteúdo adulto** (marcado quando ligado, o padrão). Desligado, **Itens** só tem banana, água, café e energético; os outros itens saem da tela, os efeitos de substância acabam e ele não fuma sozinho. A escolha é lembrada ao reabrir |
 | Esconder o Buzzy | Menu → **Esconder Buzzy** |
 | Mostrar de novo | Clique no ícone da bandeja, ou menu da bandeja → **Mostrar Buzzy**, ou abra o `Buzzy.exe` outra vez |
 | Fechar | Menu → **Sair** |
 
 Com o menu aberto, cada opção tem uma letra (a sublinhada): por exemplo, **D** e depois **F** escolhem
-a emoção **Feliz**, **I** e depois **B** invocam a **Banana**, e **A** liga ou desliga o conteúdo adulto. Com o Buzzy escondido, **Itens** fica
+a emoção **Feliz**, **I** e depois **B** invocam a **Banana**, **A** liga ou desliga o conteúdo adulto e **T**, o desvio da tela cheia. Com o Buzzy escondido, **Itens** fica
 indisponível; a emoção pode ser escolhida e aparece quando ele voltar.
 
 **Os efeitos são de desenho animado** e passam sozinhos:
@@ -119,7 +120,8 @@ diagnóstico, com a opção `--diagnostico`.
 |---|---|
 | Aviso "O Buzzy não roda como administrador" | Abra de novo normalmente, sem "Executar como administrador" |
 | O Windows pede para baixar o .NET | Falta o .NET 10: instale o SDK (item 1) |
-| O personagem sumiu | Clique no ícone da bandeja ou abra o `Buzzy.exe` de novo |
+| O personagem sumiu | Clique no ícone da bandeja ou abra o `Buzzy.exe` de novo. Com um jogo ou vídeo em tela cheia, ele pode estar no outro monitor, ou escondido até a tela cheia sair do primeiro plano |
+| Ele fica por cima de um jogo em tela cheia | Confira se **Desviar da tela cheia** está marcado no menu. Se estiver e ele continuar por cima, abra com `Buzzy.exe --diagnostico`, jogue um pouco e mande as linhas `TELA_CHEIA` do log: elas dizem o que o Windows informou, sem nada do jogo |
 | Nada aparece, ou para relatar um problema | Abra com `Buzzy.exe --diagnostico`: ele registra só eventos do próprio Buzzy em `%LOCALAPPDATA%\Buzzy\diagnostico.log` (até 1 MB) |
 | O build falha com o arquivo em uso | Feche o Buzzy (menu → **Sair**) e compile de novo |
 | Ele volta sempre a um lugar ruim e você quer a posição inicial | Feche o Buzzy (menu → **Sair**) e só então apague `settings.json` e `settings.json.bak` em `%LOCALAPPDATA%\Buzzy` — os dois, porque sem o primeiro ele usaria a cópia `.bak`; com ele aberto não adianta, porque grava de novo ao sair. Ele volta ao canto inferior direito do principal e à emoção automática |

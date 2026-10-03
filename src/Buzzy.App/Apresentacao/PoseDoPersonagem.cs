@@ -25,6 +25,9 @@ internal enum Giro
 
     /// <summary>A borda de baixo do quadro vai para a direita: esconderijo na lateral direita.</summary>
     AntiHorario,
+
+    /// <summary>Meia volta: a borda de baixo do quadro vai para cima, de cabeça para baixo (esconderijo na borda de cima).</summary>
+    MeiaVolta,
 }
 
 /// <summary>
@@ -226,6 +229,7 @@ internal static class PoseDoPersonagem
     {
         LadoDoEsconderijo.Esquerda => Giro.Horario,
         LadoDoEsconderijo.Direita => Giro.AntiHorario,
+        LadoDoEsconderijo.Cima => Giro.MeiaVolta,
         _ => Giro.Nenhum,
     };
 

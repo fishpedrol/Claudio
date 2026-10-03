@@ -44,6 +44,13 @@ public sealed record ConfiguracaoDoNucleo
     /// </summary>
     public bool Travessia { get; init; }
 
+    /// <summary>
+    /// Se a troca de monitor do modo de tela cheia é um pulo (DEC-035): com o <see cref="Movimento"/> ligado, ele salta num
+    /// arco até o cipó do monitor livre e, no fim da tela cheia, de volta à posição anterior; sem um arco que caiba na união
+    /// das áreas úteis, aparece direto lá, como antes. Desligado por padrão; o aplicativo o liga.
+    /// </summary>
+    public bool PuloDaTelaCheia { get; init; }
+
     /// <summary>Velocidades e gravidade do movimento (iguais em todos os níveis de energia).</summary>
     public ParametrosDeMovimento Fisica { get; init; } = new();
 
@@ -122,6 +129,8 @@ public sealed record ConfiguracaoDoNucleo
         Tamagotchi = true,
         // A travessia entre monitores (Fase 5, passo P13; DEC-032), pelas portas planas.
         Travessia = true,
+        // A troca de monitor da tela cheia num pulo até o cipó (DEC-035).
+        PuloDaTelaCheia = true,
     };
 }
 

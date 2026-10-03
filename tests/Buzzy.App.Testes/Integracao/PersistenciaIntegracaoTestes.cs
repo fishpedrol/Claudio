@@ -390,6 +390,47 @@ internal sealed class PersistenciaIntegracaoTestes
         });
     }
 
+    // "Desviar da tela cheia" (DEC-034) pelo menu de verdade: T desliga o modo, o núcleo registra o comando e a escolha vai
+    // para o settings.json do perfil com atraso; reaberto, o menu mostra a chave desmarcada, e T religa. As teclas são WM_CHAR
+    // postadas ao dono do menu, deste Buzzy.
+    [Teste]
+    public void ModoTelaCheiaPeloMenu_FecharEReabrir_VoltaDesligado()
+    {
+        SemTocarNosArquivosReais(() =>
+        {
+            using (BuzzyEmTeste b = BuzzyEmTeste.Iniciar(perfil: Perfil))
+            {
+                b.Esperar(e => e.Chave == "NUCLEO" && e["evento"] == "Loaded" && e["para"] == "Idle", 5000, "núcleo carregado");
+                PontoPx opaco = EventoDoLog.Ponto(b.Esperar(e => e.Chave == "POSICAO", 5000, "posição")["pontoOpaco"]);
+                long marca = BuzzyEmTeste.MarcaDoLog();
+                EventoDoLog fechado = EscolherNoMenu(b, opaco, 't');
+                Afirmar.Igual("ModoTelaCheia", fechado["fechado"], "o menu escolheu \"Desviar da tela cheia\"");
+                EventoDoLog exibindo = EsperarDesde(b, marca, e => e.Chave == "MENU" && e["exibindo"] == "sim", 1000, "o menu");
+                Afirmar.Igual("sim", exibindo["modoTelaCheia"], "o modo vem ligado");
+                EventoDoLog nucleo = EsperarDesde(b, marca, e => e.Chave == "NUCLEO" && e["evento"] == "CmdSetFullscreenMode", 3000, "CMD_SET_FULLSCREEN_MODE no núcleo");
+                Afirmar.Igual(("menu", "CMD_SET_FULLSCREEN_MODE: desligado"), (nucleo["motivo"], nucleo["regra"]), "desligado pelo menu");
+                EventoDoLog pedido = EsperarDesde(b, marca, e => e.Chave == "CONFIG" && e["pedido"] == "preferencias", 3000, "o pedido de gravação das preferências");
+                Afirmar.Igual(("CmdSetFullscreenMode", "nao"), (pedido["evento"], pedido["imediata"]), "com atraso");
+                EsperarDesde(b, marca, e => e.Chave == "CONFIG" && e["gravado"] == "sim" && e["motivo"] == "atraso", 8000, "o modo gravado com atraso");
+                Afirmar.Igual(0, b.FecharPorWmClose());
+            }
+            Afirmar.Falso(LerDoPerfil().Configuracoes.Preferencias.ModoTelaCheia, "o arquivo guarda o modo desligado");
+
+            using (BuzzyEmTeste b = BuzzyEmTeste.Iniciar(perfil: Perfil, limpar: false))
+            {
+                b.Esperar(e => e.Chave == "NUCLEO" && e["evento"] == "Loaded" && e["para"] == "Idle", 5000, "núcleo carregado");
+                PontoPx opaco = EventoDoLog.Ponto(b.Esperar(e => e.Chave == "POSICAO", 5000, "posição")["pontoOpaco"]);
+                long marca = BuzzyEmTeste.MarcaDoLog();
+                EventoDoLog fechado = EscolherNoMenu(b, opaco, 't');
+                EventoDoLog exibindo = EsperarDesde(b, marca, e => e.Chave == "MENU" && e["exibindo"] == "sim", 1000, "o menu ao reabrir");
+                Afirmar.Igual(("nao", "ModoTelaCheia"), (exibindo["modoTelaCheia"], fechado["fechado"]), "reaberto, desligado; T religa");
+                EventoDoLog nucleo = EsperarDesde(b, marca, e => e.Chave == "NUCLEO" && e["evento"] == "CmdSetFullscreenMode", 3000, "CMD_SET_FULLSCREEN_MODE no núcleo");
+                Afirmar.Igual("CMD_SET_FULLSCREEN_MODE: ligado", nucleo["regra"], "religado pelo menu");
+                Afirmar.Igual(0, b.FecharPorWmClose());
+            }
+        });
+    }
+
     // Um settings.json ilegível no perfil: a partida usa os padrões (a posição inicial), e a primeira gravação, a da saída,
     // guarda o ilegível como a cópia de diagnóstico (settings.corrupt.json) e recria o principal, válido.
     [Teste]
@@ -425,15 +466,14 @@ internal sealed class PersistenciaIntegracaoTestes
     }
 
     /// <summary>Abre o menu pelo botão direito postado e escolhe pelas teclas, postadas como WM_CHAR ao dono do menu.</summary>
-    private static EventoDoLog EscolherNoMenu(BuzzyEmTeste b, PontoPx opaco, char submenu, char opcao)
+    private static EventoDoLog EscolherNoMenu(BuzzyEmTeste b, PontoPx opaco, params char[] teclas)
     {
         long marca = BuzzyEmTeste.MarcaDoLog();
         b.PostarMouse(NativoTeste.WM_RBUTTONDOWN, 0, opaco);
         b.PostarMouse(NativoTeste.WM_RBUTTONUP, 0, opaco);
         EventoDoLog exibindo = EsperarDesde(b, marca, e => e.Chave == "MENU" && e["exibindo"] == "sim", 3000, "menu exibido");
         var dono = (nint)long.Parse(exibindo["dono"], CultureInfo.InvariantCulture);
-        b.PostarChar(dono, submenu);
-        b.PostarChar(dono, opcao);
-        return EsperarDesde(b, marca, e => e.Chave == "MENU" && e.Campos.ContainsKey("fechado"), 3000, $"menu fechado pelas teclas {submenu} e {opcao}");
+        foreach (char tecla in teclas) b.PostarChar(dono, tecla);
+        return EsperarDesde(b, marca, e => e.Chave == "MENU" && e.Campos.ContainsKey("fechado"), 3000, $"menu fechado pelas teclas {string.Join(" e ", teclas)}");
     }
 }

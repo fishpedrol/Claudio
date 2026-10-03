@@ -58,15 +58,34 @@ internal sealed class MenuNativoTestes
                 (TipoDeEntrada.Comando, "&Pausar movimento", 3),
                 (TipoDeEntrada.Separador, "", 0),
                 (TipoDeEntrada.Submenu, "Emoção &dominante", 0),
+                (TipoDeEntrada.Comando, "Desviar da &tela cheia", 8),
                 (TipoDeEntrada.Separador, "", 0),
                 (TipoDeEntrada.Comando, "&Sair", 2),
             ],
             menu.Select(e => (e.Tipo, e.Rotulo, e.Id)), "visível e com o movimento livre");
 
         IReadOnlyList<EntradaDoMenu> outro = MenuNativo.Entradas(Modelo(visivel: false, pausado: true));
-        Afirmar.Sequencia(["&Mostrar Buzzy", "&Retomar movimento", "", "Emoção &dominante", "", "&Sair"], outro.Select(e => e.Rotulo), "escondido e pausado");
-        Afirmar.Sequencia([1, 3, 0, 0, 0, 2], outro.Select(e => e.Id), "os mesmos ids");
-        Afirmar.Falso(menu.Concat(outro).Any(e => e.Marcada || e.Radio || e.Desabilitada || e.Rosto is not null), "no menu principal, nada marcado, desabilitado ou com rosto");
+        Afirmar.Sequencia(["&Mostrar Buzzy", "&Retomar movimento", "", "Emoção &dominante", "Desviar da &tela cheia", "", "&Sair"], outro.Select(e => e.Rotulo), "escondido e pausado");
+        Afirmar.Sequencia([1, 3, 0, 0, 8, 0, 2], outro.Select(e => e.Id), "os mesmos ids");
+        // Só "Desviar da tela cheia" tem marca: o modo de tela cheia vem ligado (Q-09).
+        Afirmar.Falso(menu.Concat(outro).Any(e => e.Id != 8 && (e.Marcada || e.Radio || e.Desabilitada || e.Rosto is not null)), "no menu principal, nada marcado, desabilitado ou com rosto");
+    }
+
+    // "Desviar da tela cheia" (DEC-034) é um comando com a marca de seleção (não de rádio), marcado com o modo ligado; existe
+    // sempre, com ou sem a chave do tamagotchi, à vista ou escondido, logo antes do último separador e de "Sair"; o id 8
+    // volta ao comando.
+    [Teste]
+    public void ModoTelaCheia_ComandoComMarca_SempreAntesDoUltimoSeparador()
+    {
+        foreach (ModeloDoMenu modelo in new[] { Modelo(), Modelo(visivel: false, pausado: true), ModeloComItens(), ModeloComItens(visivel: false, adulto: false) })
+        {
+            List<EntradaDoMenu> menu = [.. MenuNativo.Entradas(modelo)];
+            int i = menu.FindIndex(e => e.Id == 8);
+            Afirmar.Igual((TipoDeEntrada.Comando, "Desviar da &tela cheia", true, false, false), (menu[i].Tipo, menu[i].Rotulo, menu[i].Marcada, menu[i].Radio, menu[i].Desabilitada), $"{modelo}: ligado, marcado e habilitado");
+            Afirmar.Igual((TipoDeEntrada.Separador, "&Sair", menu.Count), (menu[i + 1].Tipo, menu[i + 2].Rotulo, i + 3), $"{modelo}: logo antes do último separador e de Sair");
+            Afirmar.Falso(MenuNativo.Entradas(modelo with { ModoTelaCheia = false }).Single(e => e.Id == 8).Marcada, $"{modelo}: desligado, sem marca");
+        }
+        Afirmar.Igual(new EscolhaDoMenu(ComandoDoMenu.ModoTelaCheia), MenuNativo.Escolha(8), "o id volta ao comando");
     }
 
     [Teste]
@@ -95,12 +114,12 @@ internal sealed class MenuNativoTestes
     public void MarcaDeRadio_SoNaEmocaoAtual_EmAutomaticaQuandoNaoHaEmocao()
     {
         IReadOnlyList<EntradaDoMenu> automatica = MenuNativo.Entradas(Modelo());
-        Afirmar.Sequencia([999], Todas(automatica).Where(e => e.Marcada).Select(e => e.Id), "sem emoção dominante: só Automática");
+        Afirmar.Sequencia([999], Todas(automatica).Where(e => e.Radio && e.Marcada).Select(e => e.Id), "sem emoção dominante: só Automática");
         for (int i = 0; i < Emocoes.Length; i++)
         {
             Expressao emocao = Enum.Parse<Expressao>(Emocoes[i].Nome);
             IReadOnlyList<EntradaDoMenu> menu = MenuNativo.Entradas(Modelo(emocao: emocao));
-            Afirmar.Sequencia([1000 + i], Todas(menu).Where(e => e.Marcada).Select(e => e.Id), $"{emocao}: só ela marcada");
+            Afirmar.Sequencia([1000 + i], Todas(menu).Where(e => e.Radio && e.Marcada).Select(e => e.Id), $"{emocao}: só ela marcada");
         }
     }
 
@@ -141,7 +160,7 @@ internal sealed class MenuNativoTestes
         Afirmar.Igual(14, Todas(MenuNativo.Entradas(Modelo())).Count(e => e.Rosto is not null), "com o tema comum, 14 rostos");
         IReadOnlyList<EntradaDoMenu> contraste = MenuNativo.Entradas(Modelo(altoContraste: true, emocao: Expressao.Feliz));
         Afirmar.Verdadeiro(Todas(contraste).All(e => e.Rosto is null), "em alto contraste, nenhum rosto");
-        Afirmar.Sequencia([1001], Todas(contraste).Where(e => e.Marcada).Select(e => e.Id), "a marca de rádio continua");
+        Afirmar.Sequencia([1001], Todas(contraste).Where(e => e.Radio && e.Marcada).Select(e => e.Id), "a marca de rádio continua");
         Afirmar.Sequencia(
             Todas(MenuNativo.Entradas(Modelo(emocao: Expressao.Feliz))).Select(e => (e.Tipo, e.Rotulo, e.Id, e.Marcada)),
             Todas(contraste).Select(e => (e.Tipo, e.Rotulo, e.Id, e.Marcada)), "o resto do menu é o mesmo");
@@ -182,6 +201,7 @@ internal sealed class MenuNativoTestes
                 (TipoDeEntrada.Submenu, "Emoção &dominante", 0),
                 (TipoDeEntrada.Submenu, "&Itens", 0),
                 (TipoDeEntrada.Comando, "Conteúdo &adulto", 7),
+                (TipoDeEntrada.Comando, "Desviar da &tela cheia", 8),
                 (TipoDeEntrada.Separador, "", 0),
                 (TipoDeEntrada.Comando, "&Sair", 2),
             ],
@@ -257,7 +277,7 @@ internal sealed class MenuNativoTestes
 
         // Com a chave ligada, todo id da lista volta a uma escolha, sem repetição.
         int[] ids = [.. Todas(MenuNativo.Entradas(ModeloComItens(itensNaTela: 1))).Where(e => e.Tipo == TipoDeEntrada.Comando).Select(e => e.Id)];
-        Afirmar.Igual(4 + 15 + 14, ids.Length, "Esconder, Pausar, Conteúdo adulto, Sair, 15 opções de emoção e 14 do submenu dos itens");
+        Afirmar.Igual(5 + 15 + 14, ids.Length, "Esconder, Pausar, Conteúdo adulto, Desviar da tela cheia, Sair, 15 opções de emoção e 14 do submenu dos itens");
         Afirmar.Igual(ids.Length, ids.Distinct().Count(), "ids sem repetição");
         Afirmar.Verdadeiro(ids.All(id => MenuNativo.Escolha(id) != EscolhaDoMenu.Nenhuma), "todo id da lista volta a uma escolha");
     }
@@ -331,6 +351,11 @@ internal sealed class MenuNativoTestes
         nucleo.Enfileirar(new CmdSetAdultContent(false));
         nucleo.Processar();
         Afirmar.Falso(MenuNativo.ModeloAoAbrir(nucleo, true, false).ConteudoAdulto, "o conteúdo adulto desligado vem do núcleo");
+
+        Afirmar.Verdadeiro(MenuNativo.ModeloAoAbrir(nucleo, true, false).ModoTelaCheia, "o modo de tela cheia ligado vem do núcleo");
+        nucleo.Enfileirar(new CmdSetFullscreenMode(false));
+        nucleo.Processar();
+        Afirmar.Falso(MenuNativo.ModeloAoAbrir(nucleo, true, false).ModoTelaCheia, "o modo de tela cheia desligado vem do núcleo");
 
         var desligada = new Nucleo(ConfiguracaoDoNucleo.DoAplicativo(new TamanhoDip(128, 128)) with { Tamagotchi = false }, 7);
         Afirmar.Falso(MenuNativo.ModeloAoAbrir(desligada, true, false).Tamagotchi, "a chave vem da configuração do núcleo");

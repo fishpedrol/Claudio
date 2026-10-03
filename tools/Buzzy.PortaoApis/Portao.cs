@@ -95,6 +95,7 @@ internal sealed record BinarioVerificado(string Caminho, string Tipo, string Res
 /// <summary>Tudo o que uma execução do portão verificou e encontrou.</summary>
 /// <param name="Fontes">Cada --fonte com o número de arquivos .cs encontrados nela.</param>
 /// <param name="ArquivosDeFonte">Arquivos .cs verificados, cada um uma vez, mesmo com pastas repetidas ou aninhadas.</param>
+/// <param name="UsosRestritos">P/Invokes permitidos só no lugar de um uso restrito (<see cref="PortaoApis.UsosRestritos"/>).</param>
 internal sealed record ResultadoDoPortao(
     Opcoes Opcoes,
     IReadOnlyList<BinarioVerificado> Binarios,
@@ -102,7 +103,8 @@ internal sealed record ResultadoDoPortao(
     IReadOnlyList<(string Pasta, int Arquivos)> Fontes,
     int ArquivosDeFonte,
     IReadOnlyList<Violacao> Violacoes,
-    IReadOnlyList<Permitida> Permitidas);
+    IReadOnlyList<Permitida> Permitidas,
+    IReadOnlyList<UsoRestritoVisto> UsosRestritos);
 
 /// <summary>
 /// Portão de APIs proibidas do build (SECURITY.md 3.2 e 8, item 1). Verifica, nesta ordem:
@@ -168,14 +170,15 @@ internal static class Portao
 
         var violacoes = new List<Violacao>();
         var permitidas = new List<Permitida>();
+        var usosRestritos = new List<UsoRestritoVisto>();
         var binarios = new List<BinarioVerificado>();
 
         (string principal, List<string> bibliotecas, string executavel, List<string> naoVerificados) = Localizar(opcoes);
 
         var referencias = new List<(string Assembly, string Referencia)>();
         foreach (string biblioteca in bibliotecas.Prepend(principal))
-            binarios.Add(VerificarBinario(biblioteca, ehExecutavel: false, violacoes, permitidas, referencias));
-        binarios.Add(VerificarBinario(executavel, ehExecutavel: true, violacoes, permitidas, referencias));
+            binarios.Add(VerificarBinario(biblioteca, ehExecutavel: false, violacoes, permitidas, usosRestritos, referencias));
+        binarios.Add(VerificarBinario(executavel, ehExecutavel: true, violacoes, permitidas, usosRestritos, referencias));
 
         // Dependências do produto que não estão na pasta não teriam sido verificadas.
         string prefixo = opcoes.Aplicativo + ".";
@@ -200,7 +203,7 @@ internal static class Portao
 
         if (opcoes.Manifesto is not null) violacoes.AddRange(VerificadorDeManifesto.Verificar(opcoes.Manifesto));
 
-        return new ResultadoDoPortao(opcoes, binarios, naoVerificados, fontes, verificados.Count, violacoes, permitidas);
+        return new ResultadoDoPortao(opcoes, binarios, naoVerificados, fontes, verificados.Count, violacoes, permitidas, usosRestritos);
     }
 
     private static (string Principal, List<string> Bibliotecas, string Executavel, List<string> NaoVerificados) Localizar(Opcoes opcoes)
@@ -236,6 +239,7 @@ internal static class Portao
         bool ehExecutavel,
         List<Violacao> violacoes,
         List<Permitida> permitidas,
+        List<UsoRestritoVisto> usosRestritos,
         List<(string, string)> referencias)
     {
         using FileStream arquivo = File.OpenRead(caminho);
@@ -247,6 +251,7 @@ internal static class Portao
         {
             AnaliseDeAssembly analise = VerificadorDeAssembly.Verificar(caminho, pe.GetMetadataReader());
             violacoes.AddRange(analise.Violacoes);
+            usosRestritos.AddRange(analise.UsosRestritos);
             referencias.AddRange(analise.AssembliesReferenciados.Select(r => (caminho, r)));
             // Um .exe gerenciado não é o apphost: não recebe a lista de permissões.
             AnaliseDeImportacoes nativas = VerificadorDeImportacoesNativas.Avaliar(caminho, importacoes, ehApphost: false);

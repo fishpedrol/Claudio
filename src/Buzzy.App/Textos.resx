@@ -105,6 +105,10 @@
     <value>Conteúdo &amp;adulto</value>
     <comment>Liga ou desliga o conteúdo adulto do tamagotchi (DEC-033), com a marca quando ligado. No menu principal, A é só dele.</comment>
   </data>
+  <data name="MenuModoTelaCheia" xml:space="preserve">
+    <value>Desviar da &amp;tela cheia</value>
+    <comment>Liga ou desliga o modo de tela cheia (Q-09; DEC-034), com a marca quando ligado: com um jogo ou vídeo em tela cheia, o Buzzy vai para outro monitor ou se esconde. No menu principal, T é só dele.</comment>
+  </data>
   <data name="ItemBanana" xml:space="preserve">
     <value>&amp;Banana</value>
     <comment>Itens do submenu, na ordem do enum Item: só o nome de cada um, sem descrição (DEC-028, tom de desenho animado).</comment>

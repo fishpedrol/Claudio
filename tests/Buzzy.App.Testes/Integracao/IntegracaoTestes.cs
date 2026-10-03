@@ -72,6 +72,11 @@ internal sealed class IntegracaoTestes
         Afirmar.Igual("True", bandeja["adicionado"], "ícone adicionado à bandeja");
         Afirmar.Igual("True", bandeja["versao4"], "notificações na versão 4");
 
+        // Com --sem-tela-cheia (o padrão dos testes), o observador não liga: o lugar inicial não depende do que estiver em
+        // tela cheia na máquina (DEC-034). O observador ligado tem o teste dele, logo abaixo.
+        EventoDoLog observador = b.Esperar(e => e.Chave == "TELA_CHEIA" && e.Campos.ContainsKey("observador"), 1000, "observador de tela cheia");
+        Afirmar.Igual(("desligado", "--sem-tela-cheia"), (observador["observador"], observador["motivo"]), "a opção da linha de comando");
+
         // Só contam processos criados depois do início do Buzzy: o pai registrado pelo Windows
         // pode ser um PID antigo reaproveitado.
         Afirmar.Igual(0, NativoTeste.Filhos(b.Processo.Id, b.Inicio).Count, "o Buzzy não cria processos filhos");
@@ -82,6 +87,40 @@ internal sealed class IntegracaoTestes
         Afirmar.Verdadeiro(ev.Any(e => e.Chave == "BANDEJA" && e["removido"] == "True"), "ícone removido ao sair");
         Afirmar.Verdadeiro(ev.Any(e => e.Chave == "FIM" && e["codigo"] == "0"), "FIM registrado");
         Afirmar.Igual(0, NativoTeste.Filhos(b.Processo.Id, b.Inicio).Count, "nenhum processo filho do Buzzy sobra depois do encerramento");
+    }
+
+    // O modo de tela cheia como no uso real (DEC-034), sem --sem-tela-cheia: o observador assina a troca de primeiro plano
+    // na partida e avalia na hora; os ganchos saem no encerramento, com as contagens de eventos (a medição do P7); e nenhuma
+    // linha TELA_CHEIA leva a janela observada (identificador ou retângulo). O que estiver em primeiro plano na máquina
+    // decide se algum monitor fica ocupado: o teste só confere que as chaves publicadas são da topologia e que o Buzzy, à
+    // vista, não ficou num monitor ocupado.
+    [Teste]
+    public void TelaCheia_ObservadorLigaNaPartida_SaiNoEncerramento_ENadaDaJanelaVaiAoLog()
+    {
+        using BuzzyEmTeste b = BuzzyEmTeste.Iniciar(telaCheia: true);
+        EventoDoLog observador = b.Esperar(e => e.Chave == "TELA_CHEIA" && e.Campos.ContainsKey("observador"), 1000, "observador de tela cheia");
+        Afirmar.Igual("ligado", observador["observador"], "a troca de primeiro plano assinada");
+        b.Esperar(e => e.Chave == "NUCLEO" && e["evento"] == "Loaded" && e["para"] == "Idle", 5000, "núcleo carregado");
+        Thread.Sleep(500);
+
+        LeituraDaTopologia leitura = Afirmar.NaoNulo(LeitorDeTopologia.LerDetalhado(out string? erro), erro);
+        string[] ocupados = [.. b.Eventos().Where(e => e.Chave == "TELA_CHEIA" && e.Campos.ContainsKey("ocupados")).Select(e => e["ocupados"]).LastOrDefault()?
+            .Split(';', StringSplitOptions.RemoveEmptyEntries).Where(c => c != "-") ?? []];
+        foreach (string chave in ocupados)
+            Afirmar.NaoNulo(leitura.Topologia.PorChave(chave), $"o ocupado {chave} é um monitor da topologia");
+        RetanguloPx janela = b.RetanguloDaJanela();
+        MonitorDoDesktop? doBuzzy = leitura.Topologia.MonitorQueContem(new PontoPx(janela.Esquerda + janela.Largura / 2, janela.Base - 1));
+        Afirmar.Falso(doBuzzy is not null && ocupados.Contains(doBuzzy.Chave) && ocupados.Length < leitura.Topologia.Monitores.Count,
+            $"à vista num monitor ocupado ({doBuzzy?.Chave}), com outro livre");
+        Console.WriteLine($"         tela cheia na partida: {(ocupados.Length == 0 ? "nenhum monitor ocupado" : string.Join(", ", ocupados))}");
+
+        Afirmar.Igual(0, b.FecharPorWmClose());
+        List<EventoDoLog> ev = b.Eventos();
+        EventoDoLog fim = Afirmar.NaoNulo(ev.SingleOrDefault(e => e.Chave == "TELA_CHEIA" && e.Campos.ContainsKey("fim")), "os ganchos saem no encerramento");
+        Afirmar.Verdadeiro(fim.Campos.ContainsKey("eventosPrimeiroPlano") && fim.Campos.ContainsKey("eventosGeometria"), "com as contagens de eventos");
+        string[] permitidos = ["observador", "motivo", "ocupados", "shell", "candidatos", "eventosPrimeiroPlano", "eventosGeometria", "fim"];
+        foreach (EventoDoLog linha in ev.Where(e => e.Chave == "TELA_CHEIA"))
+            Afirmar.Verdadeiro(linha.Campos.Keys.All(permitidos.Contains), $"só os campos permitidos em TELA_CHEIA: {linha.Linha}");
     }
 
     [Teste]

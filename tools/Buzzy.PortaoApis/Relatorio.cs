@@ -16,7 +16,7 @@ internal static class Relatorio
 
         saida.WriteLine("Portão de APIs proibidas do Buzzy (SECURITY.md 3.2 e 8, item 1)");
         int categorias = ListaProibida.Regras.Select(r => r.Categoria).Distinct().Count();
-        saida.WriteLine($"Lista proibida: {ListaProibida.Regras.Count} regras em {categorias} categorias; permissões do apphost: {PermissoesDoApphost.Entradas.Count}.");
+        saida.WriteLine($"Lista proibida: {ListaProibida.Regras.Count} regras em {categorias} categorias; permissões do apphost: {PermissoesDoApphost.Entradas.Count}; usos restritos: {UsosRestritos.Entradas.Count}.");
         saida.WriteLine();
 
         saida.WriteLine($"Binários em {opcoes.Binarios}");
@@ -43,6 +43,14 @@ internal static class Relatorio
             saida.WriteLine();
         }
 
+        if (resultado.UsosRestritos.Count > 0)
+        {
+            saida.WriteLine("Usos restritos (decisão aprovada; só no tipo e no arquivo indicados, proibidos no resto do produto):");
+            foreach (UsoRestritoVisto u in resultado.UsosRestritos)
+                saida.WriteLine($"  {Path.GetFileName(u.Arquivo)}: {u.Api} [{u.Categoria.Nome()}] uso restrito em {u.Onde} ({u.Uso.Arquivo}) - {u.Uso.Motivo}");
+            saida.WriteLine();
+        }
+
         if (resultado.Violacoes.Count > 0)
         {
             saida.WriteLine($"Violações ({resultado.Violacoes.Count}):");
@@ -65,7 +73,7 @@ internal static class Relatorio
     public static string Resumo(ResultadoDoPortao resultado)
     {
         ArgumentNullException.ThrowIfNull(resultado);
-        string permitidas = $"{resultado.Permitidas.Count} importação(ões) permitida(s) no apphost";
+        string permitidas = $"{resultado.Permitidas.Count} importação(ões) permitida(s) no apphost; {resultado.UsosRestritos.Count} uso(s) restrito(s)";
         if (resultado.Violacoes.Count == 0)
             return $"Resumo: APROVADO - nenhuma violação; {permitidas}.";
 

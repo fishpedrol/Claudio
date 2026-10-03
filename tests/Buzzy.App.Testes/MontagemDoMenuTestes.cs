@@ -34,13 +34,15 @@ internal sealed class MontagemDoMenuTestes
             menuLido = menu;
             Afirmar.Igual(14, icones, "um rosto por emoção, já anexado quando o menu é exibido");
 
-            Afirmar.Igual(6, NativoTeste.GetMenuItemCount(menu), "itens do menu principal");
-            NativoTeste.ItemDoMenuLido[] principal = [.. Enumerable.Range(0, 6).Select(i => NativoTeste.LerItemDoMenu(menu, (uint)i))];
+            Afirmar.Igual(7, NativoTeste.GetMenuItemCount(menu), "itens do menu principal");
+            NativoTeste.ItemDoMenuLido[] principal = [.. Enumerable.Range(0, 7).Select(i => NativoTeste.LerItemDoMenu(menu, (uint)i))];
             Afirmar.Sequencia(entradas.Select(e => e.Rotulo), principal.Select(i => i.Texto), "textos do menu principal");
-            Afirmar.Sequencia([1u, 3u, 2u], principal.Where((_, i) => i is 0 or 1 or 5).Select(i => i.Id), "ids de hoje");
-            Afirmar.Verdadeiro((principal[2].Tipo & MFT_SEPARATOR) != 0 && (principal[4].Tipo & MFT_SEPARATOR) != 0, "separadores");
+            Afirmar.Sequencia([1u, 3u, 8u, 2u], principal.Where((_, i) => i is 0 or 1 or 4 or 6).Select(i => i.Id), "ids de hoje");
+            Afirmar.Verdadeiro((principal[2].Tipo & MFT_SEPARATOR) != 0 && (principal[5].Tipo & MFT_SEPARATOR) != 0, "separadores");
+            // "Desviar da tela cheia" (DEC-034): a marca de seleção, ligada por padrão, e não a de rádio.
+            Afirmar.Igual((8u, MFS_CHECKED, 0u), (principal[4].Id, principal[4].Estado & MFS_CHECKED, principal[4].Tipo & MFT_RADIOCHECK), "Desviar da tela cheia, marcado");
             // O Windows informa todo separador como desabilitado (estado 0x3); os outros itens ficam habilitados.
-            Afirmar.Verdadeiro(principal.Where(i => (i.Tipo & MFT_SEPARATOR) == 0).All(i => i.Bitmap == 0 && (i.Estado & (MFS_CHECKED | MFS_GRAYED)) == 0),
+            Afirmar.Verdadeiro(principal.Where((i, k) => (i.Tipo & MFT_SEPARATOR) == 0 && k != 4).All(i => i.Bitmap == 0 && (i.Estado & (MFS_CHECKED | MFS_GRAYED)) == 0),
                 "principal sem ícone, sem marca, habilitado: " + string.Join("; ", principal.Select(i => $"{i.Texto}: tipo 0x{i.Tipo:X} estado 0x{i.Estado:X} bitmap {i.Bitmap}")));
 
             nint submenu = principal[3].Submenu;
@@ -123,10 +125,12 @@ internal sealed class MontagemDoMenuTestes
         {
             menuLido = menu;
             Afirmar.Igual(14 + 13, icones, "14 rostos e 13 itens, já anexados quando o menu é exibido");
-            Afirmar.Igual(8, NativoTeste.GetMenuItemCount(menu), "itens do menu principal");
-            NativoTeste.ItemDoMenuLido[] principal = [.. Enumerable.Range(0, 8).Select(i => NativoTeste.LerItemDoMenu(menu, (uint)i))];
-            // "Conteúdo adulto" (DEC-033), depois de "Itens": a marca de seleção, ligada por padrão, e não a de rádio.
+            Afirmar.Igual(9, NativoTeste.GetMenuItemCount(menu), "itens do menu principal");
+            NativoTeste.ItemDoMenuLido[] principal = [.. Enumerable.Range(0, 9).Select(i => NativoTeste.LerItemDoMenu(menu, (uint)i))];
+            // "Conteúdo adulto" (DEC-033), depois de "Itens", e "Desviar da tela cheia" (DEC-034): a marca de seleção, ligada por
+            // padrão, e não a de rádio.
             Afirmar.Igual((7u, MFS_CHECKED, 0u), (principal[5].Id, principal[5].Estado & MFS_CHECKED, principal[5].Tipo & MFT_RADIOCHECK), "Conteúdo adulto, marcado");
+            Afirmar.Igual((8u, MFS_CHECKED, 0u), (principal[6].Id, principal[6].Estado & MFS_CHECKED, principal[6].Tipo & MFT_RADIOCHECK), "Desviar da tela cheia, marcado");
             Afirmar.Sequencia(entradas.Select(e => e.Rotulo), principal.Select(i => i.Texto), "textos do menu principal");
             Afirmar.Diferente((nint)0, principal[3].Submenu, "o submenu da emoção está anexado");
             nint submenu = principal[4].Submenu;

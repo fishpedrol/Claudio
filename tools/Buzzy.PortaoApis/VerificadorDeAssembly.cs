@@ -6,18 +6,22 @@ namespace Buzzy.PortaoApis;
 
 /// <summary>O que a leitura de um assembly gerenciado encontrou.</summary>
 /// <param name="AssembliesReferenciados">Nomes da tabela AssemblyRef, para conferir dependências do produto.</param>
+/// <param name="UsosRestritos">P/Invokes da lista proibida permitidos por <see cref="PortaoApis.UsosRestritos"/>.</param>
 internal sealed record AnaliseDeAssembly(
     IReadOnlyList<Violacao> Violacoes,
     int PInvokes,
     int ReferenciasATipos,
     int ReferenciasAMembros,
-    IReadOnlyList<string> AssembliesReferenciados);
+    IReadOnlyList<string> AssembliesReferenciados,
+    IReadOnlyList<UsoRestritoVisto> UsosRestritos);
 
 /// <summary>
 /// Confere os metadados de um assembly gerenciado com a lista proibida, sem carregá-lo:
 /// declarações P/Invoke (tabela ImplMap), referências a tipos (TypeRef) e a membros (MemberRef),
 /// e métodos de interfaces COM declaradas no próprio assembly. Chamadas por reflexão com nomes
-/// em texto não são rastreadas aqui; a verificação do código-fonte cobre esses textos.
+/// em texto não são rastreadas aqui; a verificação do código-fonte cobre esses textos. Um
+/// P/Invoke da lista proibida declarado no lugar de um uso restrito (<see cref="PortaoApis.UsosRestritos"/>)
+/// não é violação: vai para o relatório como uso restrito.
 /// </summary>
 internal static class VerificadorDeAssembly
 {
@@ -46,6 +50,8 @@ internal static class VerificadorDeAssembly
                 violacoes.Add(new Violacao(caminho, 0, 0, codigo, categoria, api, detalhe, regra));
         }
 
+        string nomeDoAssembly = md.IsAssembly ? md.GetString(md.GetAssemblyDefinition().Name) : "";
+        var usosRestritos = new List<UsoRestritoVisto>();
         int pinvokes = 0;
         foreach (MethodDefinitionHandle h in md.MethodDefinitions)
         {
@@ -63,7 +69,11 @@ internal static class VerificadorDeAssembly
                 string onde = NomeDoMetodo(md, metodo);
 
                 Regra? regra = ListaProibida.ProcurarNativa(modulo, entrada);
-                if (regra is not null)
+                UsoRestrito? uso = regra is null ? null
+                    : UsosRestritos.NoBinario(nomeDoAssembly, modulo, entrada, NomeDoTipoDefinido(md, metodo.GetDeclaringType(), 0));
+                if (uso is not null)
+                    usosRestritos.Add(new UsoRestritoVisto(caminho, api, onde, regra!.Categoria, uso));
+                else if (regra is not null)
                     Acusar(Codigos.PInvoke, regra.Categoria, api, $"P/Invoke em {onde}: {regra.Motivo}", regra);
                 else if (entrada.StartsWith('#'))
                     Acusar(Codigos.PInvoke, Categoria.CodigoDinamico, api,
@@ -114,7 +124,7 @@ internal static class VerificadorDeAssembly
         }
 
         List<string> referenciados = [.. md.AssemblyReferences.Select(h => md.GetString(md.GetAssemblyReference(h).Name))];
-        return new AnaliseDeAssembly(violacoes, pinvokes, tipos, membros, referenciados);
+        return new AnaliseDeAssembly(violacoes, pinvokes, tipos, membros, referenciados, usosRestritos);
     }
 
     /// <summary>

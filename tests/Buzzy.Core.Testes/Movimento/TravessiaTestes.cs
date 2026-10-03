@@ -424,6 +424,103 @@ internal static class TravessiaTestes
         Afirmar.Verdadeiro(escalou >= 0 && transbordou > escalou && pousou > transbordou, $"escalou, transbordou e pousou: {string.Join(" | ", regras)}");
     }
 
+    // ---------------------------------------------------------------- DEC-034: a tela cheia fecha as portas
+
+    private static FullscreenTargetsChanged Ocupado(params string[] chaves) => new(new MonitoresOcupados(chaves));
+
+    private static bool NoVizinho(EstadoDoNucleo s) => s.Lugar?.Monitor.Chave == TopologiasDeExemplo.Display2;
+
+    // Com o vizinho ocupado pela tela cheia e o modo ligado, a autonomia nunca o leva para lá: a lateral que encosta nele é
+    // parede, para andar, saltar o degrau ou transbordar, e ir ao outro monitor deixa de ser opção. O controle, com as
+    // mesmas sementes e sem a tela cheia, atravessa: o teste não passa por falta de oportunidade.
+    [Teste]
+    public static void VizinhoOcupado_AAutonomiaNuncaVaiParaEle()
+    {
+        (string Nome, Topologia Topologia, ConfiguracaoDoNucleo Cfg)[] casos =
+        [
+            ("porta plana", TopologiasDeExemplo.SecundarioAEsquerda, Fase5(AcoesAutonomas.Andar | AcoesAutonomas.Escalar | AcoesAutonomas.IrAoOutroMonitor)),
+            ("degrau", TopologiasDeExemplo.DegrauDesalinhado, IrAoOutro()),
+        ];
+        foreach ((string nome, Topologia topologia, ConfiguracaoDoNucleo cfg) in casos)
+        {
+            int controles = 0;
+            for (ulong semente = 1; semente <= 3; semente++)
+            {
+                var controle = new SimuladorDeTempo(cfg, semente, topologia);
+                controle.Avancar(TimeSpan.FromMinutes(5), NoVizinho);
+                if (NoVizinho(controle.Estado)) controles++;
+
+                var sim = new SimuladorDeTempo(cfg, semente, topologia);
+                sim.Aplicar(Ocupado(TopologiasDeExemplo.Display2));
+                sim.AoAplicar = (_, e, depois) =>
+                {
+                    ConferirApoioNaTravessia(depois, $"{nome}, semente {semente}: {e}");
+                    Afirmar.Falso(NoVizinho(depois), $"{nome}, semente {semente}: foi para o monitor ocupado ({e})");
+                };
+                sim.Avancar(TimeSpan.FromMinutes(5));
+            }
+            Afirmar.Verdadeiro(controles > 0, $"{nome}: sem a tela cheia, nenhuma semente atravessou em 5 minutos");
+        }
+    }
+
+    // Com o modo desligado, a tela cheia só fica no cache (DEC-013): a porta continua aberta.
+    [Teste]
+    public static void ModoDesligado_OcupadoNaoFechaAPorta()
+    {
+        var sim = new SimuladorDeTempo(IrAoOutro(), 3, TopologiasDeExemplo.SecundarioAEsquerda, new Preferencias(NivelDeEnergia.Media, false));
+        sim.Aplicar(Ocupado(TopologiasDeExemplo.Display2));
+        sim.Avancar(TimeSpan.FromMinutes(2), s => NoVizinho(s) && s.Movimento.Travessia is null);
+        Afirmar.Verdadeiro(NoVizinho(sim.Estado) && sim.Estado.Movimento.Travessia is null, "com o modo desligado, atravessa até o fim");
+        Afirmar.Falso(sim.Transicoes.Any(t => t.Regra.Contains("volta pela porta", StringComparison.Ordinal)), "e não volta pela porta");
+    }
+
+    // A tela cheia ocupa o destino no meio da travessia andando, com a âncora ainda na origem: a travessia é atômica e
+    // termina; na chegada, a porta fechou, e ele volta inteiro para a origem, encostado na lateral da porta, sem retorno
+    // guardado. O fim da tela cheia não o move.
+    [Teste]
+    public static void DestinoOcupadoNoMeioDaTravessia_TerminaEVoltaPelaPorta()
+    {
+        SimuladorDeTempo sim = NoMeioDaTravessia();
+        Afirmar.Verdadeiro(sim.Estado.Lugar!.Ancora.X >= 0, $"a âncora ainda na origem ({sim.Estado.Lugar.Ancora.X})");
+        sim.Aplicar(Ocupado(TopologiasDeExemplo.Display2));
+        Afirmar.Igual(Estado.Walking, sim.Estado.Estado, "a travessia continua");
+        Afirmar.NaoNulo(sim.Estado.Movimento.Travessia, "com o plano");
+        sim.AoAplicar = (_, e, depois) => ConferirApoioNaTravessia(depois, $"{e}");
+        sim.Avancar(TimeSpan.FromSeconds(5), s => s.Estado == Estado.Idle);
+        Posicionamento l = Afirmar.NaoNulo(sim.Estado.Lugar, "lugar");
+        Afirmar.Igual(Estado.Idle, sim.Estado.Estado, "parado");
+        Afirmar.Igual((TopologiasDeExemplo.Display1, 64, 1032), (l.Monitor.Chave, l.Ancora.X, l.Ancora.Y), "de volta à origem, encostado na porta");
+        Afirmar.Verdadeiro(sim.Transicoes.Any(t => t.Regra == "WALKING: o destino da travessia ficou ocupado pela tela cheia (volta pela porta)"), "a regra da volta");
+        Afirmar.Nulo(sim.Estado.RetornoDaTelaCheia, "sem retorno guardado");
+        sim.Aplicar(Ocupado());
+        Afirmar.Igual(new PontoPx(64, 1032), sim.Estado.Lugar!.Ancora, "o fim da tela cheia não o move");
+    }
+
+    // O mesmo no salto de degrau: o destino ocupado logo depois da decolagem; o salto termina e ele volta pela porta. E o salto
+    // planejado, na caminhada até a partida, cai: ele para sem saltar.
+    [Teste]
+    public static void DestinoOcupadoNoSalto_VoltaPelaPortaEOPlanejadoCai()
+    {
+        var sim = new SimuladorDeTempo(IrAoOutro(), 3, TopologiasDeExemplo.DegrauDesalinhado);
+        sim.Avancar(TimeSpan.FromMinutes(1), s => s.Estado == Estado.Jumping && s.Movimento.Travessia is { Passo: 1 });
+        Afirmar.Igual(Estado.Jumping, sim.Estado.Estado, "decolou");
+        Afirmar.Igual(TopologiasDeExemplo.Display1, sim.Estado.Lugar?.Monitor.Chave, "ainda na origem");
+        sim.Aplicar(Ocupado(TopologiasDeExemplo.Display2));
+        sim.AoAplicar = (_, e, depois) => ConferirApoioNaTravessia(depois, $"{e}");
+        sim.Avancar(TimeSpan.FromSeconds(5), s => s.Estado == Estado.Idle);
+        Posicionamento l = Afirmar.NaoNulo(sim.Estado.Lugar, "lugar");
+        Afirmar.Igual((TopologiasDeExemplo.Display1, 1856, 1032), (l.Monitor.Chave, l.Ancora.X, l.Ancora.Y), "de volta à origem, encostado na porta");
+        Afirmar.Verdadeiro(sim.Transicoes.Any(t => t.Regra == "JUMPING: o destino do salto ficou ocupado pela tela cheia (volta pela porta)"), "a regra da volta");
+
+        var planejado = new SimuladorDeTempo(IrAoOutro(), 3, TopologiasDeExemplo.DegrauDesalinhado);
+        planejado.Avancar(TimeSpan.FromMinutes(1), s => s.Estado == Estado.Walking && s.Movimento.Travessia is { Tipo: TipoDeTravessia.Salto });
+        Afirmar.Igual(Estado.Walking, planejado.Estado.Estado, "a caminhada até a partida");
+        planejado.Aplicar(Ocupado(TopologiasDeExemplo.Display2));
+        Afirmar.Nulo(planejado.Estado.Movimento.Travessia, "o plano caiu");
+        planejado.AoAplicar = (_, e, depois) => Afirmar.Falso(NoVizinho(depois) || depois.Estado == Estado.Jumping, $"saltou para o monitor ocupado ({e})");
+        planejado.Avancar(TimeSpan.FromMinutes(1));
+    }
+
     // Três monitores: do principal, os dois vizinhos estão acima do alcance do salto (168 e 288 DIP), e ele chega a eles pelo
     // transbordo.
     [Teste]

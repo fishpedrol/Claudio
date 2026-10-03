@@ -934,6 +934,55 @@ internal static class TelaCheiaTestes
         => new Cenario().Aplicar(new Loaded(Cenario.TresEmLinha, salva, Preferencias.Padrao)).Esta(Estado.Idle);
 
     /// <summary>LadoALado, parado e transferido pela tela cheia no DISPLAY1: no DISPLAY2, com o retorno no DISPLAY1.</summary>
+    // ---------------------------------------------------------------- DEC-034: "Desviar da tela cheia" no menu
+
+    // Desligar pelo menu faz o mesmo que pelas preferências (linha SETTINGS_CHANGED que desliga o modo) e grava a escolha; a
+    // transição para o mesmo estado registra o comando. O mesmo valor de novo, ou antes da carga, é ignorado.
+    [Teste]
+    public static void MenuDesliga_VoltaAPosicaoAnteriorEGravaAEscolha()
+    {
+        Cenario c = Transferido().Aplicar(new CmdSetFullscreenMode(false));
+        Afirmar.Igual("CMD_SET_FULLSCREEN_MODE: desligado", c.Transicoes[0].Regra);
+        Afirmar.Igual(Cenario.AncoraInicial, c.Ancora, "volta à posição de antes");
+        Afirmar.Nulo(c.Atual.RetornoDaTelaCheia, "sem retorno");
+        Afirmar.Falso(c.Atual.Preferencias.ModoTelaCheia, "modo desligado");
+        Afirmar.Falso(c.Efeito<GravarPreferencias>().Preferencias.ModoTelaCheia, "grava o modo desligado");
+        c.SemEfeito<GravarPosicao>();
+
+        c.Aplicar(new CmdSetFullscreenMode(false)).SemTransicao();
+        Afirmar.Igual(0, c.Efeitos.Count, "o mesmo valor de novo: nada");
+
+        Resultado antes = Maquina.Aplicar(EstadoDoNucleo.Inicial(1), new CmdSetFullscreenMode(false), new ConfiguracaoDoNucleo());
+        Afirmar.Igual(0, antes.Efeitos.Count, "antes da carga: nenhum efeito");
+        Afirmar.Verdadeiro(antes.Estado.Preferencias.ModoTelaCheia, "antes da carga: o modo continua ligado");
+    }
+
+    // Ligar pelo menu com ele num monitor já ocupado (o modo desligado só guardava o cache): ele sai de lá na hora, como se a
+    // tela cheia tivesse acabado de começar, e o fim dela o traz de volta. Num monitor só, esconde pela tela cheia; num gesto
+    // do usuário, nada muda (invariante 14).
+    [Teste]
+    public static void MenuLiga_ComEleNoMonitorOcupado_SaiDeLa()
+    {
+        var desligado = new Preferencias(NivelDeEnergia.Media, false);
+        Cenario c = new Cenario().Aplicar(new Loaded(TopologiasDeExemplo.LadoALado, null, desligado), Ocupados(Display1));
+        Afirmar.Igual(Cenario.AncoraInicial, c.Ancora, "com o modo desligado, fica");
+        c.Aplicar(new CmdSetFullscreenMode(true));
+        Afirmar.Igual("CMD_SET_FULLSCREEN_MODE: ligado", c.Transicoes[0].Regra);
+        Afirmar.Igual(NoDisplay2, c.Ancora, "foi para o monitor livre");
+        Afirmar.Verdadeiro(c.Efeito<GravarPreferencias>().Preferencias.ModoTelaCheia, "grava o modo ligado");
+        MesmaPosicao(PosicaoInicial, c.Atual.RetornoDaTelaCheia, "retorno guardado");
+        c.Aplicar(Ocupados());
+        Afirmar.Igual(Cenario.AncoraInicial, c.Ancora, "o fim da tela cheia o traz de volta");
+
+        Cenario um = new Cenario().Aplicar(new Loaded(TopologiasDeExemplo.UmMonitor, null, desligado), Ocupados(Display1));
+        um.Aplicar(new CmdSetFullscreenMode(true)).EstaEscondido(MotivoDoOcultamento.PorTelaCheia);
+
+        Cenario gesto = new Cenario().Aplicar(new Loaded(TopologiasDeExemplo.LadoALado, null, desligado), Ocupados(Display1), new Press(Cenario.PontoOpaco));
+        gesto.Aplicar(new CmdSetFullscreenMode(true)).Esta(Estado.Pressed);
+        Afirmar.Igual(Cenario.AncoraInicial, gesto.Ancora, "o gesto continua onde estava");
+        Afirmar.Verdadeiro(gesto.Atual.Preferencias.ModoTelaCheia, "mas o modo ligou");
+    }
+
     private static Cenario Transferido()
     {
         Cenario c = Cenario.Parado(topologia: TopologiasDeExemplo.LadoALado).Aplicar(Ocupados(Display1));

@@ -16,6 +16,18 @@ public enum TipoDeTravessia
     Salto,
 }
 
+/// <summary>O pulo da tela cheia (DEC-035) que um salto faz, ou nenhum: o salto de degrau da travessia.</summary>
+public enum PuloDaTelaCheia
+{
+    Nenhum,
+
+    /// <summary>Do monitor ocupado pela tela cheia ao cipó do monitor livre.</summary>
+    Ida,
+
+    /// <summary>No fim da tela cheia, de volta à posição de antes dela.</summary>
+    Volta,
+}
+
 /// <summary>
 /// Uma travessia em curso (Fase 5, passo P13; DEC-032), parte do estado do movimento: do monitor de chave
 /// <paramref name="ChaveOrigem"/> para o de <paramref name="ChaveDestino"/>, pela lateral <paramref name="Lado"/> (−1 esquerda,
@@ -23,12 +35,13 @@ public enum TipoDeTravessia
 /// borda (<see cref="Passagens.PassouDaBorda"/>). No salto (P13b), o arco é fechado: a partida (<paramref name="X0"/>,
 /// <paramref name="Y0"/>), as velocidades (<paramref name="VX"/>, <paramref name="VY0"/>) e a gravidade <paramref name="G"/> em
 /// pixels por segundo da escala da origem, congelada no voo, e a duração em passos; o último passo é exatamente o pouso
-/// (<paramref name="XDestino"/>, <paramref name="YDestino"/>), e <paramref name="Passo"/> é o passo atual.
+/// (<paramref name="XDestino"/>, <paramref name="YDestino"/>), e <paramref name="Passo"/> é o passo atual. No pulo da tela cheia
+/// (<paramref name="Pulo"/>, DEC-035), o monitor de cada passo é o da âncora, sem borda, e a chegada é uma acomodação.
 /// </summary>
 public sealed record Travessia(
     TipoDeTravessia Tipo, string ChaveOrigem, string ChaveDestino, int Lado, int Borda,
     double XDestino = 0, double YDestino = 0, double X0 = 0, double Y0 = 0, double VX = 0, double VY0 = 0, double G = 0,
-    int PassosTotais = 0, int Passo = 0);
+    int PassosTotais = 0, int Passo = 0, PuloDaTelaCheia Pulo = PuloDaTelaCheia.Nenhum);
 
 /// <summary>
 /// A geometria das passagens entre monitores (Fase 5, passo P13; DEC-032; desenho da travessia, D1, D2 e 4.1), pura e sem
@@ -42,9 +55,10 @@ public static class Passagens
     /// As portas da lateral <paramref name="lado"/> (−1 ou +1) do monitor, ordenadas por <see cref="Porta.Topo"/> e, no
     /// empate, pela chave do vizinho, em comparação ordinal: cada vizinho cuja área útil começa exatamente na borda da área
     /// útil dele, na faixa vertical em que as duas se sobrepõem. Monitores que só se tocam pela quina, ou separados por um
-    /// vão, não têm porta.
+    /// vão, não têm porta. Um vizinho <paramref name="fechado"/> também não (DEC-034: ocupado pela tela cheia, com o modo
+    /// ligado): a lateral que encosta nele é parede.
     /// </summary>
-    public static IReadOnlyList<Porta> Portas(Topologia topologia, MonitorDoDesktop monitor, int lado)
+    public static IReadOnlyList<Porta> Portas(Topologia topologia, MonitorDoDesktop monitor, int lado, Func<string, bool>? fechado = null)
     {
         ArgumentNullException.ThrowIfNull(topologia);
         ArgumentNullException.ThrowIfNull(monitor);
@@ -54,7 +68,7 @@ public static class Passagens
         var portas = new List<Porta>();
         foreach (MonitorDoDesktop outro in topologia.Monitores)
         {
-            if (outro.Chave == monitor.Chave) continue;
+            if (outro.Chave == monitor.Chave || fechado?.Invoke(outro.Chave) == true) continue;
             RetanguloPx n = outro.AreaUtil;
             if ((lado > 0 ? n.Esquerda : n.Direita) != borda) continue;
             int topo = Math.Max(a.Topo, n.Topo), baixo = Math.Min(a.Base, n.Base);
@@ -81,12 +95,13 @@ public static class Passagens
     /// <summary>
     /// A porta da travessia plana pela lateral <paramref name="lado"/> (4.1), ou nula: o vizinho tem o mesmo chão (a mesma
     /// base da área útil), a porta vai até o chão com a altura do sprite maior dos dois (o sprite troca de tamanho na borda,
-    /// pelo DPI de cada monitor) e o sprite cabe na área útil do vizinho. Só pode haver uma: a que contém o chão.
+    /// pelo DPI de cada monitor) e o sprite cabe na área útil do vizinho. Só pode haver uma: a que contém o chão. Um vizinho
+    /// <paramref name="fechado"/> não tem porta (<see cref="Portas"/>).
     /// </summary>
-    public static Porta? PortaPlana(Topologia topologia, MonitorDoDesktop monitor, int lado, TamanhoDip sprite)
+    public static Porta? PortaPlana(Topologia topologia, MonitorDoDesktop monitor, int lado, TamanhoDip sprite, Func<string, bool>? fechado = null)
     {
         int chao = monitor.AreaUtil.Base;
-        foreach (Porta p in Portas(topologia, monitor, lado))
+        foreach (Porta p in Portas(topologia, monitor, lado, fechado))
         {
             if (p.Base != chao || topologia.PorChave(p.ChaveVizinho) is not { } vizinho || vizinho.AreaUtil.Base != chao) continue;
             TamanhoPx aqui = sprite.ParaPixels(monitor.Dpi), la = sprite.ParaPixels(vizinho.Dpi);
@@ -108,13 +123,13 @@ public static class Passagens
     /// recuo da partida antes da lateral (0, ¼, ½, 1 e 2 larguras, até <paramref name="recuoMaximo"/> px), vence o primeiro
     /// em que o sprite, com o tamanho do monitor da âncora, fica na união das áreas úteis em todos os passos. O recuo é o que
     /// permite subir: o sprite precisa ganhar altura antes de a frente dele passar da borda. Sem nenhum, o degrau não serve.
-    /// Determinístico, sem gerador pseudoaleatório.
+    /// Determinístico, sem gerador pseudoaleatório. Um vizinho <paramref name="fechado"/> não tem porta (<see cref="Portas"/>).
     /// </summary>
-    public static Travessia? SaltoDeDegrau(Topologia topologia, MonitorDoDesktop monitor, int lado, TamanhoDip sprite, ParametrosDeMovimento fisica, int passosPorSegundo, int recuoMaximo = 0)
+    public static Travessia? SaltoDeDegrau(Topologia topologia, MonitorDoDesktop monitor, int lado, TamanhoDip sprite, ParametrosDeMovimento fisica, int passosPorSegundo, int recuoMaximo = 0, Func<string, bool>? fechado = null)
     {
         ArgumentNullException.ThrowIfNull(fisica);
         var vizinhos = new List<(Porta Porta, MonitorDoDesktop Vizinho, int Delta)>();
-        foreach (Porta p in Portas(topologia, monitor, lado))
+        foreach (Porta p in Portas(topologia, monitor, lado, fechado))
         {
             if (topologia.PorChave(p.ChaveVizinho) is not { } vizinho) continue;
             int delta = vizinho.AreaUtil.Base - monitor.AreaUtil.Base;
@@ -159,15 +174,15 @@ public static class Passagens
     /// trecho de parede abaixo da porta), um arco curto o leva ao chão do vizinho. A partida é a âncora encostada na lateral,
     /// nessa altura, com o sprite inteiro na área útil da origem; o pouso, no chão do vizinho, da lateral de entrada para
     /// dentro; o arco, pelo mesmo solucionador do salto de degrau, sem recuo. Sem limite de altura: é o caminho da subida
-    /// além do alcance do salto.
+    /// além do alcance do salto. Um vizinho <paramref name="fechado"/> não tem porta (<see cref="Portas"/>).
     /// </summary>
-    public static Travessia? Transbordo(Topologia topologia, MonitorDoDesktop monitor, int lado, int alturaDoChao, TamanhoDip sprite, ParametrosDeMovimento fisica, int passosPorSegundo)
+    public static Travessia? Transbordo(Topologia topologia, MonitorDoDesktop monitor, int lado, int alturaDoChao, TamanhoDip sprite, ParametrosDeMovimento fisica, int passosPorSegundo, Func<string, bool>? fechado = null)
     {
         ArgumentNullException.ThrowIfNull(fisica);
         if (alturaDoChao >= monitor.AreaUtil.Base) return null;
         TamanhoPx aqui = sprite.ParaPixels(monitor.Dpi);
         if (alturaDoChao - aqui.Altura < monitor.AreaUtil.Topo) return null;
-        foreach (Porta porta in Portas(topologia, monitor, lado))
+        foreach (Porta porta in Portas(topologia, monitor, lado, fechado))
         {
             if (topologia.PorChave(porta.ChaveVizinho) is not { } vizinho || vizinho.AreaUtil.Base != alturaDoChao) continue;
             TamanhoPx la = sprite.ParaPixels(vizinho.Dpi);
@@ -205,6 +220,63 @@ public static class Passagens
     }
 
     /// <summary>
+    /// O pulo da tela cheia (DEC-035) de (<paramref name="x0"/>, <paramref name="y0"/>), no monitor <paramref name="origem"/>,
+    /// a (<paramref name="x1"/>, <paramref name="y1"/>), no <paramref name="destino"/>, ou nulo. Um arco de gravidade constante,
+    /// com a duração pela distância (<see cref="ParametrosDeMovimento.VelocidadeDoPuloDaTelaCheia"/>, entre o tempo mínimo e o
+    /// máximo, em passos inteiros, para o último ser exatamente a chegada). O quanto ele sobe acima da reta, H, é tentado nesta
+    /// ordem, e vence o primeiro em que o sprite, com o tamanho do monitor da âncora, fica na união das áreas úteis em todos os
+    /// passos:
+    /// <list type="number">
+    /// <item>o maior entre ¼ do desnível e a altura do pulo: com ¼ do desnível, o ponto mais alto do arco é a ponta mais alta,
+    /// e ele chega ao cipó parando de subir, ou sai dele sem subir; com a altura, um pulo de verdade entre pontos de alturas
+    /// parecidas;</item>
+    /// <item>¼ do desnível, se for ao menos metade da altura do pulo (o arco não passa da ponta mais alta);</item>
+    /// <item>H negativo: o balanço de cipó a cipó, que desce abaixo da reta e sobe de novo.</item>
+    /// </list>
+    /// A altura do pulo é <see cref="ParametrosDeMovimento.AlturaDoPuloDaTelaCheia"/>, na escala da origem, até a metade da
+    /// distância. No <paramref name="pulinho"/> (item 6), a altura é <see cref="ParametrosDeMovimento.AlturaDoPulinho"/>, e o
+    /// tempo mínimo, <see cref="ParametrosDeMovimento.TempoMinimoDoPulinho"/>. Determinístico, sem gerador pseudoaleatório.
+    /// </summary>
+    public static Travessia? PlanejarPuloDaTelaCheia(Topologia topologia, MonitorDoDesktop origem, double x0, double y0, MonitorDoDesktop destino, double x1, double y1,
+        TamanhoDip sprite, ParametrosDeMovimento fisica, int passosPorSegundo, PuloDaTelaCheia pulo, bool pulinho = false)
+    {
+        ArgumentNullException.ThrowIfNull(topologia);
+        ArgumentNullException.ThrowIfNull(origem);
+        ArgumentNullException.ThrowIfNull(destino);
+        ArgumentNullException.ThrowIfNull(fisica);
+        double escala = origem.Dpi / 96.0;
+        double dx = x1 - x0, dy = y1 - y0, distancia = Math.Sqrt(dx * dx + dy * dy);
+        double tempo = Math.Clamp(distancia / (fisica.VelocidadeDoPuloDaTelaCheia * escala), pulinho ? fisica.TempoMinimoDoPulinho : fisica.TempoMinimoDoPuloDaTelaCheia, fisica.TempoMaximoDoPuloDaTelaCheia);
+        int passos = Math.Max(1, (int)Math.Ceiling(tempo * passosPorSegundo));
+        tempo = (double)passos / passosPorSegundo;
+
+        double altura = Math.Min((pulinho ? fisica.AlturaDoPulinho : fisica.AlturaDoPuloDaTelaCheia) * escala, distancia / 2), quarto = Math.Abs(dy) / 4;
+        var alturas = new List<double> { Math.Max(quarto, altura) };
+        if (quarto >= altura / 2 && quarto < altura) alturas.Add(quarto);
+        if (altura > 0) alturas.Add(-altura);
+        foreach (double h in alturas)
+        {
+            // y(s) = y0 + dy·s − 4H·s(1 − s), com s = t/T: a gravidade é 8H/T², e a velocidade vertical de partida, (dy − 4H)/T.
+            var salto = new Travessia(TipoDeTravessia.Salto, origem.Chave, destino.Chave, dx >= 0 ? 1 : -1, 0,
+                x1, y1, x0, y0, dx / tempo, (dy - 4 * h) / tempo, 8 * h / (tempo * tempo), passos, 0, pulo);
+            if (ArcoNaUniao(topologia, salto, origem, destino, sprite, passosPorSegundo)) return salto;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// O monitor da âncora num passo do salto: no pulo da tela cheia (DEC-035), o que contém o pixel dos pés (ou o mais
+    /// próximo); na travessia, a origem até a âncora passar da borda e, depois, o destino (D8).
+    /// </summary>
+    public static MonitorDoDesktop MonitorNoSalto(Topologia topologia, Travessia salto, MonitorDoDesktop origem, MonitorDoDesktop destino, PontoPx ancora)
+    {
+        ArgumentNullException.ThrowIfNull(topologia);
+        ArgumentNullException.ThrowIfNull(salto);
+        if (salto.Pulo != PuloDaTelaCheia.Nenhum) return topologia.MonitorMaisProximo(Posicionador.PixelDosPes(ancora));
+        return PassouDaBorda(salto, ancora) ? destino : origem;
+    }
+
+    /// <summary>
     /// A âncora fina do salto no passo <paramref name="passo"/> (1 até <see cref="Travessia.PassosTotais"/>), analítica: no
     /// último, exatamente o pouso.
     /// </summary>
@@ -223,7 +295,7 @@ public static class Passagens
         {
             (double x, double y) = PosicaoNoSalto(salto, k, passosPorSegundo);
             var ancora = new PontoPx((int)Math.Round(x, MidpointRounding.AwayFromZero), (int)Math.Round(y, MidpointRounding.AwayFromZero));
-            MonitorDoDesktop m = PassouDaBorda(salto, ancora) ? destino : origem;
+            MonitorDoDesktop m = MonitorNoSalto(topologia, salto, origem, destino, ancora);
             if (!NaUniaoDasAreasUteis(topologia, Posicionador.RetanguloDoSprite(ancora, sprite.ParaPixels(m.Dpi)))) return false;
         }
         return true;

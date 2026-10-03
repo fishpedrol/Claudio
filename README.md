@@ -4,7 +4,7 @@ Mascote de companhia, original e não verbal, para desktop Windows 11: um macaqu
 
 **Para compilar e abrir o mascote:** [COMO_INICIAR.md](COMO_INICIAR.md).
 
-**Status (2026-10-02):** o aplicativo existe em `src/`, com testes em `tests/`. A Fase 2 está VERIFIED; as Fases 1, 3 e 4 estão implementadas, com verificações manuais e de hardware pendentes; a Fase 5 (multi-monitor, travessia entre monitores e posição lembrada entre execuções) está em andamento; e a emoção dominante e o tamagotchi já aparecem no app, verificados por testes e na tela com input sintético, faltando a revisão visual e de tom pelo usuário. O estado exato e as evidências estão em [PROJECT_CONTEXT.md](docs/PROJECT_CONTEXT.md).
+**Status (2026-10-03):** o aplicativo existe em `src/`, com testes em `tests/`. A Fase 2 está VERIFIED; as Fases 1, 3 e 4 estão implementadas, com verificações manuais e de hardware pendentes; a Fase 5 (multi-monitor, travessia entre monitores e posição lembrada entre execuções) está em andamento; o modo de tela cheia (com um jogo ou vídeo em tela cheia, ele vai para o outro monitor) entrou antes, pelo relato do usuário; e a emoção dominante e o tamagotchi já aparecem no app, verificados por testes e na tela com input sintético, faltando a revisão visual e de tom pelo usuário. O estado exato e as evidências estão em [PROJECT_CONTEXT.md](docs/PROJECT_CONTEXT.md).
 
 O Buzzy guarda as configurações em `%LOCALAPPDATA%\Buzzy\settings.json`, com a versão anterior em `settings.json.bak` (seção 6 de [COMO_INICIAR.md](COMO_INICIAR.md) explica como voltar à posição inicial). Testes e ferramentas abrem o Buzzy com `--perfil-de-teste NOME` para nunca tocar nas configurações reais (seção 7).
 
