@@ -22,14 +22,14 @@ namespace Buzzy.App.Apresentacao;
 /// físicos do desktop virtual, e a captura do mouse só existe enquanto a raiz pede (um gesto começado no item). Fora de um
 /// gesto, nada do mouse de outros aplicativos chega (SECURITY.md 3.1).
 ///
-/// O gancho é uma cópia do da janela do personagem, com o tamanho do item no WM_GETDPISCALEDSIZE; extrair a parte comum
-/// fica para quando a Fase 5 corrigir o DPI das duas janelas (crítica, seção 3, P14).
+/// O tratamento do DPI é o da janela do personagem, em <see cref="EncaixeDeDpi"/> (passo P14), com o tamanho do item.
 /// </summary>
 internal sealed class JanelaDoItem : Window, IJanelaDoItem
 {
+    // Pixel a pixel pelo DPI atual da janela (EncaixeDeDpi, passo P14).
     private readonly Image _imagem = new()
     {
-        Stretch = Stretch.None,
+        Stretch = Stretch.Fill,
         HorizontalAlignment = HorizontalAlignment.Left,
         VerticalAlignment = VerticalAlignment.Top,
         SnapsToDevicePixels = true,
@@ -71,6 +71,7 @@ internal sealed class JanelaDoItem : Window, IJanelaDoItem
         Content = _imagem;
 
         StateChanged += AoMudarEstado;
+        DpiChanged += (_, e) => EncaixeDeDpi.AjustarPixelAPixel(_imagem, e.NewDpi.PixelsPerInchX);
     }
 
     /// <summary>O Id do item no núcleo.</summary>
@@ -107,7 +108,11 @@ internal sealed class JanelaDoItem : Window, IJanelaDoItem
         base.OnClosing(e);
     }
 
-    public void DefinirSprite(BitmapSource sprite) => _imagem.Source = sprite;
+    public void DefinirSprite(BitmapSource sprite)
+    {
+        _imagem.Source = sprite;
+        EncaixeDeDpi.AjustarPixelAPixel(_imagem, VisualTreeHelper.GetDpi(this).PixelsPerInchX);
+    }
 
     /// <summary>Posiciona e dimensiona a janela em pixels físicos, sem ativar nem mudar a ordem Z.</summary>
     public void AplicarRetangulo(RetanguloPx r)
@@ -171,17 +176,10 @@ internal sealed class JanelaDoItem : Window, IJanelaDoItem
                 return Win32.MA_NOACTIVATE;
 
             case Win32.WM_GETDPISCALEDSIZE:
-            {
-                // A janela vai mudar de DPI (outro monitor ou outra escala): o tamanho certo é o do item no DPI novo, e
-                // não o pedido escalado linearmente pelo Windows (o mesmo cuidado da janela do personagem).
-                int dpiNovo = (int)(long)wParam;
-                if (dpiNovo <= 0) break;
-                TamanhoPx tamanho = _tamanho.ParaPixels(dpiNovo);
-                System.Runtime.InteropServices.Marshal.WriteInt32(lParam, 0, tamanho.Largura);
-                System.Runtime.InteropServices.Marshal.WriteInt32(lParam, 4, tamanho.Altura);
+                // A janela vai mudar de DPI: o tamanho do item no DPI novo (EncaixeDeDpi, o mesmo da janela do personagem).
+                if (!EncaixeDeDpi.ResponderTamanhoEscalado(wParam, lParam, _tamanho)) break;
                 tratado = true;
                 return 1;
-            }
 
             case Win32.WM_LBUTTONDOWN:
             case Win32.WM_LBUTTONDBLCLK:

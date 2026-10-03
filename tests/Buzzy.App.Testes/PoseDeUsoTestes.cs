@@ -228,7 +228,9 @@ internal sealed class PoseDeUsoTestes
                 for (int passos = 0; passos < 40; passos++)
                 {
                     QuadroDoSprite q = PoseDoPersonagem.Escolher(R(Estado.Idle, Direcao.Esquerda, cara, gesto, relogio: true), passos);
-                    Afirmar.Igual((pose, false, (string?)null, (string?)null), (q.Pose, q.Espelhado, q.Expressao, q.Item), $"{gesto}, {cara}, {passos} passos: a pose do gesto, com a cara dela");
+                    // A gargalhada é animada desde a Fase 6 (DEC-036, item 5): alterna com o pulinho da reação a cada 6 passos.
+                    string esperada = gesto == Gesto.Gargalhada && passos / 6 % 2 == 1 ? "reagindo-2" : pose;
+                    Afirmar.Igual((esperada, false, (string?)null, (string?)null), (q.Pose, q.Espelhado, q.Expressao, q.Item), $"{gesto}, {cara}, {passos} passos: a pose do gesto, com a cara dela");
                 }
             }
         }
@@ -279,7 +281,7 @@ internal sealed class PoseDeUsoTestes
             Iguais(BonecoPixel.Desenhar(pose), SpriteProvisorio.Compor(new QuadroDoSprite(pose.Nome, false, null)), pose.Nome);
         // Na tremedeira, os dois quadros têm a mesma cara e o corpo anda 1 pixel.
         QuadroDoSprite a = PoseDoPersonagem.Escolher(R(Estado.Idle, gesto: Gesto.Tremedeira, relogio: true), 0);
-        QuadroDoSprite b = PoseDoPersonagem.Escolher(R(Estado.Idle, gesto: Gesto.Tremedeira, relogio: true), PoseDoPersonagem.PassosPorQuadroDaTremedeira);
+        QuadroDoSprite b = PoseDoPersonagem.Escolher(R(Estado.Idle, gesto: Gesto.Tremedeira, relogio: true), PoseDoPersonagem.Manifesto["gesto-tremedeira"].Quadros[0].Passos);
         Afirmar.Diferente(a.Pose, b.Pose, "a tremedeira alterna dois quadros");
         Tela ta = SpriteProvisorio.Compor(a), tb = SpriteProvisorio.Compor(b);
         Afirmar.Verdadeiro(Diferencas(ta, tb) > 0, "o corpo treme");

@@ -200,8 +200,22 @@ A `tossindo` é a cara dos gestos de tosse e de espirro.
 
 ## 7. Poses
 
-Poses-chave em `PosesPixel`, uma por estado ou gesto de ARCHITECTURE.md 2.6. As animações completas
-(mais quadros e tempo) são da Fase 6.
+Poses-chave em `PosesPixel`, uma por estado ou gesto de ARCHITECTURE.md 2.6. Desde a Fase 6 (DEC-036), a ordem dos
+quadros e os tempos de cada animação ficam no manifesto de clipes (`src/Buzzy.App/Apresentacao/clipes.json`), e os
+quadros extras, em `PosesPixel.DosClipes`, fora de `Todas` (a folha nativa não muda), cada um feito da pose-chave com
+poucos ângulos mudados, para o corpo não pular entre os quadros:
+
+| Quadro extra | Sai de | O que muda |
+|---|---|---|
+| `cocando-2` | `cocando` | a mão desce pela cabeça, que inclina mais |
+| `espreguicando-1`, `espreguicando-2` | `espreguicando` | os braços sobem pelos lados, sonolento; no fim, na ponta dos pés |
+| `olhando-2` | `olhando` | a outra mão faz a aba nos olhos, e a cabeça vira para o outro lado |
+| `espiando-2` | `espiando` | a cabeça sobe 2 pixels acima da borda |
+| `brincando-2` | `brincando` | troca o braço e a perna levantados |
+| `caindo-2` | `caindo` | os braços debatem e as pernas chutam |
+| `reagindo-2` | `reagindo` | um pulinho de 1 pixel, com os braços abertos (também na gargalhada) |
+
+A prévia `previa/clipes.png` mostra cada quadro extra ao lado da pose-chave.
 
 | Pose | Vista | Estado ou gesto |
 |---|---|---|
@@ -399,6 +413,7 @@ tempo de cada lado e um terço no meio, sem saltar mais de 10° de uma fase para
 | Arquivo | Conteúdo |
 |---|---|
 | `src/Buzzy.Visual/Pixel/` | Gerador: paleta, grade e máscaras (`Tela`), carimbos do rosto (`Rostos`), esqueleto e desenho (`BonecoPixel`), poses (`PosesPixel`) e ícone da bandeja de 16 × 16 desenhado à mão (`Icone`). Do tamagotchi: itens no chão e na mão (`ItensPixel`), poses de uso (`UsosPixel`), sobreposições e modificadores (`EfeitosPixel`) e ícones do menu (`IconesDoMenu`). É a fonte editável. |
+| `src/Buzzy.App/Apresentacao/clipes.json` e `src/Buzzy.Visual/Animacao/` | Manifesto de clipes (DEC-036): a ordem dos quadros, os tempos, a cara e a deformação de cada situação; leitor, reprodutor e validação. O build do app reprova um manifesto que cite pose ou cara ausente (`tools/Buzzy.ValidadorDeClipes`). |
 | `assets/identidade/pixel/buzzy-poses.png` | Folha nativa (64 × 64 por quadro, na ordem de `PosesPixel`); é o asset que a Fase 6 vai usar. As poses de uso e as dos gestos da onda não entram nela. |
 | `assets/identidade/pixel/buzzy-itens.png` | Folha nativa dos itens: 24 × 24 por item, na ordem do menu (312 × 24). |
 | `assets/identidade/pixel/previa/` | Prévias ampliadas sem suavização, geradas, não editadas à mão: parado e andando a 8×, poses em fundo claro e escuro, `expressoes.png` (as 14 caras de humor, uma por ícone do menu), tamanho real; do tamagotchi, `rostos-efeito.png` (caras de efeito, de frente e de perfil, e passageiras), `itens-8x.png`, `itens-na-mao-8x.png` (com a pega e a ponta marcadas), `itens-tamanho-real.png` (ao lado do boneco, a 2× e 1×, em fundo claro e escuro), `usos.png` (cada verbo com cada item, a 2×), `usos-tamanho-real.png`, `efeitos.png` (os nove efeitos), `gestos.png` (os oito gestos, com a sobreposição da onda), `paranoico-8x.png` (a cara `paranoico` de frente e de perfil e os gestos `olharproteto` e `agachar` com o suor na fase parada, a 8×) e `icones-menu.png`. Desde 2026-10-01, `rostos-efeito.png` tem as 8 caras de efeito. |

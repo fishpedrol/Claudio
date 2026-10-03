@@ -14,5 +14,6 @@
   <Folder Name="/tools/">
     <Project Path="tools/Buzzy.Identidade/Buzzy.Identidade.csproj" />
     <Project Path="tools/Buzzy.PortaoApis/Buzzy.PortaoApis.csproj" />
+    <Project Path="tools/Buzzy.ValidadorDeClipes/Buzzy.ValidadorDeClipes.csproj" />
   </Folder>
 </Solution>

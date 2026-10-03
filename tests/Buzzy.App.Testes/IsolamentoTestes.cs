@@ -187,14 +187,15 @@ internal sealed class IsolamentoTestes : IDisposable
     {
         // Nos testes do aplicativo, o Buzzy.exe só é iniciado por BuzzyEmTeste, sempre com um perfil de teste
         // (BuzzyEmTeste_AbreComOPerfilDeIntegracao); o outro processo que eles iniciam é o próprio executável de
-        // testes, como gravador (ArquivoDeConfiguracoesTestes.MatarDuranteGravacoes_NuncaDeixaIlegivel).
+        // testes, como gravador (ArquivoDeConfiguracoesTestes.MatarDuranteGravacoes_NuncaDeixaIlegivel). A validação do manifesto de
+        // clipes (Fase 6, passo F6-P3) roda o dotnet com a DLL da ferramenta do build, nunca o Buzzy.exe.
         string pasta = Path.Combine(Caminhos.Raiz, "tests", "Buzzy.App.Testes");
         Dictionary<string, string> fontes = FontesCs(pasta)
             .Where(f => Path.GetFileName(f) != "IsolamentoTestes.cs")
             .ToDictionary(f => Path.GetRelativePath(pasta, f), File.ReadAllText, StringComparer.Ordinal);
         string[] Onde(string padrao) => [.. fontes.Where(f => Regex.IsMatch(f.Value, padrao)).Select(f => f.Key).Order(StringComparer.Ordinal)];
 
-        Afirmar.Sequencia(["ArquivoDeConfiguracoesTestes.cs", @"Integracao\BuzzyEmTeste.cs"], Onde(@"Process\.Start\("), "quem inicia processos");
+        Afirmar.Sequencia(["ArquivoDeConfiguracoesTestes.cs", @"Integracao\BuzzyEmTeste.cs", "ValidacaoDeClipesNoBuildTestes.cs"], Onde(@"Process\.Start\("), "quem inicia processos");
         Afirmar.Sequencia(["Caminhos.cs", "CaminhosTestes.cs", @"Integracao\BuzzyEmTeste.cs"], Onde(@"\bExeDoBuzzy\("), "quem usa o caminho do Buzzy.exe");
         Afirmar.Sequencia([], Onde(@"new\s+ProcessStartInfo\s*(\(\s*\)|\{)|\.StartInfo\b|UseShellExecute\s*=\s*true"), "ProcessStartInfo sem o executável, StartInfo ou shell");
 

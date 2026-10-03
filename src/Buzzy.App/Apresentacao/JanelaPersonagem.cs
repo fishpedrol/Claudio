@@ -22,9 +22,10 @@ namespace Buzzy.App.Apresentacao;
 /// </summary>
 internal sealed class JanelaPersonagem : Window
 {
+    // Pixel a pixel pelo DPI atual da janela (EncaixeDeDpi, passo P14).
     private readonly Image _imagem = new()
     {
-        Stretch = Stretch.None,
+        Stretch = Stretch.Fill,
         HorizontalAlignment = HorizontalAlignment.Left,
         VerticalAlignment = VerticalAlignment.Top,
         SnapsToDevicePixels = true,
@@ -65,6 +66,7 @@ internal sealed class JanelaPersonagem : Window
             // de mostrar a janela); isso não é mudança de topologia.
             int antes = (int)Math.Round(e.OldDpi.PixelsPerInchX);
             int depois = (int)Math.Round(e.NewDpi.PixelsPerInchX);
+            EncaixeDeDpi.AjustarPixelAPixel(_imagem, e.NewDpi.PixelsPerInchX);
             if (antes != depois) DpiMudou?.Invoke(depois);
         };
     }
@@ -95,7 +97,11 @@ internal sealed class JanelaPersonagem : Window
         HwndSource.FromHwnd(Hwnd)?.AddHook(Gancho);
     }
 
-    internal void DefinirSprite(BitmapSource sprite) => _imagem.Source = sprite;
+    internal void DefinirSprite(BitmapSource sprite)
+    {
+        _imagem.Source = sprite;
+        EncaixeDeDpi.AjustarPixelAPixel(_imagem, VisualTreeHelper.GetDpi(this).PixelsPerInchX);
+    }
 
     internal BitmapSource? Sprite => _imagem.Source as BitmapSource;
 
@@ -148,19 +154,10 @@ internal sealed class JanelaPersonagem : Window
                 return Win32.MA_NOACTIVATE;
 
             case Win32.WM_GETDPISCALEDSIZE:
-            {
-                // A janela vai mudar de DPI (outro monitor ou outra escala). Sem esta resposta,
-                // o Windows escalaria linearmente o tamanho pedido no SetWindowPos, que já é o
-                // do DPI novo, e a janela ficaria com a escala aplicada duas vezes até a
-                // próxima acomodação. O tamanho certo é o do sprite no DPI novo.
-                int dpiNovo = (int)(long)wParam;
-                if (dpiNovo <= 0) break;
-                TamanhoPx tamanho = SpriteProvisorio.TamanhoLogico.ParaPixels(dpiNovo);
-                System.Runtime.InteropServices.Marshal.WriteInt32(lParam, 0, tamanho.Largura);
-                System.Runtime.InteropServices.Marshal.WriteInt32(lParam, 4, tamanho.Altura);
+                // A janela vai mudar de DPI (outro monitor ou outra escala): o tamanho do sprite no DPI novo (EncaixeDeDpi).
+                if (!EncaixeDeDpi.ResponderTamanhoEscalado(wParam, lParam, SpriteProvisorio.TamanhoLogico)) break;
                 tratado = true;
                 return 1;
-            }
 
             case Win32.WM_LBUTTONDOWN:
             case Win32.WM_LBUTTONDBLCLK:

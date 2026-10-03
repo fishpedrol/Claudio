@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Buzzy.Core;
+using Buzzy.Visual.Animacao;
 using Buzzy.Visual.Pixel;
 
 namespace Buzzy.App.Apresentacao;
@@ -21,11 +22,11 @@ internal static class SpriteProvisorio
     /// <summary>Tamanho lógico do personagem. A escala escolhida pelo usuário entra na Fase 8.</summary>
     internal static readonly TamanhoDip TamanhoLogico = new(128, 128);
 
-    /// <summary>Escalas horizontal e vertical do corpo achatado no impacto (toon force, DEC-023).</summary>
-    internal static readonly (double X, double Y) EscalaAchatada = (1.3, 0.7);
+    /// <summary>Escalas horizontal e vertical do corpo achatado no impacto (toon force, DEC-023), as da validação do manifesto.</summary>
+    internal static readonly (double X, double Y) EscalaAchatada = Deformacoes.Achatado;
 
-    /// <summary>Escalas horizontal e vertical do corpo esticado pela velocidade (toon force, DEC-023).</summary>
-    internal static readonly (double X, double Y) EscalaEsticada = (0.8, 1.25);
+    /// <summary>Escalas horizontal e vertical do corpo esticado pela velocidade (toon force, DEC-023), as da validação do manifesto.</summary>
+    internal static readonly (double X, double Y) EscalaEsticada = Deformacoes.Esticado;
 
     private static readonly Lazy<Tela> Parado = new(() => BonecoPixel.Desenhar(PosesPixel.Todas.First(p => p.Nome == "parado")));
 

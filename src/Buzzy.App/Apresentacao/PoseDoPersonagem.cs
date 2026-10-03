@@ -1,4 +1,7 @@
+using System.IO;
+using System.Text;
 using Buzzy.Core.Personagem;
+using Buzzy.Visual.Animacao;
 using Buzzy.Visual.Pixel;
 
 namespace Buzzy.App.Apresentacao;
@@ -67,41 +70,18 @@ internal readonly record struct Dinamica(double VelocidadeVerticalDip, int Quiqu
     LadoDoEsconderijo Esconderijo = LadoDoEsconderijo.Nenhum);
 
 /// <summary>
-/// Poses provisórias por estado (TODO.md, Fase 4) e, no tamagotchi (DEC-028), as de uso, as dos gestos da onda e a
-/// sobreposição da onda: a apresentação escolhe o quadro pelo retrato do núcleo, sem mudar estado nem posição
-/// (ARCHITECTURE.md 2.10). As animações completas, com manifesto, tempos e expressões em camadas, são da Fase 6.
+/// A escolha do quadro do personagem (ARCHITECTURE.md 2.10; DEC-036): pelo retrato e pela dinâmica, a apresentação decide a
+/// situação (`Situacoes`), e o clipe do manifesto dá o quadro pelos passos no estado, a cara, o espelho e a deformação. O
+/// giro do esconderijo, o item e a sobreposição da onda continuam aqui, porque não são tempo; os quadros de uso no chão vêm
+/// de `UsosPixel`, cuja soma de passos é a duração do uso no núcleo (DEC-028). Nada disso muda estado nem posição.
 /// </summary>
 internal static class PoseDoPersonagem
 {
-    /// <summary>Passos do relógio lógico por quadro do ciclo de caminhada (60 passos/s → 7,5 quadros/s).</summary>
-    private const int PassosPorQuadroAndando = 8;
-
-    /// <summary>Passos por quadro do ciclo de escalada.</summary>
-    private const int PassosPorQuadroEscalando = 12;
-
-    /// <summary>Passos em que o pulo ainda mostra o impulso antes do voo.</summary>
-    private const int PassosDoImpulso = 6;
-
-    /// <summary>Passos em que o impacto (pouso ou quique) aparece achatado.</summary>
+    /// <summary>Passos em que o impacto do quique de borracha aparece achatado (toon force, DEC-023).</summary>
     internal const int PassosDoAchatamento = 5;
 
     /// <summary>A partir desta velocidade vertical, em DIP/s, o corpo aparece esticado.</summary>
-    internal const double VelocidadeDoEsticamento = 700;
-
-    /// <summary>Passos por quadro do balanço no cipó (DEC-024).</summary>
-    private const int PassosPorQuadroNoCipo = 10;
-
-    /// <summary>O balanço no cipó vai e volta: esquerda, meio, direita, meio.</summary>
-    private static readonly int[] BalancoDoCipo = [1, 2, 3, 2];
-
-    /// <summary>Quem está parado, agarrado à parede: o primeiro quadro da escalada, virado para ela.</summary>
-    private const string PoseAgarradoNaParede = "escalando-1";
-
-    /// <summary>Quem está parado, agarrado ao cipó: o quadro do meio do balanço.</summary>
-    private const string PoseAgarradoNoCipo = "cipo-2";
-
-    /// <summary>Escondido atrás de uma borda (DEC-025): só a cabeça e as mãos.</summary>
-    private const string PoseEscondido = "escondido";
+    internal const double VelocidadeDoEsticamento = Deformacoes.VelocidadeDoEsticamento;
 
     /// <summary>
     /// Passos por fase da sobreposição da onda com o relógio ligado: 5 trocas por segundo a 60 passos por segundo
@@ -109,11 +89,19 @@ internal static class PoseDoPersonagem
     /// </summary>
     internal const int PassosPorFaseDaSobreposicao = 12;
 
-    /// <summary>Passos por quadro da tremedeira (L11): o corpo vai e volta 1 pixel, 7,5 vezes por segundo.</summary>
-    internal const int PassosPorQuadroDaTremedeira = 4;
+    /// <summary>O nome do manifesto embutido no app (Apresentacao/clipes.json).</summary>
+    internal const string RecursoDoManifesto = "Buzzy.App.Apresentacao.clipes.json";
 
-    /// <summary>A cara da pose da tremedeira, que o quadro do parado repete: na alternância, só o corpo treme.</summary>
-    private static readonly string? CaraDaTremedeira = PosesPixel.PorNome(NomeDoGesto(Gesto.Tremedeira))?.Expressao;
+    /// <summary>O manifesto de clipes do app (DEC-036), embutido e lido uma vez; a validação do build o confere antes.</summary>
+    internal static ManifestoDeClipes Manifesto { get; } = LerManifestoEmbutido();
+
+    private static ManifestoDeClipes LerManifestoEmbutido()
+    {
+        using Stream recurso = typeof(PoseDoPersonagem).Assembly.GetManifestResourceStream(RecursoDoManifesto)
+            ?? throw new InvalidOperationException($"O manifesto de clipes ({RecursoDoManifesto}) não está embutido no app.");
+        using var leitor = new StreamReader(recurso, Encoding.UTF8);
+        return ManifestoDeClipes.Ler(leitor.ReadToEnd());
+    }
 
     /// <summary>
     /// O quadro do sprite para o retrato, sem mudar estado nem posição (ARCHITECTURE.md 2.10): a pose pelo estado, pela
@@ -121,10 +109,14 @@ internal static class PoseDoPersonagem
     /// onda da frente (crítica, L12), na fase do relógio. As caras de efeito e a emoção dominante chegam pela expressão do
     /// retrato, nas poses que mostram a cara dele (crítica, F9).
     /// </summary>
-    internal static QuadroDoSprite Escolher(Retrato r, long passosNoEstado, Dinamica dinamica = default)
+    internal static QuadroDoSprite Escolher(Retrato r, long passosNoEstado, Dinamica dinamica = default) => Escolher(Manifesto, r, passosNoEstado, dinamica);
+
+    /// <summary>O mesmo, com outro manifesto (os testes da Fase 6, critério 1).</summary>
+    internal static QuadroDoSprite Escolher(ManifestoDeClipes manifesto, Retrato r, long passosNoEstado, Dinamica dinamica = default)
     {
+        ArgumentNullException.ThrowIfNull(manifesto);
         ArgumentNullException.ThrowIfNull(r);
-        QuadroDoSprite quadro = Pose(r, passosNoEstado, dinamica);
+        QuadroDoSprite quadro = Pose(manifesto, r, passosNoEstado, dinamica);
         EfeitoVisual efeito = r.Onda is { } onda ? SobreposicaoDaOnda(onda.Tipo) : EfeitoVisual.Nenhum;
         // Sem sobreposição, a fase fica em 0: o cache não guarda o mesmo desenho uma vez por fase.
         return efeito == EfeitoVisual.Nenhum ? quadro : quadro with { Efeito = efeito, Fase = FaseDaSobreposicao(r.RelogioAtivo, passosNoEstado) };
@@ -155,74 +147,79 @@ internal static class PoseDoPersonagem
     internal static int FaseDaSobreposicao(bool relogioLigado, long passosNoEstado)
         => relogioLigado ? (int)(Math.Max(0, passosNoEstado) / PassosPorFaseDaSobreposicao % EfeitosPixel.Fases) : 0;
 
-    private static QuadroDoSprite Pose(Retrato r, long passosNoEstado, Dinamica dinamica)
+    private static QuadroDoSprite Pose(ManifestoDeClipes manifesto, Retrato r, long passosNoEstado, Dinamica dinamica)
     {
-        bool esquerda = r.Direcao == Direcao.Esquerda;
-        string expressao = NomeDaExpressao(r.Expressao);
-        Deformacao rapido = Math.Abs(dinamica.VelocidadeVerticalDip) >= VelocidadeDoEsticamento ? Deformacao.Esticado : Deformacao.Nenhuma;
-        if (r.Estado == Estado.Using && r.Uso is { } uso) return DeUso(uso, r.PassoDoUso, esquerda, expressao, dinamica);
-        // Escondido (DEC-025): no esconderijo, e também na reação e no pressionar de quem continua
-        // escondido, só a cabeça e as mãos aparecem; o corpo nunca surge de relance.
-        if (dinamica.Esconderijo != LadoDoEsconderijo.Nenhum && r.Estado is Estado.Peeking or Estado.Reacting or Estado.Pressed)
+        // Uso no chão (DEC-028): o quadro da animação do verbo no passo do uso, com o item na mão e a cara da própria pose
+        // (crítica, C10), de frente e sem espelho.
+        if (r.Estado == Estado.Using && r.Uso is { Apoio: ApoioDoUso.Chao } uso)
+            return new(UsosPixel.Quadro(VerboDaArte(uso.Verbo), r.PassoDoUso).Nome, false, null) { Item = NomeDoItem(uso.Item) };
+        (string situacao, Giro giro) = Situacao(r, passosNoEstado, dinamica);
+        Clipe clipe = manifesto[situacao];
+        (_, QuadroDoClipe q) = ReprodutorDeClipes.Quadro(clipe, passosNoEstado);
+        string? cara = q.Cara ?? clipe.Cara switch
         {
-            string? cara = r.Estado == Estado.Pressed ? "surpreso" : r.Expressao == Expressao.Neutro ? null : expressao;
-            return new(PoseEscondido, false, cara, Deformacao.Nenhuma, GiroDoEsconderijo(dinamica.Esconderijo));
-        }
-        return r.Estado switch
-        {
-            Estado.Walking => new($"andando-{1 + (int)(passosNoEstado / PassosPorQuadroAndando % 4)}", esquerda, expressao),
-            // Toon force: o foguete de borracha sobe esticado, com o braço para cima.
-            Estado.Climbing when dinamica.Foguete => new("impulso", esquerda, null, Deformacao.Esticado),
-            // Na parede, o macaquinho olha para ela: parede da direita sem espelho, da esquerda espelhada.
-            Estado.Climbing when dinamica.Agarrado => new(PoseAgarradoNaParede, esquerda, null),
-            Estado.Climbing => new($"escalando-{1 + (int)(passosNoEstado / PassosPorQuadroEscalando % 2)}", esquerda, null),
-            // Na borda de cima, pendurado num cipó (DEC-024): parado, o quadro do meio; andando, balança.
-            // Com a cara neutra, fica a da pose: rindo no cipó.
-            Estado.Hanging when dinamica.Agarrado => new(PoseAgarradoNoCipo, esquerda, r.Expressao == Expressao.Neutro ? null : expressao),
-            Estado.Hanging => new($"cipo-{BalancoDoCipo[(int)(passosNoEstado / PassosPorQuadroNoCipo % BalancoDoCipo.Length)]}", esquerda,
-                r.Expressao == Expressao.Neutro ? null : expressao),
-            // Toon force: o quique começa achatado no chão e sobe esticado.
-            Estado.Jumping when dinamica.Quiques > 0 && passosNoEstado < PassosDoAchatamento => new("pousando", false, null, Deformacao.Achatado),
-            Estado.Jumping when dinamica.Quiques > 0 && rapido == Deformacao.Esticado => new("impulso", esquerda, null, Deformacao.Esticado),
-            Estado.Jumping when dinamica.Quiques > 0 => new("no-ar", esquerda, null),
-            Estado.Jumping => new(passosNoEstado < PassosDoImpulso ? "impulso" : "no-ar", esquerda, null, passosNoEstado < PassosDoImpulso ? Deformacao.Nenhuma : rapido),
-            Estado.Falling => new("caindo", false, null, rapido),
-            Estado.Landing => new("pousando", false, null, passosNoEstado < PassosDoAchatamento ? Deformacao.Achatado : Deformacao.Nenhuma),
-            Estado.Resting => new(r.Expressao is Expressao.Dormindo ? "dormindo" : "sentado", false, null),
-            Estado.Pressed or Estado.Dragging => new("segurado", false, null),
-            Estado.Reacting => new("reagindo", false, null),
-            Estado.Idle => r.Gesto switch
-            {
-                Gesto.Espiar => new("espiando", false, null),
-                Gesto.OlharAoRedor => new("olhando", false, null),
-                Gesto.Cocar => new("cocando", false, null),
-                Gesto.Espreguicar => new("espreguicando", false, null),
-                Gesto.Brincar => new("brincando", false, null),
-                // Gestos da onda (DEC-028): as poses provisórias da arte (crítica, L11), com a cara delas, como os outros
-                // gestos. A tremedeira é o parado deslocado 1 pixel: os dois quadros se alternam, com a mesma cara. Os da
-                // paranoia (adicional de 2026-10-01), olhar pro teto e agachar, têm desenho próprio, com a cara "paranoico".
-                Gesto.Tremedeira when passosNoEstado / PassosPorQuadroDaTremedeira % 2 != 0 => new("parado", false, CaraDaTremedeira),
-                Gesto.Soluco or Gesto.Danca or Gesto.Gargalhada or Gesto.Espirro or Gesto.Tosse or Gesto.Tremedeira
-                    or Gesto.OlharProTeto or Gesto.Agachar => new(NomeDoGesto(r.Gesto), false, null),
-                _ => new("parado", false, expressao),
-            },
-            _ => new("parado", false, expressao),
+            OrigemDaCara.Pose => null,
+            OrigemDaCara.RetratoSemNeutro when r.Expressao == Expressao.Neutro => null,
+            _ => NomeDaExpressao(r.Expressao),
         };
+        Deformacao deformacao = (q.Deformacao ?? clipe.Deformacao) switch
+        {
+            DeformacaoDoQuadro.Achatado => Deformacao.Achatado,
+            DeformacaoDoQuadro.Esticado => Deformacao.Esticado,
+            DeformacaoDoQuadro.PelaVelocidade when Math.Abs(dinamica.VelocidadeVerticalDip) >= VelocidadeDoEsticamento => Deformacao.Esticado,
+            _ => Deformacao.Nenhuma,
+        };
+        return new(q.Pose, clipe.Espelha && r.Direcao == Direcao.Esquerda, cara, deformacao, giro);
     }
 
     /// <summary>
-    /// USING (DEC-028). No chão, o quadro da animação do verbo no passo do uso, com o item na mão e a cara da própria
-    /// pose (crítica, C10): de frente, sem espelho, como as outras poses de frente. Na parede, no cipó e no esconderijo,
-    /// que ainda não têm pose de uso (C25), a pose de quem está agarrado ou espia ali, com a cara do item durante o uso
-    /// (a do retrato: o núcleo a fixa do começo ao fim do uso) e sem objeto na mão.
+    /// A situação do retrato (DEC-036, item 1), e o giro do esconderijo, que não é do clipe:
+    /// <list type="bullet">
+    /// <item>em USING, fora do chão, a pose do apoio (parede, cipó ou esconderijo), com a cara do item, que o núcleo fixa do
+    /// começo ao fim do uso; ainda não há poses de uso por apoio (crítica, C25);</item>
+    /// <item>escondido (DEC-025), também na reação e no pressionar de quem continua escondido: só a cabeça e as mãos, e o
+    /// corpo nunca surge de relance; pressionado, com a cara de surpresa;</item>
+    /// <item>pela dinâmica (DEC-022 a DEC-024): o foguete de borracha e quem está agarrado à parede ou ao cipó; no quique de
+    /// borracha, o impacto achatado nos primeiros passos, depois esticado com a velocidade alta, senão no ar;</item>
+    /// <item>em IDLE, o gesto em curso, com o clipe dele; sem gesto, e nos outros estados, parado.</item>
+    /// </list>
     /// </summary>
-    private static QuadroDoSprite DeUso(Uso uso, int passoDoUso, bool esquerda, string expressao, Dinamica dinamica) => uso.Apoio switch
+    internal static (string Situacao, Giro Giro) Situacao(Retrato r, long passosNoEstado, Dinamica dinamica)
     {
-        ApoioDoUso.Parede => new(PoseAgarradoNaParede, esquerda, expressao),
-        ApoioDoUso.Cipo => new(PoseAgarradoNoCipo, esquerda, expressao),
-        ApoioDoUso.Esconderijo => new(PoseEscondido, false, expressao, Deformacao.Nenhuma, GiroDoEsconderijo(dinamica.Esconderijo)),
-        _ => new(UsosPixel.Quadro(VerboDaArte(uso.Verbo), passoDoUso).Nome, false, null) { Item = NomeDoItem(uso.Item) },
-    };
+        ArgumentNullException.ThrowIfNull(r);
+        if (r.Estado == Estado.Using && r.Uso is { } uso)
+            return uso.Apoio switch
+            {
+                ApoioDoUso.Parede => ("uso-parede", Giro.Nenhum),
+                ApoioDoUso.Cipo => ("uso-cipo", Giro.Nenhum),
+                ApoioDoUso.Esconderijo => ("uso-esconderijo", GiroDoEsconderijo(dinamica.Esconderijo)),
+                _ => throw new ArgumentOutOfRangeException(nameof(r), uso.Apoio, "O uso no chão não tem situação: vem de UsosPixel."),
+            };
+        if (dinamica.Esconderijo != LadoDoEsconderijo.Nenhum && r.Estado is Estado.Peeking or Estado.Reacting or Estado.Pressed)
+            return (r.Estado == Estado.Pressed ? "escondido-pressionado" : "escondido", GiroDoEsconderijo(dinamica.Esconderijo));
+        bool rapido = Math.Abs(dinamica.VelocidadeVerticalDip) >= VelocidadeDoEsticamento;
+        string situacao = r.Estado switch
+        {
+            Estado.Walking => "andando",
+            Estado.Climbing when dinamica.Foguete => "foguete",
+            Estado.Climbing when dinamica.Agarrado => "escalando-agarrado",
+            Estado.Climbing => "escalando",
+            Estado.Hanging when dinamica.Agarrado => "cipo-agarrado",
+            Estado.Hanging => "cipo",
+            Estado.Jumping when dinamica.Quiques > 0 && passosNoEstado < PassosDoAchatamento => "quique-impacto",
+            Estado.Jumping when dinamica.Quiques > 0 && rapido => "quique-esticado",
+            Estado.Jumping when dinamica.Quiques > 0 => "quique-voo",
+            Estado.Jumping => "pulo",
+            Estado.Falling => "caindo",
+            Estado.Landing => "pousando",
+            Estado.Resting => r.Expressao is Expressao.Dormindo ? "dormindo" : "sentado",
+            Estado.Pressed or Estado.Dragging => "segurado",
+            Estado.Reacting => "reagindo",
+            Estado.Idle when r.Gesto != Gesto.Nenhum => Situacoes.DoGesto(NomeDoGesto(r.Gesto)),
+            _ => "parado",
+        };
+        return (situacao, Giro.Nenhum);
+    }
 
     /// <summary>O esconderijo numa lateral é o de baixo, girado: a borda de baixo do quadro vai para a borda da tela (DEC-025).</summary>
     private static Giro GiroDoEsconderijo(LadoDoEsconderijo lado) => lado switch

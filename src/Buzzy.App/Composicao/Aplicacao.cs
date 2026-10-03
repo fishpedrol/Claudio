@@ -207,13 +207,13 @@ internal sealed partial class Aplicacao
         _servico = new JanelaDeServico();
         _servico.BandejaAcionada += AoAcionarBandeja;
         _servico.BarraDeTarefasRecriada += AoRecriarBarra;
-        _servico.TopologiaPodeTerMudado += AoPossivelMudancaDeTopologia;
+        _servico.TopologiaPodeTerMudado += motivo => AoPossivelMudancaDeTopologia(motivo);
         _servico.EventoDoSistema += AoEventoDoSistema;
         Diagnostico.Evento("SERVICO", ("hwnd", _servico.Hwnd));
 
         _personagem = new JanelaPersonagem();
         _personagem.Ponteiro += AoPonteiro;
-        _personagem.DpiMudou += dpi => AoPossivelMudancaDeTopologia($"WM_DPICHANGED {dpi}");
+        _personagem.DpiMudou += dpi => AoPossivelMudancaDeTopologia($"WM_DPICHANGED {dpi}", daPropriaJanela: true);
         _personagem.Minimizada += () => Adiar(AoMinimizarPersonagem);
         _personagem.Closing += (_, e) =>
         {
@@ -344,14 +344,20 @@ internal sealed partial class Aplicacao
     /// Uma mensagem do Windows que pode ter mudado a topologia (WM_DISPLAYCHANGE, WM_SETTINGCHANGE com SPI_SETWORKAREA, o
     /// WM_DPICHANGED da janela do personagem ou a TaskbarCreated): vai crua ao log, só com o tipo (<c>MENSAGEM|tipo=</c>,
     /// para calibrar o agrupamento no protótipo P5), e pede a releitura agrupada (crítica, C11). No passo P10, o árbitro do
-    /// sistema recebe o sinal entre as duas coisas.
+    /// sistema recebe o sinal entre as duas coisas. O WM_DPICHANGED da própria janela (<paramref name="daPropriaJanela"/>,
+    /// passo P14) passado do limite de rodadas seguidas da agenda é ignorado, sem avisar o árbitro (<c>ignorada=sim</c>).
     /// </summary>
-    private void AoPossivelMudancaDeTopologia(string motivo)
+    private void AoPossivelMudancaDeTopologia(string motivo, bool daPropriaJanela = false)
     {
         if (_encerrando) return;
+        if (daPropriaJanela && _releitura.IgnoraAPropriaJanela)
+        {
+            Diagnostico.Evento("MENSAGEM", ("tipo", motivo), ("ignorada", "sim"));
+            return;
+        }
         Diagnostico.Evento("MENSAGEM", ("tipo", motivo));
         TimeSpan esperaMinima = _eventosDoSistema.SinalizarMudancaDeTopologia();
-        _releitura.Agendar(motivo, esperaMinima);
+        _releitura.Agendar(motivo, esperaMinima, daPropriaJanela);
     }
 
     /// <summary>

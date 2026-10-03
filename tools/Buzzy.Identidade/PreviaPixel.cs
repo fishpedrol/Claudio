@@ -29,7 +29,7 @@ internal static class PreviaPixel
 
         int problemas = 0;
         // As poses de estado e as provisórias dos gestos da onda (DEC-028; crítica, L11).
-        foreach (PosePixel pose in poses.Concat(PosesPixel.DosGestos))
+        foreach (PosePixel pose in poses.Concat(PosesPixel.DosGestos).Concat(PosesPixel.DosClipes))
         {
             foreach (string expressao in Rostos.Expressoes.Keys)
             {
@@ -56,7 +56,7 @@ internal static class PreviaPixel
         }
         problemas += ConferirItens();
         problemas += ConferirUsos();
-        problemas += ConferirEfeitos([.. poses, .. PosesPixel.DosGestos]);
+        problemas += ConferirEfeitos([.. poses, .. PosesPixel.DosGestos, .. PosesPixel.DosClipes]);
 
         PosePixel parado = poses.First(p => p.Nome == "parado");
         Salvar(Ampliada(BonecoPixel.Desenhar(parado), 8, Fundo), Path.Combine(pasta, "parado-8x.png"));
@@ -88,6 +88,8 @@ internal static class PreviaPixel
         Salvar(UsosEmTamanhoReal(), Path.Combine(pasta, "usos-tamanho-real.png"));
         Salvar(Efeitos(poses), Path.Combine(pasta, "efeitos.png"));
         Salvar(Gestos(), Path.Combine(pasta, "gestos.png"));
+        // Os quadros dos clipes da Fase 6 (DEC-036), cada um ao lado da pose-chave de onde saiu.
+        Salvar(Grade([.. PosesPixel.DosClipes.SelectMany(q => new[] { (Chave(q).Nome, BonecoPixel.Desenhar(Chave(q))), (q.Nome, BonecoPixel.Desenhar(q)) })], 4, 4, Fundo), Path.Combine(pasta, "clipes.png"));
         Salvar(Paranoico(andando, xDoPerfil), Path.Combine(pasta, "paranoico-8x.png"));
         Salvar(IconesDoMenuNativo(), Path.Combine(pasta, "icones-menu.png"));
 
@@ -113,6 +115,13 @@ internal static class PreviaPixel
             foreach ((int x, int y) in new[] { (i, 0), (0, i), (t.Largura - 1, i) })
                 if (t[x, y] is not Cor.Nada and not Cor.Contorno) return (x, y);
         return null;
+    }
+
+    /// <summary>A pose-chave de um quadro de clipe: o nome sem o sufixo do quadro ("cocando-2" vem de "cocando").</summary>
+    private static PosePixel Chave(PosePixel quadro)
+    {
+        string nome = quadro.Nome[..quadro.Nome.LastIndexOf('-')];
+        return PosesPixel.Todas.First(p => p.Nome == nome);
     }
 
     /// <summary>O recorte do rosto de expressoes.png (o mesmo do ícone do menu) num quadro qualquer.</summary>

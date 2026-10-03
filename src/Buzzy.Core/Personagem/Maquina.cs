@@ -1403,14 +1403,23 @@ public static partial class Maquina
         /// <summary>
         /// Troca de cara da agenda, com exatamente um sorteio (DEC-027 e DEC-028). Com a onda de um item, uma das caras
         /// da fase, que tem precedência (<see cref="SortearCaraDaFase"/>). Com a emoção dominante, ela ou uma das
-        /// companheiras (<see cref="SortearComADominante"/>). Na automática, uma das outras 13 caras de humor,
-        /// uniforme, pela lista fixa <see cref="Expressoes.DeHumor"/> (com a cara atual fora das 14, uma das 14).
+        /// companheiras (<see cref="SortearComADominante"/>). Na automática, uma das outras 13 caras de humor, pela lista
+        /// fixa <see cref="Expressoes.DeHumor"/> (com a cara atual fora das 14, uma das 14): com a tendência da energia
+        /// (<see cref="PerfilDeEnergia.PesosDasCaras"/>; DEC-036, item 6), ponderada; sem ela, uniforme, como antes.
         /// </summary>
         private Expressao SortearTrocaDeCara()
         {
             if (FaseEmVigor is { } fase) return SortearCaraDaFase(fase);
             if (_s.Preferencias.EmocaoDominante is { } dominante) return SortearComADominante(dominante);
             IReadOnlyList<Expressao> humor = Expressoes.DeHumor;
+            if (Perfil.PesosDasCaras is { } tendencia)
+            {
+                // A cara atual sai do sorteio (peso 0): a troca sempre muda a cara, como na uniforme.
+                int[] pesos = [.. humor.Select((cara, i) => cara == _s.Expressao ? 0 : tendencia[i])];
+                (int escolhida, Aleatorio ap) = _s.Aleatorio.Ponderado(pesos);
+                _s = _s with { Aleatorio = ap };
+                return humor[escolhida];
+            }
             // As 14 estão na ordem do enum: a posição de uma cara de humor na lista é o valor dela.
             int atual = Expressoes.EhDeHumor(_s.Expressao) ? (int)_s.Expressao : -1;
             (int e, Aleatorio a) = _s.Aleatorio.Entre(0, humor.Count - (atual < 0 ? 1 : 2));

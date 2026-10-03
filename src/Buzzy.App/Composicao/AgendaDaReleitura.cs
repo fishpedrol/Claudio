@@ -23,7 +23,12 @@ internal readonly record struct PedidoDeReleitura(string Motivos, bool NovaTenta
 /// tentativas do zero. Os motivos guardados têm teto (<see cref="MaximoDeMotivos"/>): os outros só são contados;</item>
 /// <item>toda releitura publicada (re)arma a conferência tardia do lugar das janelas, 1,5 s depois (D14 do desenho dos
 /// monitores): o Windows pode devolver uma janela ao monitor reconectado depois da releitura, e quem decide o lugar é o
-/// núcleo. Uma releitura publicada antes do disparo o adia: no máximo uma conferência por rajada.</item>
+/// núcleo. Uma releitura publicada antes do disparo o adia: no máximo uma conferência por rajada;</item>
+/// <item>o WM_DPICHANGED da própria janela do personagem (passo P14): a releitura reafirma o lugar dela, e, com a janela
+/// montada entre monitores de DPI diferente, isso pode trazer outro WM_DPICHANGED, e assim por diante. Depois de
+/// <see cref="MaximoDeRodadasDaPropriaJanela"/> releituras publicadas seguidas pedidas só por ele, cada uma até
+/// <see cref="IntervaloDasRodadasDaPropriaJanela"/> depois da anterior, o próximo pedido dele é ignorado
+/// (<see cref="IgnoraAPropriaJanela"/>); qualquer outra mensagem, ou esse intervalo sem rodadas, zera a conta.</item>
 /// </list>
 /// Nada é periódico: só disparos únicos depois de uma mensagem; em repouso, nenhum. <see cref="Parar"/>, no encerramento,
 /// cancela os dois, e nada mais é agendado. Só na thread da interface.
@@ -48,6 +53,12 @@ internal sealed class AgendaDaReleitura
     /// crescerem sem limite (revisão de segurança do bloco P6-P9, achado 4).
     /// </summary>
     internal const int MaximoDeMotivos = 32;
+
+    /// <summary>Quantas releituras publicadas seguidas pedidas só pela própria janela valem, antes de ignorar as seguintes (P14).</summary>
+    internal const int MaximoDeRodadasDaPropriaJanela = 3;
+
+    /// <summary>Até quanto tempo depois da anterior uma rodada da própria janela conta como seguida (P14). Provisório até o P6.</summary>
+    internal static readonly TimeSpan IntervaloDasRodadasDaPropriaJanela = TimeSpan.FromSeconds(5);
 
     private readonly Func<TimeSpan> _agora;
     private readonly Func<TimeSpan, Action, Action> _agendarUmaVez;
@@ -80,6 +91,15 @@ internal sealed class AgendaDaReleitura
 
     private bool _parada;
 
+    /// <summary>Se todos os motivos guardados para a próxima releitura vieram da própria janela (P14).</summary>
+    private bool _soDaPropriaJanela;
+
+    /// <summary>Releituras publicadas seguidas pedidas só pela própria janela (P14).</summary>
+    private int _rodadasDaPropriaJanela;
+
+    /// <summary>Quando saiu a última delas.</summary>
+    private TimeSpan _ultimaRodadaDaPropriaJanela;
+
     /// <param name="agora">O relógio monotônico.</param>
     /// <param name="agendarUmaVez">Agenda um disparo único e devolve o que o cancela (<see cref="DisparoUnico.NoDispatcher"/>).</param>
     /// <param name="reler">Lê a topologia e, se a leitura for coerente, publica-a ao núcleo; devolve se publicou.</param>
@@ -103,15 +123,27 @@ internal sealed class AgendaDaReleitura
     internal bool ReafirmacaoPendente => _cancelarReafirmacao is not null;
 
     /// <summary>
+    /// Se um pedido da própria janela agora seria ignorado (P14): já houve <see cref="MaximoDeRodadasDaPropriaJanela"/>
+    /// rodadas seguidas só dela, a última há menos de <see cref="IntervaloDasRodadasDaPropriaJanela"/>. Quem recebe a mensagem
+    /// consulta antes de avisar o árbitro dos eventos do sistema, que esperaria por uma releitura que não vem.
+    /// </summary>
+    internal bool IgnoraAPropriaJanela
+        => _rodadasDaPropriaJanela >= MaximoDeRodadasDaPropriaJanela && _agora() - _ultimaRodadaDaPropriaJanela < IntervaloDasRodadasDaPropriaJanela;
+
+    /// <summary>
     /// Uma mensagem que pode ter mudado a topologia pede a releitura: entra na rajada em curso, ou começa outra, e as
     /// tentativas recomeçam. Com <paramref name="naoAntesDe"/>, a releitura não sai antes de agora + essa espera (o maior
-    /// pedido vale).
+    /// pedido vale). <paramref name="daPropriaJanela"/> marca o WM_DPICHANGED da janela do personagem (P14): no limite
+    /// (<see cref="IgnoraAPropriaJanela"/>), ele é ignorado; outra mensagem zera a conta.
     /// </summary>
-    internal void Agendar(string motivo, TimeSpan naoAntesDe = default)
+    internal void Agendar(string motivo, TimeSpan naoAntesDe = default, bool daPropriaJanela = false)
     {
         ArgumentNullException.ThrowIfNull(motivo);
         if (_parada) return;
+        if (daPropriaJanela && IgnoraAPropriaJanela) return;
+        if (!daPropriaJanela) _rodadasDaPropriaJanela = 0;
         TimeSpan agora = _agora();
+        _soDaPropriaJanela = (_motivos.Count == 0 && _motivosAMais == 0 || _soDaPropriaJanela) && daPropriaJanela;
         if (_motivos.Count < MaximoDeMotivos) _motivos.Add(motivo);
         else _motivosAMais++;
         _falhas = 0;
@@ -164,6 +196,15 @@ internal sealed class AgendaDaReleitura
         if (publicada)
         {
             _falhas = 0;
+            // A conta das rodadas da própria janela (P14): seguidas, até o intervalo depois da anterior.
+            TimeSpan fim = _agora();
+            if (!_soDaPropriaJanela) _rodadasDaPropriaJanela = 0;
+            else
+            {
+                if (fim - _ultimaRodadaDaPropriaJanela >= IntervaloDasRodadasDaPropriaJanela) _rodadasDaPropriaJanela = 0;
+                _rodadasDaPropriaJanela++;
+                _ultimaRodadaDaPropriaJanela = fim;
+            }
             CancelarReafirmacao();
             _cancelarReafirmacao = _agendarUmaVez(ReafirmacaoTardia, AoReafirmar);
             return;

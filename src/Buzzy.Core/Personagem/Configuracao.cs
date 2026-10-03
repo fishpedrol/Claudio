@@ -208,6 +208,14 @@ public sealed record PerfilDeEnergia(
     /// </summary>
     public int PesoIrAoOutroMonitor { get; init; } = 2;
 
+    /// <summary>
+    /// A tendência de expressão (Fase 6; DEC-036, item 6; Q-23): o peso de cada cara de humor na troca de cara automática,
+    /// na ordem de <see cref="Expressoes.DeHumor"/>, num único sorteio que nunca repete a cara atual. Nulo, todas as outras
+    /// valem igual, com o sorteio de antes (a Média: as referências gravadas não mudam). Frequência de caras, nunca física
+    /// (invariante 12).
+    /// </summary>
+    public IReadOnlyList<int>? PesosDasCaras { get; init; }
+
     public static readonly PerfilDeEnergia Baixa = new(
         NivelDeEnergia.Baixa,
         TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(45),
@@ -228,6 +236,9 @@ public sealed record PerfilDeEnergia(
         ChanceDoFoguete = 10,
         PesoAtravessar = 3,
         PesoIrAoOutroMonitor = 1,
+        // Calmo: sono, tédio e pensamento na frente; agitação, rara.
+        //                 neutro feliz rindo curioso surpreso assustado sonolento bocejando dormindo travesso entediado pensativo empolgado determinado
+        PesosDasCaras = [      3,    2,    1,      2,       1,        1,        4,        4,       2,       1,        4,        4,        1,          1],
     };
 
     public static readonly PerfilDeEnergia Media = new(
@@ -257,6 +268,9 @@ public sealed record PerfilDeEnergia(
         ChanceDoFoguete = 50,
         PesoAtravessar = 7,
         PesoIrAoOutroMonitor = 3,
+        // Agitado: empolgação, riso e travessura na frente; sono, raro.
+        //                 neutro feliz rindo curioso surpreso assustado sonolento bocejando dormindo travesso entediado pensativo empolgado determinado
+        PesosDasCaras = [      1,    3,    4,      3,       3,        1,        1,        1,       1,       4,        1,        1,        4,          3],
     };
 
     public static PerfilDeEnergia Padrao(NivelDeEnergia nivel) => nivel switch

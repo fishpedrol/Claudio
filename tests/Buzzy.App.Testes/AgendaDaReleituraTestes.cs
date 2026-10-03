@@ -98,6 +98,13 @@ internal sealed class AgendaDaReleituraTestes
             Agenda.Agendar(motivo, Ms(naoAntesDeMs));
         }
 
+        /// <summary>O WM_DPICHANGED da própria janela do personagem no instante <paramref name="ms"/> (passo P14).</summary>
+        internal void DaPropriaJanela(double ms)
+        {
+            Relogio.AvancarAte(ms);
+            Agenda.Agendar("WM_DPICHANGED 144", daPropriaJanela: true);
+        }
+
         internal double[] Instantes => [.. Releituras.Select(r => r.Quando.TotalMilliseconds)];
     }
 
@@ -348,6 +355,94 @@ internal sealed class AgendaDaReleituraTestes
 
     // ------------------------------------------------------------------ encerramento
 
+    // ------------------------------------------------------------------ o WM_DPICHANGED da própria janela (passo P14)
+
+    // A releitura reafirma o lugar da janela, e a janela montada entre monitores de DPI diferente pode mandar outro
+    // WM_DPICHANGED: três releituras seguidas pedidas só por ele valem; a quarta é ignorada. Outra mensagem zera a conta, e a
+    // própria janela volta a valer.
+    [Teste]
+    public void PropriaJanela_TresRodadasSeguidas_AQuartaEhIgnorada_OutraMensagemZeraAConta()
+    {
+        var c = new Cenario();
+        c.DaPropriaJanela(0);
+        c.Relogio.AvancarAte(400);
+        c.DaPropriaJanela(400);
+        c.Relogio.AvancarAte(800);
+        c.DaPropriaJanela(800);
+        c.Relogio.AvancarAte(1200);
+        Afirmar.Sequencia([300.0, 700.0, 1100.0], c.Instantes, "três rodadas seguidas");
+        Afirmar.Verdadeiro(c.Agenda.IgnoraAPropriaJanela, "no limite");
+        c.DaPropriaJanela(1200);
+        Afirmar.Falso(c.Agenda.ReleituraPendente, "a quarta é ignorada");
+        c.Relogio.AvancarAte(1600);
+        Afirmar.Igual(3, c.Releituras.Count, "nenhuma releitura a mais");
+
+        c.Mensagem(1700);
+        Afirmar.Falso(c.Agenda.IgnoraAPropriaJanela, "outra mensagem zera a conta");
+        c.Relogio.AvancarAte(2000);
+        c.DaPropriaJanela(2100);
+        c.Relogio.AvancarAte(2400);
+        Afirmar.Sequencia([300.0, 700.0, 1100.0, 2000.0, 2400.0], c.Instantes, "a da outra mensagem e, depois, a da própria janela");
+    }
+
+    // A conta é de rodadas seguidas: 5 s sem nenhuma delas a zera, e a travessia seguinte, minutos depois, vale.
+    [Teste]
+    public void PropriaJanela_DepoisDoIntervaloSemRodadas_VoltaAValer()
+    {
+        var c = new Cenario();
+        foreach (double ms in new[] { 0.0, 400, 800 })
+        {
+            c.DaPropriaJanela(ms);
+            c.Relogio.AvancarAte(ms + 300);
+        }
+        Afirmar.Verdadeiro(c.Agenda.IgnoraAPropriaJanela, "no limite logo depois");
+        c.Relogio.AvancarAte(1100 + 4999);
+        Afirmar.Verdadeiro(c.Agenda.IgnoraAPropriaJanela, "ainda no limite antes de 5 s");
+        c.Relogio.AvancarAte(1100 + 5000);
+        Afirmar.Falso(c.Agenda.IgnoraAPropriaJanela, "5 s depois da última, volta a valer");
+        c.DaPropriaJanela(6100);
+        c.Relogio.AvancarAte(6400);
+        Afirmar.Igual(4, c.Releituras.Count, "a rodada nova sai");
+        Afirmar.Falso(c.Agenda.IgnoraAPropriaJanela, "e conta de novo do um");
+    }
+
+    // Uma rajada com a própria janela e outra mensagem não conta como rodada só dela; uma leitura incoerente também não.
+    [Teste]
+    public void PropriaJanela_RajadaMistaOuLeituraIncoerente_NaoContam()
+    {
+        var c = new Cenario();
+        foreach (double ms in new[] { 0.0, 1000, 2000 })
+        {
+            c.DaPropriaJanela(ms);
+            c.Mensagem(ms + 10);
+            c.Relogio.AvancarAte(ms + 400);
+        }
+        Afirmar.Falso(c.Agenda.IgnoraAPropriaJanela, "rajadas mistas não contam");
+
+        // Uma rajada mista e, logo depois, duas só da própria janela: são duas rodadas seguidas, não três.
+        var depois = new Cenario();
+        depois.DaPropriaJanela(0);
+        depois.Relogio.AvancarAte(5);
+        depois.Agenda.Agendar("WM_DISPLAYCHANGE");
+        depois.Relogio.AvancarAte(400);
+        depois.DaPropriaJanela(400);
+        depois.Relogio.AvancarAte(800);
+        depois.DaPropriaJanela(800);
+        depois.Relogio.AvancarAte(1200);
+        Afirmar.Igual(3, depois.Releituras.Count, "três releituras");
+        Afirmar.Falso(depois.Agenda.IgnoraAPropriaJanela, "só duas contam");
+
+        // Cada leitura incoerente e as três novas tentativas dela: nenhuma conta, nem logo depois da última.
+        var incoerente = new Cenario { Coerente = false };
+        for (int i = 0; i < 4; i++)
+        {
+            incoerente.DaPropriaJanela(i * 10_000);
+            incoerente.Relogio.AvancarAte(i * 10_000 + 3_900);
+            Afirmar.Igual(4 * (i + 1), incoerente.Releituras.Count, $"rajada {i}: a leitura e as três novas tentativas");
+            Afirmar.Falso(incoerente.Agenda.IgnoraAPropriaJanela, $"rajada {i}: leituras incoerentes não contam");
+        }
+    }
+
     [Teste]
     public void Raiz_ParaAsAgendasNoEncerramento_EAUltimaTentativaEhParcial_ConferidoNaFonte()
     {
@@ -368,6 +463,14 @@ internal sealed class AgendaDaReleituraTestes
         int estritas = partida.IndexOf("LeitorDeTopologia.LerDetalhado(out erro);", StringComparison.Ordinal);
         int parcial = partida.IndexOf("LeitorDeTopologia.LerDetalhado(out string? erroDaParcial, parcial: true)", StringComparison.Ordinal);
         Afirmar.Verdadeiro(estritas >= 0 && parcial > estritas, "a partida: as leituras de sempre, depois a parcial");
+
+        // Passo P14: o WM_DPICHANGED da própria janela, no limite da agenda, é ignorado antes de avisar o árbitro dos eventos do
+        // sistema, que seguraria um desbloqueio ou uma retomada à espera de uma releitura que não vem.
+        string mensagem = Trecho(fonte, "private void AoPossivelMudancaDeTopologia(");
+        int ignora = mensagem.IndexOf("_releitura.IgnoraAPropriaJanela", StringComparison.Ordinal);
+        int arbitro = mensagem.IndexOf("_eventosDoSistema.SinalizarMudancaDeTopologia()", StringComparison.Ordinal);
+        Afirmar.Verdadeiro(ignora >= 0 && ignora < arbitro, "a consulta do limite antes do árbitro");
+        Afirmar.Contem("AoPossivelMudancaDeTopologia($\"WM_DPICHANGED {dpi}\", daPropriaJanela: true)", fonte);
     }
 
     /// <summary>O corpo de um método da fonte, da assinatura até a chave que o fecha (quatro espaços de recuo).</summary>
